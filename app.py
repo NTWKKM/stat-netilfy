@@ -1,42 +1,51 @@
 import streamlit as st
 import pandas as pd
-import io
+import numpy as np
 
-# Import function จาก stat.py
-# (ตรวจสอบให้แน่ใจว่าไฟล์ stat.py อยู่ในโฟลเดอร์เดียวกัน)
+# Import logic
 from stat import process_data_and_generate_html
+
+# ฟังก์ชันสำหรับตรวจสอบคุณภาพข้อมูล (Duplicate Logic with stat.py for checking purpose)
+def is_problematic(val):
+    """เช็คว่าค่านี้นำไปคำนวณได้ไหม"""
+    if pd.isna(val) or val == "":
+        return False # ค่าว่างไม่ใช่ปัญหา (แค่ Missing)
+    
+    # ลอง Clean แบบเดียวกับ Backend
+    s = str(val).strip()
+    s = s.replace('>', '').replace('<', '').replace(',', '')
+    
+    try:
+        float(s)
+        return False # แปลงได้ = รอด
+    except:
+        return True # แปลงไม่ได้ = ปัญหา (เช่น '87(baseline)')
 
 st.set_page_config(page_title="Statistical Analysis Tool", layout="wide")
 
 st.title("📊 Auto Statistical Analysis")
 st.markdown("""
-เครื่องมือวิเคราะห์สถิติอัตโนมัติ (Univariate & Multivariate Logistic Regression)
-* **Privacy-First:** ประมวลผลบน Browser ของคุณ 100% ข้อมูลไม่ถูกส่งไป Server
-* **Flexible:** รองรับ CSV/Excel และเลือกตัวแปร Outcome ได้เอง
+**Privacy-First Statistical Tool** (Run locally in your browser)
 """)
 
-# --- 1. ส่วนจัดการข้อมูล (Data Handling) ---
+# --- 1. Data Input ---
 st.sidebar.header("1. Data Input")
 
-# ตัวแปร session state เพื่อเก็บข้อมูล
 if 'df' not in st.session_state:
     st.session_state.df = None
 
-# ปุ่มโหลดข้อมูลตัวอย่าง
+# ปุ่ม Load Example
 if st.sidebar.button("📄 Load Example Data"):
-    # สร้างข้อมูลจำลอง (Mockup Data)
     data = {
-        'age': [55, 60, 45, 70, 80, 52, 66, 48, 75, 82] * 5,
-        'sex': [1, 0, 1, 0, 1, 1, 0, 1, 0, 0] * 5, # 1=Male, 0=Female
-        'systolic_bp': [120, 140, 110, 160, 150, 130, 135, 125, 155, 145] * 5,
-        'diabetes': [0, 1, 0, 1, 1, 0, 1, 0, 1, 1] * 5,
-        'outcome_died': [0, 1, 0, 1, 1, 0, 0, 0, 1, 1] * 5  # Outcome หลัก
+        'age': [55, 60, 45, '87(baseline)', 80], # มีค่า Error
+        'sex': [1, 0, 1, 0, 1],
+        'outcome_died': [0, 1, 0, 1, 1] 
     }
     st.session_state.df = pd.DataFrame(data)
     st.sidebar.success("Loaded example data!")
 
-# อัพโหลดไฟล์
-uploaded_file = st.sidebar.file_uploader("Or Upload CSV/Excel", type=['csv', 'xlsx'])
+# Upload File
+uploaded_file = st.sidebar.file_uploader("Upload CSV/Excel", type=['csv', 'xlsx'])
 if uploaded_file:
     try:
         if uploaded_file.name.endswith('.csv'):
@@ -44,62 +53,69 @@ if uploaded_file:
         else:
             st.session_state.df = pd.read_excel(uploaded_file)
     except Exception as e:
-        st.sidebar.error(f"Error loading file: {e}")
+        st.sidebar.error(f"Error: {e}")
 
-# --- 2. ส่วนแสดงผลและตั้งค่า (Display & Settings) ---
+# --- 2. Review & Data Cleaning Check ---
 if st.session_state.df is not None:
     df = st.session_state.df
     
-    st.subheader("2. Review & Edit Data")
-    # ให้แก้ไขข้อมูลได้สดๆ
+    st.subheader("2. Review & Fix Data")
+    
+    # --- 🔍 AUTO-DETECT PROBLEMS ---
+    problems = []
+    # วนลูปเช็คทุกช่อง (อาจช้าหน่อยถ้าไฟล์ใหญ่มาก แต่ปลอดภัย)
+    # เช็คเฉพาะคอลัมน์ที่เป็น Object (String) เพราะถ้าเป็น Int/Float อยู่แล้วแปลว่าปลอดภัย
+    cols_to_check = df.select_dtypes(include=['object']).columns
+    
+    for col in cols_to_check:
+        for idx, val in df[col].items():
+            if is_problematic(val):
+                problems.append({
+                    "Row Index": idx,
+                    "Column": col,
+                    "Invalid Value": val,
+                    "Suggestion": "Please remove text (keep only numbers)"
+                })
+    
+    # ถ้าเจอปัญหา แสดงตือนก่อนตาราง
+    if problems:
+        problem_df = pd.DataFrame(problems)
+        st.error(f"⚠️ Found {len(problems)} values that cannot be calculated!")
+        st.markdown("ค่าเหล่านี้จะถูกมองเป็น **ว่าง (Missing)** หากไม่แก้ไข (เครื่องหมาย >,< ใช้ได้ไม่ต้องแก้)")
+        
+        # แสดงรายการที่ผิด
+        st.dataframe(problem_df, use_container_width=True, hide_index=True)
+    else:
+        st.success("✅ Data looks clean! (Standard symbols >, <, , are accepted)")
+
+    # Data Editor (แก้ไขค่าผิดได้ตรงนี้เลย)
     edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
     
+    # --- 3. Analysis ---
     st.subheader("3. Analysis Settings")
-    col1, col2 = st.columns(2)
     
-    with col1:
-        # เลือก Outcome (Y)
-        all_columns = edited_df.columns.tolist()
-        # พยายามหา column ที่ชื่อเหมือน outcome เพื่อตั้งเป็น default
-        default_idx = 0
-        for i, col in enumerate(all_columns):
-            if "outcome" in col.lower() or "died" in col.lower() or "status" in col.lower():
-                default_idx = i
-                break
-                
-        target_outcome = st.selectbox(
-            "Select Main Outcome (Y) for Logistic Regression", 
-            all_columns,
-            index=default_idx,
-            help="เลือกคอลัมน์ที่เป็นผลลัพธ์ (เช่น ตาย/รอด, เป็นโรค/ไม่เป็น) ค่าต้องเป็น 0 หรือ 1"
-        )
-    
-    with col2:
-        st.info(f"Selected Outcome: **{target_outcome}**")
-        # เช็คว่า Outcome เป็น Binary (0/1) หรือไม่
-        if edited_df[target_outcome].nunique() > 2:
-            st.warning("⚠️ Warning: Selected outcome has more than 2 categories. Logistic regression might fail.")
+    # หา Outcome
+    all_columns = edited_df.columns.tolist()
+    default_idx = 0
+    for i, col in enumerate(all_columns):
+        if any(x in col.lower() for x in ["outcome", "died", "status", "sumoutcome"]):
+            default_idx = i
+            break
+            
+    target_outcome = st.selectbox("Select Outcome (Y)", all_columns, index=default_idx)
 
-    # --- 3. ปุ่มรัน (Action) ---
     if st.button("🚀 Run Analysis", type="primary"):
-        with st.spinner('Calculating stats...'):
-            try:
-                # ส่ง Dataframe และ Outcome ที่เลือกไปให้ stat.py
-                html_result = process_data_and_generate_html(edited_df, target_outcome=target_outcome)
-                
-                # แสดงผล HTML
-                st.components.v1.html(html_result, height=800, scrolling=True)
-                
-                # ปุ่มดาวน์โหลด
-                st.download_button(
-                    label="📥 Download Report (HTML)",
-                    data=html_result,
-                    file_name="analysis_report.html",
-                    mime="text/html"
-                )
-            except Exception as e:
-                st.error(f"An error occurred: {e}")
-                st.exception(e)
+        # เช็คอีกทีว่า Outcome มีค่าพอไหม
+        if edited_df[target_outcome].nunique() < 2:
+            st.error("❌ Outcome must have at least 2 groups (e.g., 0 and 1).")
+        else:
+            with st.spinner('Calculating...'):
+                try:
+                    html_result = process_data_and_generate_html(edited_df, target_outcome=target_outcome)
+                    st.components.v1.html(html_result, height=800, scrolling=True)
+                    st.download_button("📥 Download HTML Report", html_result, "report.html", "text/html")
+                except Exception as e:
+                    st.error(f"Error: {e}")
 
 else:
-    st.info("👈 Please upload a file or click 'Load Example Data' to start.")
+    st.info("👈 Please upload a file to start.")
