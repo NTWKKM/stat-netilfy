@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 
 # Import logic
-from stat import process_data_and_generate_html
+from logic import process_data_and_generate_html
 
 # ฟังก์ชันสำหรับตรวจสอบคุณภาพข้อมูล (Duplicate Logic with stat.py for checking purpose)
 def is_problematic(val):
