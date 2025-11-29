@@ -106,6 +106,14 @@ def generate_table(df, selected_vars, group_col, var_meta):
         tr:nth-child(even) td { background-color: #f9f9f9; }
         tr:hover td { background-color: #f1f7ff; }
         .footer-note { margin-top: 15px; font-size: 0.85em; color: #666; font-style: italic; }
+                .report-footer {
+            text-align: right;
+            font-size: 0.75em;
+            color: var(--text-color);
+            margin-top: 20px;
+            border-top: 1px dashed var(--border-color);
+            padding-top: 10px;
+        }
     </style>
     """
     
@@ -173,4 +181,11 @@ def generate_table(df, selected_vars, group_col, var_meta):
     html += "<div class='footer-note'>Data presented as Mean ± SD for continuous variables, and n (%) for categorical variables. P-values calculated using T-test/ANOVA or Chi-square/Fisher's exact test.</div>"
     html += "</div></body></html>"
     
+# 🟢 NEW: เพิ่ม Footer ของ Report
+    html += """
+    <div class="report-footer">
+      &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
+    </div>
+    """
+
     return html
