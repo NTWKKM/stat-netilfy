@@ -9,15 +9,23 @@
   </head>
   <body>
     <div id="root"></div>
-   <script>
+    <script>
       stlite.mount({
+        // 🟢 เพิ่ม theme config ตรงนี้เพื่อบังคับ Light Mode
+        theme: {
+          "base": "light",
+          "primaryColor": "#2c3e50",
+          "backgroundColor": "#ffffff",
+          "secondaryBackgroundColor": "#f0f2f6",
+          "textColor": "#31333F"
+        },
         requirements: ["pandas", "scipy", "statsmodels", "openpyxl", "scikit-learn", "matplotlib"],
         entrypoint: "app.py",
         files: {
           "app.py": { url: "./app.py" },
           "logic.py": { url: "./logic.py" },
           "diag_test.py": { url: "./diag_test.py" },
-          "table_one.py": { url: "./table_one.py" }  // 🟢 เพิ่มไฟล์นี้
+          "table_one.py": { url: "./table_one.py" }
         },
       }, document.getElementById("root"));
     </script>
