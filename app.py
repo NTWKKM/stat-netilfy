@@ -17,6 +17,18 @@ if 'df' not in st.session_state:
     st.session_state.df = None
 if 'var_meta' not in st.session_state:
     st.session_state.var_meta = {} 
+    
+# 🟢 FIX: Initialize all output variables at the top
+if 'html_output_t1' not in st.session_state:
+    st.session_state.html_output_t1 = None
+if 'html_output_roc' not in st.session_state:
+    st.session_state.html_output_roc = None
+if 'html_output_chi' not in st.session_state:
+    st.session_state.html_output_chi = None
+if 'html_output_desc' not in st.session_state:
+    st.session_state.html_output_desc = None
+if 'html_output_logit' not in st.session_state:
+    st.session_state.html_output_logit = None
 
 # --- HELPER FUNCTIONS ---
 def check_perfect_separation(df, target_col):
@@ -226,8 +238,6 @@ if st.session_state.df is not None:
             selected_vars = st.multiselect("Include Variables:", all_cols, default=def_vars, key='t1_vars')
             
         run_col_t1, download_col_t1 = st.columns([1, 1])
-        if 'html_output_t1' not in st.session_state:
-            st.session_state.html_output_t1 = None
 
         if run_col_t1.button("📊 Generate Table 1", type="primary"):
             with st.spinner("Generating Table 1..."):
@@ -300,8 +310,6 @@ if st.session_state.df is not None:
 
             
             run_col_roc, download_col_roc = st.columns([1, 1])
-            if 'html_output_roc' not in st.session_state:
-                st.session_state.html_output_roc = None
             
             if run_col_roc.button("📉 Analyze ROC", key='btn_roc'):
                 if pos_label is None and len(unique_truth_vals) == 2:
@@ -449,8 +457,6 @@ if st.session_state.df is not None:
             dv = st.selectbox("Select Variable:", all_cols, key='desc_var')
             
             run_col_desc, download_col_desc = st.columns([1, 1])
-            if 'html_output_desc' not in st.session_state:
-                st.session_state.html_output_desc = None
             
             if run_col_desc.button("Show Stats", key='btn_desc'):
                 res_df = diag_test.calculate_descriptive(df, dv)
@@ -514,9 +520,7 @@ if st.session_state.df is not None:
                 exclude_cols = st.multiselect("Exclude Variables (Optional):", all_cols, key='logit_exclude_optional')
 
         run_col, download_col = st.columns([1, 1])
-        if 'html_output_logit' not in st.session_state:
-            st.session_state.html_output_logit = None 
-        
+  
         if run_col.button("🚀 Run Logistic Regression", type="primary"):
             if df[target].nunique() < 2:
                 st.error("Error: Outcome must have at least 2 values (e.g., 0 and 1).")
