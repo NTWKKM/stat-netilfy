@@ -44,21 +44,68 @@ def calculate_descriptive(df, col):
         }).sort_values("Count", ascending=False)
 
 def calculate_chi2(df, col1, col2):
-    """คำนวณ Chi-square"""
-    if col1 not in df.columns or col2 not in df.columns: return None, "Columns not found"
+    """คำนวณ Chi-square พร้อมทั้ง RR, ARR, NNT สำหรับตาราง 2x2"""
+    if col1 not in df.columns or col2 not in df.columns: 
+        return None, {"error": "Columns not found"}
     
-    # Drop missing
     data = df[[col1, col2]].dropna()
     
-    # Contingency Table
+    # Contingency Table: col1 (Row/Exposure) vs col2 (Column/Outcome)
     tab = pd.crosstab(data[col1], data[col2])
+    
+    results = {}
     
     try:
         chi2, p, dof, ex = stats.chi2_contingency(tab)
-        msg = f"Chi-square statistic: {chi2:.4f}, p-value: {p:.4f}"
-        return tab, msg
+        results['chi2_msg'] = f"Chi-square statistic: {chi2:.4f}, p-value: {p:.4f}, df: {dof}"
+        results['p_value'] = p
     except Exception as e:
-        return tab, str(e)
+        results['chi2_msg'] = f"Chi-square calculation error: {str(e)}"
+        
+    # --- RR / ARR / NNT Calculation (Only for 2x2 table) ---
+    if tab.shape == (2, 2):
+        # Assumption: Row 0 = Exposed, Row 1 = Unexposed, Col 0 = Event (Positive)
+        tab_arr = tab.values 
+        a, b = tab_arr[0, 0], tab_arr[0, 1] 
+        c, d = tab_arr[1, 0], tab_arr[1, 1] 
+        
+        N_exp = a + b 
+        N_unexp = c + d 
+        
+        # Calculate Risk
+        R_exp = a / N_exp if N_exp > 0 else 0 # Risk in Exposed (R1)
+        R_unexp = c / N_unexp if N_unexp > 0 else 0 # Risk in Unexposed (R0)
+        
+        if N_exp > 0 and N_unexp > 0:
+            # RR
+            RR = R_exp / R_unexp if R_unexp > 0 else np.inf
+            
+            # Risk Difference (RD) / Absolute Risk Reduction (ARR)
+            RD = R_exp - R_unexp
+            
+            # NNT = 1 / |RD|
+            NNT = 1 / abs(RD) if RD != 0 and abs(RD) <= 1 else np.inf
+            
+            # Odds Ratio (for reference)
+            OR = (a * d) / (b * c) if b != 0 and c != 0 else np.inf
+            
+            results['Is_2x2'] = True
+            results['RR'] = RR
+            results['RD'] = RD
+            results['NNT'] = NNT
+            results['OR'] = OR
+            results['R_exp'] = R_exp
+            results['R_unexp'] = R_unexp
+            results['R_exp_label'] = tab.index[0] # Label assumed to be Exposed
+            results['R_unexp_label'] = tab.index[1] # Label assumed to be Unexposed
+            results['Event_label'] = tab.columns[0] # Label assumed to be the Event
+        else:
+            results['RR'] = np.nan
+            results['NNT'] = np.nan
+            results['RD'] = np.nan
+            results['Is_2x2'] = True
+            
+    return tab, results
 
 # --- ROC & AUC FUNCTIONS ---
 
