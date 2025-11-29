@@ -61,10 +61,19 @@ def calculate_chi2(df, col1, col2):
     tab_for_chi2 = pd.crosstab(data[col1], data[col2]) 
     
     try:
-        chi2, p, dof, ex = stats.chi2_contingency(tab_for_chi2)
-        results['chi2_msg'] = f"Chi-square statistic: {chi2:.4f}, p-value: {p:.4f}, df: {dof}"
+        # MODIFIED: Pass correction parameter to chi2_contingency
+        chi2, p, dof, ex = stats.chi2_contingency(tab_for_chi2, correction=correction)
+        
+        # Determine the name of the test used for the message
+        test_name = "Chi-square (Pearson)"
+        if correction:
+            test_name = "Chi-square (Yates' corrected)"
+            
+        # MODIFIED: Update chi2_msg to include the test name
+        results['chi2_msg'] = f"{test_name} statistic: {chi2:.4f}, p-value: {p:.4f}, df: {dof}"
         results['p_value'] = p
     except Exception as e:
+        
         results['chi2_msg'] = f"Chi-square calculation error: {str(e)}"
         
     # --- RR / ARR / NNT Calculation (Only for 2x2 table) ---
