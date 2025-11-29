@@ -108,7 +108,7 @@ if st.sidebar.button("📄 Load Example Data"):
     safe_rerun()
 
 # Upload File
-uploaded_file = st.sidebar.file_uploader("Upload CSV/Excel", type=['csv', 'xlsx']) # <--- บรรทัดนี้คือบรรทัดที่ขาดหายไปและถูกเพิ่มกลับมา
+uploaded_file = st.sidebar.file_uploader("Upload CSV/Excel", type=['csv', 'xlsx'])
 if uploaded_file:
     try:
         if uploaded_file.name.endswith('.csv'): st.session_state.df = pd.read_csv(uploaded_file)
@@ -160,6 +160,15 @@ if st.session_state.df is not None:
             st.session_state.var_meta[selected_var]['map'] = new_map
             st.sidebar.success("Saved!")
             safe_rerun()
+
+# 🟢 NEW: เพิ่มเครดิตที่ส่วนท้ายของ Sidebar (เฉพาะเมื่อมีการโหลดข้อมูลแล้ว)
+st.sidebar.markdown("""
+<hr style="margin-top: 20px; margin-bottom: 10px; border-color: var(--border-color);">
+<div style='text-align: center; font-size: 0.7em; color: var(--text-color);'>
+  &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
+</div>
+""", unsafe_allow_html=True)
+
 
 # ==========================================
 # 2. MAIN AREA: NAVIGATION & CONTENT
@@ -256,6 +265,7 @@ if st.session_state.df is not None:
                 <ul>
                     <li>**AUC (Area Under the Curve):** Measures the overall discriminative ability (0.5 = random chance, 1.0 = perfect separation).</li>
                     <li>**Youden Index:** Used to find the optimal cut-off point that maximizes both Sensitivity and Specificity.</li>
+                    <li>**P-value (H0: AUC=0.5):** Tests if the AUC is statistically better than random chance.</li>
                 </ul>
             """, unsafe_allow_html=True)
             
@@ -326,7 +336,7 @@ if st.session_state.df is not None:
                     st.button("📥 Download HTML Report", disabled=True, key='placeholder_roc')
 
 
-        # --- Chi-Square --- (MODIFIED)
+        # --- Chi-Square ---
         with sub_tab2:
             st.markdown("##### Chi-Square Test & Risk Measures")
             st.markdown("""
@@ -419,7 +429,8 @@ if st.session_state.df is not None:
                 else:
                     st.button("📥 Download HTML Report", disabled=True, key='placeholder_chi')
 
-        # --- Descriptive --- (UNCHANGED)
+
+        # --- Descriptive ---
         with sub_tab3:
             st.markdown("##### Descriptive Statistics")
             st.markdown("""
@@ -534,35 +545,13 @@ else:
     """)
 
 # ==========================================
-# 3. GLOBAL FOOTER (Moved from index.html)
+# 3. GLOBAL FOOTER (CLEANUP)
 # ==========================================
 
-# 🟢 Inject Custom CSS for fixed footer (Must be run once)
+# 🟢 NEW: Inject CSS to hide the default Streamlit footer (Keep this part)
 st.markdown("""
 <style>
-/* CSS เพื่อให้ Footer อยู่ติดด้านล่างสุด */
-
-   .stApp {
-    margin-bottom: 30px; /* เพิ่มระยะห่างด้านล่างสำหรับ Footer */
-}
-.app-footer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    padding: 8px 0;
-    
-    /* ใช้ CSS Variables ของ Streamlit */
-    background-color: var(--secondary-background-color); 
-    color: var(--text-color);
-    
-    text-align: center;
-    font-size: 0.75em;
-    border-top: 1px solid var(--border-color);
-    z-index: 10000; /* FIX: เพิ่ม Z-INDEX ให้สูงขึ้นมาก เพื่อให้ Footer ทับ Sidebar */
-}
-
-/* 🟢 NEW FIX: ทำให้ Sidebar Background ยาวลงมาถึงด้านล่างสุด */
+/* 🟢 FIX: ทำให้ Sidebar Background ยาวลงมาถึงด้านล่างสุด */
 [data-testid="stSidebar"] > div {
     height: 100vh !important; /* บังคับให้ Sidebar background ยาวเท่าความสูงของหน้าจอ */
 }
@@ -576,12 +565,4 @@ footer:after {
     content: none;
 }
 </style>
-""", unsafe_allow_html=True)
-
-
-# 🟢 Render the Footer HTML
-st.markdown("""
-<div class="app-footer">
-  &copy; 2025 NTWKKM &nbsp;|&nbsp; Powered by GitHub, Gemini, Streamlit
-</div>
 """, unsafe_allow_html=True)
