@@ -106,7 +106,7 @@ def generate_table(df, selected_vars, group_col, var_meta):
         tr:nth-child(even) td { background-color: #f9f9f9; }
         tr:hover td { background-color: #f1f7ff; }
         .footer-note { margin-top: 15px; font-size: 0.85em; color: #666; font-style: italic; }
-                .report-footer {
+        .report-footer {
             text-align: right;
             font-size: 0.75em;
             color: var(--text-color);
