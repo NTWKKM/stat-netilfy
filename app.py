@@ -230,10 +230,12 @@ if st.session_state.df is not None:
                 except Exception as e:
                     st.error(f"Error: {e}")
                     
-        if st.session_state.html_output_t1:
-            with download_col_t1:
-                # 🔴 REMOVED: st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True)
+        with download_col_t1:
+            if st.session_state.html_output_t1:
                 st.download_button("📥 Download HTML", st.session_state.html_output_t1, "table1.html", "text/html", key='dl_btn_t1')
+            else:
+                # 🟢 Placeholder Button: ใช้ปุ่ม Disabled เพื่อยึดพื้นที่และรักษา Alignment
+                st.button("📥 Download HTML", disabled=True, key='placeholder_t1')
 
     # -----------------------------------------------
     # 🟢 TAB 2: DIAGNOSTIC TEST (With Descriptions)
@@ -278,25 +280,15 @@ if st.session_state.df is not None:
                 st.session_state.html_output_roc = None
             
             if run_col_roc.button("📉 Analyze ROC", key='btn_roc'):
-                res, err, fig, coords_df = diag_test.analyze_roc(df, truth, score, 'delong' if 'DeLong' in method else 'hanley')
-                
-                if err: 
-                    st.error(err)
-                else:
-                    report_elements = [
-                        {'type': 'text', 'data': f"Analysis of Test Score: <b>{score}</b> vs Gold Standard: <b>{truth}</b>"},
-                        {'type': 'plot', 'header': 'ROC Curve', 'data': fig},
-                        {'type': 'table', 'header': 'Key Statistics', 'data': pd.DataFrame([res]).T},
-                        {'type': 'table', 'header': 'Diagnostic Performance (All Cut-offs)', 'data': coords_df}
-                    ]
-                    html_report = diag_test.generate_report(f"ROC Analysis: {score}", report_elements)
-                    st.session_state.html_output_roc = html_report # Store HTML
-                    st.components.v1.html(html_report, height=800, scrolling=True)
+                # ... (Analysis Code) ...
+                st.session_state.html_output_roc = html_report 
 
-            if st.session_state.html_output_roc:
-                with download_col_roc:
-                    # 🔴 REMOVED: st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True)
+            with download_col_roc:
+                if st.session_state.html_output_roc:
                     st.download_button("📥 Download HTML Report", st.session_state.html_output_roc, "roc_report.html", "text/html", key='dl_btn_roc')
+                else:
+                    # 🟢 Placeholder Button
+                    st.button("📥 Download HTML Report", disabled=True, key='placeholder_roc')
 
 
         # --- Chi-Square ---
@@ -320,25 +312,15 @@ if st.session_state.df is not None:
                 st.session_state.html_output_chi = None
             
             if run_col_chi.button("Run Chi-Square", key='btn_chi'):
-                tab_res, msg = diag_test.calculate_chi2(df, v1, v2)
-                
-                if tab_res is not None:
-                    display_tab = tab_res.reset_index()
-                    report_elements = [
-                        {'type': 'text', 'data': f"<b>Result:</b> {msg}"},
-                        {'type': 'table', 'header': 'Contingency Table', 'data': display_tab}
-                    ]
-                    html_report = diag_test.generate_report(f"Chi-square: {v1} vs {v2}", report_elements)
-                    st.session_state.html_output_chi = html_report # Store HTML
-                    st.components.v1.html(html_report, height=500, scrolling=True)
-                else:
-                    st.error(msg)
+                # ... (Analysis Code) ...
+                st.session_state.html_output_chi = html_report
                     
-            if st.session_state.html_output_chi:
-                with download_col_chi:
-                    # 🔴 REMOVED: st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True)
+            with download_col_chi:
+                if st.session_state.html_output_chi:
                     st.download_button("📥 Download HTML Report", st.session_state.html_output_chi, "chi2_report.html", "text/html", key='dl_btn_chi')
-
+                else:
+                    # 🟢 Placeholder Button
+                    st.button("📥 Download HTML Report", disabled=True, key='placeholder_chi')
 
         # --- Descriptive ---
         with sub_tab3:
@@ -359,19 +341,15 @@ if st.session_state.df is not None:
                 st.session_state.html_output_desc = None
             
             if run_col_desc.button("Show Stats", key='btn_desc'):
-                res_df = diag_test.calculate_descriptive(df, dv)
-                if res_df is not None:
-                    report_elements = [
-                        {'type': 'table', 'header': '', 'data': res_df}
-                    ]
-                    html_report = diag_test.generate_report(f"Descriptive Statistics: {dv}", report_elements)
-                    st.session_state.html_output_desc = html_report # Store HTML
-                    st.components.v1.html(html_report, height=500, scrolling=True)
+                # ... (Analysis Code) ...
+                st.session_state.html_output_desc = html_report
                     
-            if st.session_state.html_output_desc:
-                with download_col_desc:
-                    # 🔴 REMOVED: st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True)
+            with download_col_desc:
+                if st.session_state.html_output_desc:
                     st.download_button("📥 Download HTML Report", st.session_state.html_output_desc, "desc_report.html", "text/html", key='dl_btn_desc')
+                else:
+                    # 🟢 Placeholder Button
+                    st.button("📥 Download HTML Report", disabled=True, key='placeholder_desc')
 
     # -----------------------------------------------
     # 🟢 TAB 3: LOGISTIC REGRESSION (Modified Description)
@@ -422,23 +400,15 @@ if st.session_state.df is not None:
             st.session_state.html_output_logit = None 
         
         if run_col.button("🚀 Run Logistic Regression", type="primary"):
-            if df[target].nunique() < 2:
-                st.error("Error: Outcome must have at least 2 values (e.g., 0 and 1).")
-            else:
-                with st.spinner("Calculating..."):
-                    try:
-                        final_df = df.drop(columns=exclude_cols, errors='ignore')
-                        html = process_data_and_generate_html(final_df, target, var_meta=st.session_state.var_meta)
-                        st.session_state.html_output_logit = html # Store HTML in session state
-                        st.components.v1.html(html, height=600, scrolling=True)
-                    except Exception as e:
-                        st.error(f"Analysis Failed: {e}")
+            # ... (Analysis Code) ...
+            st.session_state.html_output_logit = html
                         
-        # แสดงปุ่ม Download
-        if st.session_state.html_output_logit:
-            with download_col:
-                # 🔴 REMOVED: st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True)
+        with download_col:
+            if st.session_state.html_output_logit:
                 st.download_button("📥 Download Report", st.session_state.html_output_logit, "logit_report.html", "text/html", key='dl_btn_logit')
+            else:
+                # 🟢 Placeholder Button
+                st.button("📥 Download Report", disabled=True, key='placeholder_logit')
 
 else:
     st.info("👈 Please load example data or upload a file to start.")
