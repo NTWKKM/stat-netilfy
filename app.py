@@ -169,96 +169,74 @@ if st.session_state.df is not None:
     df = st.session_state.df
     all_cols = df.columns.tolist()
 
-    # --- TOP NAVIGATION (เพิ่ม Raw Data Tab) ---
+    # --- TOP NAVIGATION (Reordered Tabs) ---
     main_tab0, main_tab1, main_tab2, main_tab3 = st.tabs([
         "📄 Raw Data", 
-        "📊 Logistic Regression", 
-        "🔬 Diagnostic Test (ROC/Chi2)", 
-        "📋 Baseline Table 1"
+        "📋 Baseline Table 1", # New Tab 1
+        "🔬 Diagnostic Test (ROC/Chi2)", # New Tab 2
+        "📊 Logistic Regression" # New Tab 3
     ])
 
     # -----------------------------------------------
-    # 🟢 TAB 0: RAW DATA
+    # TAB 0: RAW DATA
     # -----------------------------------------------
     with main_tab0:
         st.subheader("Raw Data Table")
         st.info("💡 You can view, scroll, and edit your raw data directly in this table.")
-        # ย้าย Data Editor มาไว้ที่นี่
         edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, height=500, key='editor_raw')
-        st.session_state.df = edited_df # อัปเดตข้อมูลที่แก้ไขกลับเข้าสู่ session state
-        df = st.session_state.df # ให้ตัวแปร df ในปัจจุบันชี้ไปที่ข้อมูลที่แก้ไขแล้ว
+        st.session_state.df = edited_df 
+        df = st.session_state.df 
 
     # -----------------------------------------------
-    # TAB 1: LOGISTIC REGRESSION (ปรับปรุง)
+    # 🟢 TAB 1: BASELINE CHARACTERISTICS (TABLE 1)
     # -----------------------------------------------
     with main_tab1:
-        st.subheader("1. Logistic Regression Analysis")
-        
-        # เพิ่มรายละเอียดของ Logistic Regression Analysis คร่าวๆ
+        st.subheader("1. Baseline Characteristics (Table 1)")
         st.markdown("""
             <div style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 20px;">
                 <p>
-                <b>Binary Logistic Regression</b> ใช้ในการสร้างแบบจำลองความน่าจะเป็นของผลลัพธ์แบบไบนารี (เช่น 0 หรือ 1, เป็นโรคหรือไม่เป็น) โดยอาศัยตัวแปรทำนายตั้งแต่หนึ่งตัวขึ้นไป
+                The **Baseline Characteristics (Table 1)** tool generates a summary table of the study population, typically stratifying variables by treatment or outcome groups.
                 </p>
-                <ul>
-                    <li><b>Univariate Analysis (Crude OR):</b> วิเคราะห์ความสัมพันธ์ของตัวแปรแต่ละตัวกับผลลัพธ์เพื่อหาค่า Crude Odds Ratio (OR)</li>
-                    <li><b>Multivariate Analysis (Adjusted OR):</b> เลือกตัวแปรที่มีนัยสำคัญ (P-value < 0.20) จากการวิเคราะห์แบบ Univariate เพื่อนำมาสร้างแบบจำลองรวม เพื่อหาค่า Adjusted Odds Ratio (aOR) ซึ่งเป็นตัวทำนายอิสระ</li>
-                </ul>
-                <p style='font-size:0.9em;'><i>ท่านสามารถดูและแก้ไขข้อมูลได้ในแท็บ 📄 Raw Data</i></p>
+                <p>
+                It reports continuous variables as **Mean ± SD** and categorical variables as **Counts (%)**, providing **P-values** to test for significant differences between groups (using T-test/ANOVA for continuous and Chi-square/Fisher's exact test for categorical variables).
+                </p>
             </div>
         """, unsafe_allow_html=True)
         
-        st.markdown("### Analysis Configuration")
-        col1, col2 = st.columns([1, 2])
+        # Try to find group column
+        grp_idx = 0
+        for i, c in enumerate(all_cols):
+            if 'group' in c.lower() or 'treat' in c.lower(): grp_idx = i; break
         
-        with col1:
-            # Find default outcome
-            def_idx = 0
-            for i, c in enumerate(all_cols):
-                if 'outcome' in c.lower() or 'died' in c.lower():
-                    def_idx = i; break
+        c_t1, c_t2 = st.columns([1, 2])
+        with c_t1:
+            col_group = st.selectbox("Group By (Column):", ["None"] + all_cols, index=grp_idx+1, key='t1_group')
+        
+        with c_t2:
+            def_vars = [c for c in all_cols if c != col_group]
+            selected_vars = st.multiselect("Include Variables:", all_cols, default=def_vars, key='t1_vars')
             
-            target = st.selectbox("Select Outcome (Y):", all_cols, index=def_idx)
-            
-        with col2:
-            # Check Perfect Separation
-            risky_vars = check_perfect_separation(df, target)
-            exclude_cols = []
-            
-            if risky_vars:
-                st.warning(f"⚠️ Risk of Perfect Separation: {', '.join(risky_vars)}")
-                exclude_cols = st.multiselect("Exclude Variables:", all_cols, default=risky_vars)
-            else:
-                exclude_cols = st.multiselect("Exclude Variables (Optional):", all_cols)
+        run_col_t1, download_col_t1 = st.columns([1, 1])
+        if 'html_output_t1' not in st.session_state:
+            st.session_state.html_output_t1 = None
 
-        # จัดวางปุ่ม Run และ Download ในคอลัมน์เดียวกัน
-        run_col, download_col = st.columns([1, 1])
-        
-        if 'html_output_logit' not in st.session_state:
-            st.session_state.html_output_logit = None # Initialize 
-        
-        if run_col.button("🚀 Run Logistic Regression", type="primary"):
-            if df[target].nunique() < 2:
-                st.error("Error: Outcome must have at least 2 values (e.g., 0 and 1).")
-            else:
-                with st.spinner("Calculating..."):
-                    try:
-                        final_df = df.drop(columns=exclude_cols, errors='ignore')
-                        html = process_data_and_generate_html(final_df, target, var_meta=st.session_state.var_meta)
-                        st.session_state.html_output_logit = html # Store HTML in session state
-                        st.components.v1.html(html, height=600, scrolling=True)
-                    except Exception as e:
-                        st.error(f"Analysis Failed: {e}")
-                        
-        # แสดงปุ่ม Download
-        if st.session_state.html_output_logit:
-            with download_col:
+        if run_col_t1.button("📊 Generate Table 1", type="primary"):
+            with st.spinner("Generating Table 1..."):
+                try:
+                    grp = None if col_group == "None" else col_group
+                    html_t1 = table_one.generate_table(df, selected_vars, grp, st.session_state.var_meta)
+                    st.session_state.html_output_t1 = html_t1 # Store HTML
+                    st.components.v1.html(html_t1, height=600, scrolling=True)
+                except Exception as e:
+                    st.error(f"Error: {e}")
+                    
+        if st.session_state.html_output_t1:
+            with download_col_t1:
                 st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True) # เว้นระยะ
-                st.download_button("📥 Download Report", st.session_state.html_output_logit, "logit_report.html", "text/html", key='dl_btn_logit')
-
+                st.download_button("📥 Download HTML", st.session_state.html_output_t1, "table1.html", "text/html", key='dl_btn_t1')
 
     # -----------------------------------------------
-    # 🟢 TAB 2: DIAGNOSTIC TEST (ปรับปรุงปุ่ม)
+    # 🟢 TAB 2: DIAGNOSTIC TEST (With Descriptions)
     # -----------------------------------------------
     with main_tab2:
         st.subheader("2. Diagnostic Test & Statistics")
@@ -268,6 +246,16 @@ if st.session_state.df is not None:
         # --- ROC ---
         with sub_tab1:
             st.markdown("##### ROC Curve Analysis")
+            st.markdown("""
+                <p>
+                The **Receiver Operating Characteristic (ROC) Curve** evaluates the performance of a continuous test score in predicting a binary outcome.
+                </p>
+                <ul>
+                    <li>**AUC (Area Under the Curve):** Measures the overall discriminative ability (0.5 = random chance, 1.0 = perfect separation).</li>
+                    <li>**Youden Index:** Used to find the optimal cut-off point that maximizes both Sensitivity and Specificity.</li>
+                </ul>
+            """, unsafe_allow_html=True)
+            
             rc1, rc2, rc3 = st.columns(3)
             # Find default outcome index
             def_idx = 0
@@ -314,6 +302,15 @@ if st.session_state.df is not None:
         # --- Chi-Square ---
         with sub_tab2:
             st.markdown("##### Chi-Square Test")
+            st.markdown("""
+                <p>
+                The **Chi-Square Test** is used to determine whether there is a significant association between two categorical variables. 
+                </p>
+                <p>
+                It compares the observed frequencies in the Contingency Table with the expected frequencies if the variables were independent.
+                </p>
+            """, unsafe_allow_html=True)
+            
             cc1, cc2 = st.columns(2)
             v1 = cc1.selectbox("Variable 1:", all_cols, key='chi1')
             v2 = cc2.selectbox("Variable 2:", all_cols, index=min(1, len(all_cols)-1), key='chi2')
@@ -346,6 +343,15 @@ if st.session_state.df is not None:
         # --- Descriptive ---
         with sub_tab3:
             st.markdown("##### Descriptive Statistics")
+            st.markdown("""
+                <p>
+                **Descriptive Statistics** summarizes the basic features of the data in a study. 
+                </p>
+                <p>
+                For **Continuous** variables, it reports Count, Mean, Standard Deviation (SD), and Quartiles. For **Categorical** variables, it reports Counts and Percentages.
+                </p>
+            """, unsafe_allow_html=True)
+            
             dv = st.selectbox("Select Variable:", all_cols, key='desc_var')
             
             run_col_desc, download_col_desc = st.columns([1, 1])
@@ -368,42 +374,71 @@ if st.session_state.df is not None:
                     st.download_button("📥 Download HTML Report", st.session_state.html_output_desc, "desc_report.html", "text/html", key='dl_btn_desc')
 
     # -----------------------------------------------
-    # TAB 3: TABLE 1 (ปรับปรุงปุ่ม)
+    # 🟢 TAB 3: LOGISTIC REGRESSION (Modified Description)
     # -----------------------------------------------
     with main_tab3:
-        st.subheader("3. Baseline Characteristics (Table 1)")
+        st.subheader("3. Logistic Regression Analysis")
         
-        # Try to find group column
-        grp_idx = 0
-        for i, c in enumerate(all_cols):
-            if 'group' in c.lower() or 'treat' in c.lower(): grp_idx = i; break
+        # English Description of Logistic Regression
+        st.markdown("""
+            <div style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 20px;">
+                <p>
+                <b>Binary Logistic Regression</b> is used to model the probability of a binary outcome (e.g., 0 or 1, disease presence/absence) based on one or more predictor variables.
+                </p>
+                <ul>
+                    <li><b>Univariate Analysis (Crude OR):</b> Calculates the association of each individual variable with the outcome, providing the Crude Odds Ratio (OR).</li>
+                    <li><b>Multivariate Analysis (Adjusted OR):</b> Includes potential confounding variables (screened at P-value < 0.20) into a single model to determine independent predictors, providing the Adjusted Odds Ratio (aOR).</li>
+                </ul>
+                <p style='font-size:0.9em;'><i>You can view and edit the data in the 📄 Raw Data tab.</i></p>
+            </div>
+        """, unsafe_allow_html=True)
         
-        c_t1, c_t2 = st.columns([1, 2])
-        with c_t1:
-            col_group = st.selectbox("Group By (Column):", ["None"] + all_cols, index=grp_idx+1)
+        st.markdown("### Analysis Configuration")
+        col1, col2 = st.columns([1, 2])
         
-        with c_t2:
-            def_vars = [c for c in all_cols if c != col_group]
-            selected_vars = st.multiselect("Include Variables:", all_cols, default=def_vars)
+        with col1:
+            # Find default outcome
+            def_idx = 0
+            for i, c in enumerate(all_cols):
+                if 'outcome' in c.lower() or 'died' in c.lower():
+                    def_idx = i; break
             
-        run_col_t1, download_col_t1 = st.columns([1, 1])
-        if 'html_output_t1' not in st.session_state:
-            st.session_state.html_output_t1 = None
+            target = st.selectbox("Select Outcome (Y):", all_cols, index=def_idx, key='logit_target')
+            
+        with col2:
+            # Check Perfect Separation
+            risky_vars = check_perfect_separation(df, target)
+            exclude_cols = []
+            
+            if risky_vars:
+                st.warning(f"⚠️ Risk of Perfect Separation: {', '.join(risky_vars)}")
+                exclude_cols = st.multiselect("Exclude Variables:", all_cols, default=risky_vars, key='logit_exclude')
+            else:
+                exclude_cols = st.multiselect("Exclude Variables (Optional):", all_cols, key='logit_exclude_optional')
 
-        if run_col_t1.button("📊 Generate Table 1", type="primary"):
-            with st.spinner("Generating Table 1..."):
-                try:
-                    grp = None if col_group == "None" else col_group
-                    html_t1 = table_one.generate_table(df, selected_vars, grp, st.session_state.var_meta)
-                    st.session_state.html_output_t1 = html_t1 # Store HTML
-                    st.components.v1.html(html_t1, height=600, scrolling=True)
-                except Exception as e:
-                    st.error(f"Error: {e}")
-                    
-        if st.session_state.html_output_t1:
-            with download_col_t1:
+        # จัดวางปุ่ม Run และ Download ในคอลัมน์เดียวกัน
+        run_col, download_col = st.columns([1, 1])
+        if 'html_output_logit' not in st.session_state:
+            st.session_state.html_output_logit = None 
+        
+        if run_col.button("🚀 Run Logistic Regression", type="primary"):
+            if df[target].nunique() < 2:
+                st.error("Error: Outcome must have at least 2 values (e.g., 0 and 1).")
+            else:
+                with st.spinner("Calculating..."):
+                    try:
+                        final_df = df.drop(columns=exclude_cols, errors='ignore')
+                        html = process_data_and_generate_html(final_df, target, var_meta=st.session_state.var_meta)
+                        st.session_state.html_output_logit = html # Store HTML in session state
+                        st.components.v1.html(html, height=600, scrolling=True)
+                    except Exception as e:
+                        st.error(f"Analysis Failed: {e}")
+                        
+        # แสดงปุ่ม Download
+        if st.session_state.html_output_logit:
+            with download_col:
                 st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True) # เว้นระยะ
-                st.download_button("📥 Download HTML", st.session_state.html_output_t1, "table1.html", "text/html", key='dl_btn_t1')
+                st.download_button("📥 Download Report", st.session_state.html_output_logit, "logit_report.html", "text/html", key='dl_btn_logit')
 
 else:
     st.info("👈 Please load example data or upload a file to start.")
