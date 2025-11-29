@@ -6,49 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
     <title>Medical Stat Tool</title>
     <script src="https://cdn.jsdelivr.net/npm/@stlite/mountable@0.39.0/build/stlite.js"></script>
-    <style>
-      /* CSS สำหรับ Footer (ไม่มีการกำหนดสีตายตัว) */
-      .stApp {
-          margin-bottom: 30px;
-      }
-      .footer {
-          position: fixed;
-          bottom: 0;
-          left: 0;
-          width: 100%;
-          padding: 8px 0;
-          
-          /* ใช้ CSS Variables ของ Streamlit */
-          background-color: var(--secondary-background-color); 
-          color: var(--text-color);
-          
-          text-align: center;
-          font-size: 0.75em;
-          border-top: 1px solid var(--border-color);
-          z-index: 1000;
-      }
-      .footer a {
-          color: var(--text-color);
-          text-decoration: none;
-      }
-      .footer a:hover {
-          text-decoration: underline;
-      }
-      /* โค้ดสำหรับซ่อน Streamlit footer */
-      footer {
-          visibility: hidden;
-          height: 0px;
-      }
-      footer:after {
-          content: none;
-      }
-    </style>
-  </head>
+    </head>
   <body>
     <div id="root"></div>
-    <div class="footer">
-      &copy; 2025 NTWKKM &nbsp;|&nbsp; Powered by GitHub, Gemini, Streamlit
-    </div>
     <script>
       stlite.mount({
         /* 🟢 ลบส่วน theme config ออกไปแล้ว */
