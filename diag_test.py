@@ -1,15 +1,14 @@
 # diag_test.py
-
 import pandas as pd
 import numpy as np
 import scipy.stats as stats
 from sklearn.metrics import roc_curve, roc_auc_score
 import matplotlib.pyplot as plt
-import io, base64 
+import io, base64 # เพิ่ม io และ base64 สำหรับการฝังรูปใน HTML
 
 def calculate_descriptive(df, col):
     """คำนวณสถิติพื้นฐาน"""
-    if col not in df.columns: return None, "Column not found"
+    if col not in df.columns: return "Column not found"
     
     data = df[col].dropna()
     try:
@@ -33,7 +32,7 @@ def calculate_descriptive(df, col):
                 f"{desc['25%']:.4f}",
                 f"{desc['75%']:.4f}"
             ]
-        }), None
+        })
     else:
         # Categorical
         counts = data.value_counts()
@@ -42,7 +41,7 @@ def calculate_descriptive(df, col):
             "Category": counts.index,
             "Count": counts.values,
             "Percentage (%)": percent.values
-        }).sort_values("Count", ascending=False), None
+        }).sort_values("Count", ascending=False)
 
 def calculate_chi2(df, col1, col2):
     """คำนวณ Chi-square พร้อมทั้ง RR, ARR, NNT และสร้างตารางแสดงผลที่มี Count และ Percent"""
@@ -50,6 +49,7 @@ def calculate_chi2(df, col1, col2):
         return None, {"error": "Columns not found"}
     
     data = df[[col1, col2]].dropna()
+    N_total = len(data)
     
     # Contingency Table (Frequency Count)
     tab_raw = pd.crosstab(data[col1], data[col2], margins=True, margins_name="Total")
@@ -69,20 +69,29 @@ def calculate_chi2(df, col1, col2):
         
     # --- RR / ARR / NNT Calculation (Only for 2x2 table) ---
     if tab_for_chi2.shape == (2, 2):
+        # Assumption: Row 0 = Exposed, Row 1 = Unexposed, Col 0 = Event (Positive)
         tab_arr = tab_for_chi2.values 
         a, b = tab_arr[0, 0], tab_arr[0, 1] 
-        c, d = tab_arr[1, 0], tab_arr[1, 1] 
+        c, d = tab_arr[1, 0], tab_arr[1, 1]
         
         N_exp = a + b 
         N_unexp = c + d 
         
-        R_exp = a / N_exp if N_exp > 0 else 0 
-        R_unexp = c / N_unexp if N_unexp > 0 else 0 
+        # Calculate Risk
+        R_exp = a / N_exp if N_exp > 0 else 0 # Risk in Exposed (R1)
+        R_unexp = c / N_unexp if N_unexp > 0 else 0 # Risk in Unexposed (R0)
         
         if N_exp > 0 and N_unexp > 0:
+            # RR
             RR = R_exp / R_unexp if R_unexp > 0 else np.inf
+            
+            # Risk Difference (RD) / Absolute Risk Reduction (ARR)
             RD = R_exp - R_unexp
+            
+            # NNT = 1 / |RD|
             NNT = 1 / abs(RD) if RD != 0 and abs(RD) <= 1 else np.inf
+            
+            # Odds Ratio (for reference)
             OR = (a * d) / (b * c) if b != 0 and c != 0 else np.inf
             
             results['Is_2x2'] = True
@@ -124,7 +133,7 @@ def calculate_chi2(df, col1, col2):
 
             if col_name == 'Total' and row_name == 'Total':
                 # Grand Total Cell: แสดงเฉพาะ Count และ Total %
-                row_pct = 100.0
+                row_pct = 100.0 
                 cell_content = f"{count} / ({total_pct:.1f}%)"
             elif col_name == 'Total':
                 # Row Marginal Total Cell: แสดง Count และ Total %
@@ -193,28 +202,6 @@ def auc_ci_delong(y_true, y_scores):
     pos_scores = y_scores[y_true == 1]
     neg_scores = y_scores[y_true == 0]
     
-    def compute_mid_rank(x):
-        """Helper to get mid-ranks"""
-        argsort = np.argsort(x)
-        ranks = np.empty_like(argsort)
-        ranks[argsort] = np.arange(len(x))
-        return (ranks + 1) # dummy, actual logic below
-        
-    # Faster vectorization for V10, V01
-    # Concatenate all scores to rank them
-    all_scores = np.concatenate([pos_scores, neg_scores])
-    all_labels = np.concatenate([np.ones(len(pos_scores)), np.zeros(len(neg_scores))])
-    
-    # Rank (with average for ties)
-    order = np.argsort(all_scores)
-    ranks = stats.rankdata(all_scores) # 1-based, average ties
-    
-    # Sum of ranks for positives
-    # AUC = (Sum(R_pos) - n_pos(n_pos+1)/2 ) / (n_pos * n_neg)
-    
-    # DeLong variance components
-    # We need empirical Probabilities
-    
     # V10: For each positive, what fraction of negatives is it greater than?
     v10 = []
     for p in pos_scores:
@@ -251,17 +238,8 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
 
     # 🟢 START: Manual Encoding based on user input (Overriding LabelEncoder)
     if pos_label_user is None:
-        # ควรถูกดักจับใน app.py แล้ว แต่มีไว้เพื่อความปลอดภัย
         return None, "Positive label (pos_label) must be specified for binary outcome.", None, None
         
-    # Map user's selected label to 1, and the other label to 0
-    # ใช้ str() เพื่อรองรับการเทียบ String ที่มาจาก Selectbox
-    if str(y_true_raw.iloc[0]) not in [str(x) for x in y_true_raw.unique()]:
-        # ในกรณีที่ข้อมูลมีการแปลงประเภทแล้ว ต้องทำการเทียบตามประเภทข้อมูลเดิม
-        # แต่เนื่องจากเราใช้ str() ใน selectbox และในโค้ดนี้จึงปลอดภัย
-        pass
-        
-    # หาค่า Negative label ที่เหลืออยู่
     all_labels_raw = [str(x) for x in y_true_raw.unique()]
     neg_label_raw = [lab for lab in all_labels_raw if lab != pos_label_user][0]
     
@@ -362,7 +340,9 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
     return stats_res, None, fig, coords_df # แก้ไขให้ return 4 ค่า
 
 def generate_report(title, elements):
-    """Generates a simple HTML report based on a list of elements (text, plot, table)."""
+    """Generates a simple HTML report based on a list of elements (text, plot, table).
+    ใช้สำหรับแสดงผลลัพธ์ของ ROC, Chi-Square และ Descriptive
+    """
     
     # --- CSS Styling (Fixed to use Streamlit CSS variables for theme compatibility) ---
     css_style = """
@@ -428,7 +408,8 @@ def generate_report(title, elements):
             html += f"<p>{data}</p>"
         elif element_type == 'table':
             # Handle standard table (e.g., Key Statistics, Descriptive)
-            include_index = not data.columns.contains('Category') and not data.columns.contains('Statistic')
+            # FIX: ใช้ 'in data.columns' แทน data.columns.contains()
+            include_index = not ('Category' in data.columns) and not ('Statistic' in data.columns)
             html += data.to_html(index=include_index, classes='report-table')
             
         # 🟢 NEW: Handle Contingency Table with Two-Level Header
@@ -444,10 +425,9 @@ def generate_report(title, elements):
             # 2. สร้าง Header สองชั้นด้วย HTML
             
             # Row 1: Merge cells for Outcome_Disease and Total
-            # (First TH is for Exposure/Row Variable, colspan should cover all data columns)
+            # (First TH is for Exposure/Row Variable)
             header_row1 = f"<tr>"
-            # Th แรกสำหรับคอลัมน์ Index (V1)
-            header_row1 += f"<th rowspan='2' class='report-table' style='text-align: left;'>{index_name}</th>" 
+            header_row1 += f"<th rowspan='2' class='report-table' style='text-align: left;'>{index_name}</th>" # ชื่อ Exposure/V1
             # Th ที่เหลือ Merge Cells เพื่อแสดงชื่อ Outcome (รวม Total ด้วย)
             header_row1 += f"<th colspan='{len(col_names_raw)}' class='report-table'>{outcome_col_name}</th>" 
             header_row1 += f"</tr>"
@@ -460,6 +440,7 @@ def generate_report(title, elements):
             header_row2 += f"</tr>"
             
             # 3. นำ Header ที่สร้างเองไปใส่ในตาราง HTML
+            # ค้นหาและแทนที่ส่วน <thead>
             table_start_tag = df_html.split('<thead>')[0]
             table_end_tag = df_html.split('</thead>')[1]
             
@@ -480,12 +461,12 @@ def generate_report(title, elements):
             else:
                  html += '<p class="alert">⚠️ Plot data is not a valid Matplotlib Figure object.</p>'
         
-    # 🟢 NEW: เพิ่ม Footer ของ Report (อยู่หลัง loop for และเยื้องถูกต้องแล้ว)
+    # 🟢 NEW: เพิ่ม Footer ของ Report
     html += """
     <div class="report-footer">
       &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
     </div>
     """
-            
+    
     html += "</div></body></html>"
-    return html
+    return html # <-- ลบ '}' ที่เกินมาออกไป
