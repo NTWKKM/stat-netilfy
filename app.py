@@ -361,14 +361,19 @@ if st.session_state.df is not None:
             """, unsafe_allow_html=True)
             
             # เปลี่ยนจาก 2 เป็น 3 คอลัมน์
-            cc1, cc2, cc3 = st.columns(3)
-            v1 = cc1.selectbox("Variable 1 (Exposure/Group):", all_cols, key='chi1')
-            v2 = cc2.selectbox("Variable 2 (Outcome/Event):", all_cols, index=min(1, len(all_cols)-1), key='chi2')
-            # ADDED: Correction selection
+           cc1, cc2, cc3 = st.columns(3) 
+            
+            with cc1:
+                v1 = st.selectbox("Variable 1 (Exposure/Group):", all_cols, key='chi1')
+            
+            with cc2:
+                v2 = st.selectbox("Variable 2 (Outcome/Event):", all_cols, index=min(1, len(all_cols)-1), key='chi2')
+            
+            # ย้าย Correction Method ไปอยู่ในคอลัมน์ที่ 3
             with cc3:
-            correction_flag = st.radio("Correction Method (for 2x2 table):", 
-                                         ['Pearson (Standard)', "Yates' correction"], 
-                                         index=0, key='chi_corr_method') == "Yates' correction"
+                correction_flag = st.radio("Correction Method (for 2x2 table):", 
+                                             ['Pearson (Standard)', "Yates' correction"], 
+                                             index=0, key='chi_corr_method') == "Yates' correction"
             
             run_col_chi, download_col_chi = st.columns([1, 1])
             # if 'html_output_chi' not in st.session_state: # REMOVED: Initialized at top
