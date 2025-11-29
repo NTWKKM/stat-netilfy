@@ -360,26 +360,23 @@ if st.session_state.df is not None:
                 </p>
             """, unsafe_allow_html=True)
             
-            # เปลี่ยนจาก 2 เป็น 3 คอลัมน์
-           cc1, cc2, cc3 = st.columns(3) 
+           # 🟢 FIX 2: Change to 3 columns and use dot notation for selection to fix IndentationError
+            cc1, cc2, cc3 = st.columns(3) 
             
-            with cc1:
-                v1 = st.selectbox("Variable 1 (Exposure/Group):", all_cols, key='chi1')
+            v1 = cc1.selectbox("Variable 1 (Exposure/Group):", all_cols, key='chi1')
+            v2 = cc2.selectbox("Variable 2 (Outcome/Event):", all_cols, index=min(1, len(all_cols)-1), key='chi2')
             
-            with cc2:
-                v2 = st.selectbox("Variable 2 (Outcome/Event):", all_cols, index=min(1, len(all_cols)-1), key='chi2')
-            
-            # ย้าย Correction Method ไปอยู่ในคอลัมน์ที่ 3
-            with cc3:
-                correction_flag = st.radio("Correction Method (for 2x2 table):", 
-                                             ['Pearson (Standard)', "Yates' correction"], 
-                                             index=0, key='chi_corr_method') == "Yates' correction"
+            # ADDED: Correction selection in the third column
+            correction_flag = cc3.radio("Correction Method (for 2x2 table):", 
+                                         ['Pearson (Standard)', "Yates' correction"], 
+                                         index=0, key='chi_corr_method') == "Yates' correction"
             
             run_col_chi, download_col_chi = st.columns([1, 1])
             # if 'html_output_chi' not in st.session_state: # REMOVED: Initialized at top
             
             if run_col_chi.button("Run Chi-Square", key='btn_chi'):
-                tab_res, results = diag_test.calculate_chi2(df, v1, v2) 
+                # 🟢 FIX 3: Pass correction flag to diag_test.calculate_chi2
+                tab_res, results = diag_test.calculate_chi2(df, v1, v2, correction=correction_flag)
                 
                 if tab_res is not None and 'error' not in results:
                     
