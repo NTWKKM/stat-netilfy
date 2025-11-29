@@ -9,15 +9,15 @@
   </head>
   <body>
     <div id="root"></div>
-    <script>
+   <script>
       stlite.mount({
-        // ⚠️ เพิ่ม scikit-learn และ matplotlib ตรงนี้
         requirements: ["pandas", "scipy", "statsmodels", "openpyxl", "scikit-learn", "matplotlib"],
         entrypoint: "app.py",
         files: {
           "app.py": { url: "./app.py" },
-          "logic.py": { url: "./logic.py" },     // ไฟล์ Logic เดิมของคุณ
-          "diag_test.py": { url: "./diag_test.py" } // 🟢 ไฟล์ใหม่ที่เราจะสร้าง
+          "logic.py": { url: "./logic.py" },
+          "diag_test.py": { url: "./diag_test.py" },
+          "table_one.py": { url: "./table_one.py" }  // 🟢 เพิ่มไฟล์นี้
         },
       }, document.getElementById("root"));
     </script>
