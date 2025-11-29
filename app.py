@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-# Import Module ที่เราแยกไฟล์ไว้ (ต้องมีไฟล์เหล่านี้ในโฟลเดอร์เดียวกัน)
+# Import Module ที่เราแยกไฟล์ไว้
 from logic import process_data_and_generate_html
 import diag_test
 import table_one
@@ -29,7 +29,7 @@ def check_perfect_separation(df, target_col):
 
     for col in df.columns:
         if col == target_col: continue
-        # เช็คเฉพาะ Categorical
+        # เช็คเฉพาะ Categorical หรือตัวแปรที่มีกลุ่มน้อยๆ
         if df[col].nunique() < 10: 
             try:
                 tab = pd.crosstab(df[col], y)
@@ -59,8 +59,7 @@ if st.sidebar.button("📄 Load Super Example Data"):
     np.random.seed(42)
     n = 150
     
-    # -- Data Generation Logic --
-    # 1. Group (สำหรับ Table 1): แบ่งกลุ่ม Treatment
+    # 1. Group (สำหรับ Table 1)
     groups = np.random.choice(['Standard Care', 'New Drug'], n, p=[0.5, 0.5])
     
     # 2. Continuous Vars (สำหรับ T-test/ANOVA)
@@ -76,17 +75,17 @@ if st.sidebar.button("📄 Load Super Example Data"):
     
     # 4. Diagnostic Test Score (สำหรับ ROC)
     # สร้าง Score ที่มีความสามารถในการแยกโรค (AUC ~ 0.85)
-    disease_status = np.zeros(n)
     risk_score = np.random.normal(5, 2, n)
     
     # คนที่มี Score สูง มีโอกาสเป็นโรคสูง (Logistic function)
+    # เพิ่มความชันเพื่อให้ ROC สวยและ Significant
     prob_disease = 1 / (1 + np.exp(-(risk_score - 6)*0.8))
     outcome = np.random.binomial(1, prob_disease)
     
     # Combine Data
     data = {
         'ID': range(1, n+1),
-        'Group': groups,
+        'Group_Treatment': groups,
         'Age': age,
         'Sex': sex,
         'BMI': bmi,
@@ -102,7 +101,7 @@ if st.sidebar.button("📄 Load Super Example Data"):
         'Sex': {'type': 'Categorical', 'map': {0:'Female', 1:'Male'}},
         'Hypertension': {'type': 'Categorical', 'map': {0:'No', 1:'Yes'}},
         'Outcome_Disease': {'type': 'Categorical', 'map': {0:'Healthy', 1:'Disease'}},
-        'Group': {'type': 'Categorical', 'map': {}} # Auto-detect string
+        'Group_Treatment': {'type': 'Categorical', 'map': {}} 
     }
     
     st.sidebar.success("Loaded! Ready for all tabs.")
@@ -171,7 +170,6 @@ if st.session_state.df is not None:
     all_cols = df.columns.tolist()
 
     # --- TOP NAVIGATION ---
-    # ใช้ Tabs ใหญ่ด้านบนเพื่อเปลี่ยนโหมด (UX ดีกว่า Radio)
     main_tab1, main_tab2, main_tab3 = st.tabs([
         "📊 Logistic Regression", 
         "🔬 Diagnostic Test (ROC/Chi2)", 
@@ -183,10 +181,10 @@ if st.session_state.df is not None:
     # -----------------------------------------------
     with main_tab1:
         st.subheader("1. Logistic Regression Analysis")
-        st.info("💡 Edit data below if needed. Changes apply instantly.")
+        st.info("💡 You can edit data in the table below.")
         
-        # Data Editor
-        edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, height=250, key='editor_logit')
+        # Data Editor (Scrollable)
+        edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, height=300, key='editor_logit')
         
         st.markdown("### Analysis Configuration")
         col1, col2 = st.columns([1, 2])
@@ -247,22 +245,45 @@ if st.session_state.df is not None:
             method = rc3.radio("CI Method:", ["DeLong et al.", "Binomial (Hanley)"])
             
             if st.button("📉 Plot ROC", key='btn_roc'):
-                res, err, fig = diag_test.analyze_roc(df, truth, score, 'delong' if 'DeLong' in method else 'hanley')
+                # เรียกฟังก์ชันใหม่ที่คืนค่า coords ด้วย
+                res, err, fig, coords_df = diag_test.analyze_roc(df, truth, score, 'delong' if 'DeLong' in method else 'hanley')
+                
                 if err: 
                     st.error(err)
                 else:
-                    st.success(f"AUC = {res['AUC']:.4f} (95% CI: {res['95% CI Lower']:.4f} - {res['95% CI Upper']:.4f})")
+                    # 1. Main Stats
+                    st.success(f"AUC = {res['AUC']:.3f} ({res['95% CI']})")
+                    
                     c_plot, c_stat = st.columns([1.5, 1])
-                    c_plot.pyplot(fig)
-                    c_stat.write("**Detailed Statistics:**")
-                    c_stat.dataframe(pd.DataFrame([res]).T, use_container_width=True)
+                    with c_plot:
+                        st.pyplot(fig)
+                        
+                    with c_stat:
+                        st.markdown("**Best Cut-off Statistics:**")
+                        # Transpose for better view
+                        st.dataframe(pd.DataFrame([res]).T, use_container_width=True)
+                        st.caption(f"Chi-square P-value at Best Cut-off: {res['Chi-square P-value']:.4f}")
+
+                    # 2. Coordinate Table
+                    st.markdown("---")
+                    st.markdown("### 📋 Diagnostic Performance at Each Cut-off")
+                    st.markdown("ตารางแสดงค่า Sen/Spec ของทุกจุดตัด (เรียงตาม Youden Index มากไปน้อย)")
+                    
+                    if coords_df is not None:
+                        disp_cols = ['Cut-off', 'Sensitivity', 'Specificity', 'Youden Index', 'PPV', 'NPV']
+                        st.dataframe(
+                            coords_df[disp_cols].style.format("{:.3f}")
+                            .background_gradient(subset=['Youden Index'], cmap='Greens'),
+                            use_container_width=True,
+                            height=300
+                        )
 
         # --- Chi-Square ---
         with sub_tab2:
             st.markdown("##### Chi-Square Test")
             cc1, cc2 = st.columns(2)
             v1 = cc1.selectbox("Variable 1:", all_cols, key='chi1')
-            v2 = cc2.selectbox("Variable 2:", all_cols, index=1, key='chi2')
+            v2 = cc2.selectbox("Variable 2:", all_cols, index=min(1, len(all_cols)-1), key='chi2')
             
             if st.button("Run Chi-Square", key='btn_chi'):
                 tab_res, msg = diag_test.calculate_chi2(df, v1, v2)
@@ -282,13 +303,14 @@ if st.session_state.df is not None:
     with main_tab3:
         st.subheader("3. Baseline Characteristics (Table 1)")
         
-        col_group_idx = 0
+        # Try to find group column
+        grp_idx = 0
         for i, c in enumerate(all_cols):
-            if 'group' in c.lower() or 'treat' in c.lower(): col_group_idx = i; break
+            if 'group' in c.lower() or 'treat' in c.lower(): grp_idx = i; break
         
         c_t1, c_t2 = st.columns([1, 2])
         with c_t1:
-            col_group = st.selectbox("Group By (Column):", ["None"] + all_cols, index=col_group_idx+1)
+            col_group = st.selectbox("Group By (Column):", ["None"] + all_cols, index=grp_idx+1)
         
         with c_t2:
             def_vars = [c for c in all_cols if c != col_group]
@@ -306,10 +328,9 @@ if st.session_state.df is not None:
 
 else:
     st.info("👈 Please load example data or upload a file to start.")
-    # Show features list when empty
     st.markdown("""
     ### Features:
     1.  **Logistic Regression:** Univariate & Multivariate with Auto-selection.
-    2.  **Diagnostic Test:** ROC Curve, AUC (DeLong/Hanley), Chi-square.
+    2.  **Diagnostic Test:** ROC Curve, AUC, Best Cut-off Table, Chi-square.
     3.  **Table 1:** Auto-generated Baseline Characteristics with P-values.
     """)
