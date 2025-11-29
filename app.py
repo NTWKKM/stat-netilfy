@@ -1,498 +1,582 @@
-# diag_test.py
-
+# app.py
+import streamlit as st
 import pandas as pd
 import numpy as np
-import scipy.stats as stats
-from sklearn.metrics import roc_curve, roc_auc_score
-import matplotlib.pyplot as plt
-import io, base64 # เพิ่ม io และ base64 สำหรับการฝังรูปใน HTML
 
-def calculate_descriptive(df, col):
-    """คำนวณสถิติพื้นฐาน"""
-    if col not in df.columns: return "Column not found"
+# Import Module ที่เราแยกไฟล์ไว้
+from logic import process_data_and_generate_html
+import diag_test
+import table_one
+
+# --- CONFIGURATION ---
+st.set_page_config(page_title="Medical Stat Tool", layout="wide")
+
+st.title("🏥 Medical Statistical Tool")
+
+# --- INITIALIZE STATE ---
+if 'df' not in st.session_state:
+    st.session_state.df = None
+if 'var_meta' not in st.session_state:
+    st.session_state.var_meta = {} 
     
-    data = df[col].dropna()
+# 🟢 FIX: Initialize all output variables at the top
+if 'html_output_t1' not in st.session_state:
+    st.session_state.html_output_t1 = None
+if 'html_output_roc' not in st.session_state:
+    st.session_state.html_output_roc = None
+if 'html_output_chi' not in st.session_state:
+    st.session_state.html_output_chi = None
+if 'html_output_desc' not in st.session_state:
+    st.session_state.html_output_desc = None
+if 'html_output_logit' not in st.session_state:
+    st.session_state.html_output_logit = None
+
+
+# --- HELPER FUNCTIONS ---
+def check_perfect_separation(df, target_col):
+    """ตรวจสอบว่าตัวแปรไหนแยกกลุ่มผลลัพธ์ได้สมบูรณ์เกินไป (เสี่ยง Error ใน Logistic)"""
+    risky_vars = []
     try:
-        # พยายามแปลงเป็นตัวเลข
-        num_data = pd.to_numeric(data, errors='raise')
-        is_numeric = True
-    except:
-        is_numeric = False
-        
-    if is_numeric:
-        desc = num_data.describe()
-        return pd.DataFrame({
-            "Statistic": ["Count", "Mean", "SD", "Median", "Min", "Max", "Q1 (25%)", "Q3 (75%)"],
-            "Value": [
-                f"{desc['count']:.0f}",
-                f"{desc['mean']:.4f}",
-                f"{desc['std']:.4f}",
-                f"{desc['50%']:.4f}",
-                f"{desc['min']:.4f}",
-                f"{desc['max']:.4f}",
-                f"{desc['25%']:.4f}",
-                f"{desc['75%']:.4f}"
-            ]
-        })
+        y = pd.to_numeric(df[target_col], errors='coerce').dropna()
+        if y.nunique() < 2: return []
+    except: return []
+
+    for col in df.columns:
+        if col == target_col: continue
+        # เช็คเฉพาะ Categorical หรือตัวแปรที่มีกลุ่มน้อยๆ
+        if df[col].nunique() < 10: 
+            try:
+                tab = pd.crosstab(df[col], y)
+                if (tab == 0).any().any():
+                    risky_vars.append(col)
+            except: pass
+    return risky_vars
+
+def safe_rerun():
+    """รองรับคำสั่ง Rerun ทุกเวอร์ชันของ Streamlit"""
+    if hasattr(st, "rerun"):
+        st.rerun()
     else:
-        # Categorical
-        counts = data.value_counts()
-        percent = data.value_counts(normalize=True) * 100
-        return pd.DataFrame({
-            "Category": counts.index,
-            "Count": counts.values,
-            "Percentage (%)": percent.values
-        }).sort_values("Count", ascending=False)
+        st.experimental_rerun()
 
-def calculate_chi2(df, col1, col2):
-    """คำนวณ Chi-square พร้อมทั้ง RR, ARR, NNT และสร้างตารางแสดงผลที่มี Count และ Percent"""
-    if col1 not in df.columns or col2 not in df.columns: 
-        return None, {"error": "Columns not found"}
-    
-    data = df[[col1, col2]].dropna()
-    N_total = len(data)
-    
-    # Contingency Table (Frequency Count)
-    tab_raw = pd.crosstab(data[col1], data[col2], margins=True, margins_name="Total")
-    
-    # --- Chi-square Calculation ---
-    results = {}
-    
-    # ต้องแยก Chi-square ออกจาก margins
-    tab_for_chi2 = pd.crosstab(data[col1], data[col2]) 
-    
-    try:
-        chi2, p, dof, ex = stats.chi2_contingency(tab_for_chi2)
-        results['chi2_msg'] = f"Chi-square statistic: {chi2:.4f}, p-value: {p:.4f}, df: {dof}"
-        results['p_value'] = p
-    except Exception as e:
-        results['chi2_msg'] = f"Chi-square calculation error: {str(e)}"
-        
-    # --- RR / ARR / NNT Calculation (Only for 2x2 table) ---
-    if tab_for_chi2.shape == (2, 2):
-        # Assumption: Row 0 = Exposed, Row 1 = Unexposed, Col 0 = Event (Positive)
-        tab_arr = tab_for_chi2.values 
-        a, b = tab_arr[0, 0], tab_arr[0, 1] 
-        c, d = tab_arr[1, 0], tab_arr[1, 1]
-        
-        N_exp = a + b 
-        N_unexp = c + d 
-        
-        # Calculate Risk
-        R_exp = a / N_exp if N_exp > 0 else 0 # Risk in Exposed (R1)
-        R_unexp = c / N_unexp if N_unexp > 0 else 0 # Risk in Unexposed (R0)
-        
-        if N_exp > 0 and N_unexp > 0:
-            # RR
-            RR = R_exp / R_unexp if R_unexp > 0 else np.inf
-            
-            # Risk Difference (RD) / Absolute Risk Reduction (ARR)
-            RD = R_exp - R_unexp
-            
-            # NNT = 1 / |RD|
-            NNT = 1 / abs(RD) if RD != 0 and abs(RD) <= 1 else np.inf
-            
-            # Odds Ratio (for reference)
-            OR = (a * d) / (b * c) if b != 0 and c != 0 else np.inf
-            
-            results['Is_2x2'] = True
-            results['RR'] = RR
-            results['RD'] = RD
-            results['NNT'] = NNT
-            results['OR'] = OR
-            results['R_exp'] = R_exp
-            results['R_unexp'] = R_unexp
-            results['R_exp_label'] = tab_for_chi2.index[0]
-            results['R_unexp_label'] = tab_for_chi2.index[1]
-            results['Event_label'] = tab_for_chi2.columns[0]
-        else:
-            results['RR'] = np.nan
-            results['NNT'] = np.nan
-            results['RD'] = np.nan
-            results['Is_2x2'] = True
-            
-    # --- Formatting Display Table (Count, Row %, Total %) ---
-    
-    # 1. Calculate Row Percentages (Horizontal %)
-    tab_row_percent = pd.crosstab(data[col1], data[col2], normalize='index', margins=True, margins_name="Total") * 100
-    
-    # 2. Calculate Total Percentages (Grand Total %)
-    tab_total_percent = pd.crosstab(data[col1], data[col2], normalize='all', margins=True, margins_name="Total") * 100
-    
-    # สร้างตาราง Display Final
-    col_names = tab_raw.columns.tolist() 
-    index_names = tab_raw.index.tolist() 
-    
-    display_tab_data = []
-    
-    for row_name in index_names:
-        row_data = [] 
-        
-        for col_name in col_names:
-            count = tab_raw.loc[row_name, col_name]
-            total_pct = tab_total_percent.loc[row_name, col_name]
+# ==========================================
+# 1. SIDEBAR: DATA & SETTINGS
+# ==========================================
+st.sidebar.title("MENU")
 
-            if col_name == 'Total' and row_name == 'Total':
-                # Grand Total Cell: แสดงเฉพาะ Count และ Total %
-                row_pct = 100.0 
-                cell_content = f"{count} / ({total_pct:.1f}%)"
-            elif col_name == 'Total':
-                # Row Marginal Total Cell: แสดง Count และ Total %
-                row_pct = 100.0
-                cell_content = f"{count} ({row_pct:.1f}%) / ({total_pct:.1f}%)"
-            else:
-                # Normal Data Cell: แสดง Count, Row %, Total %
-                row_pct = tab_row_percent.loc[row_name, col_name]
-                cell_content = f"{count} ({row_pct:.1f}%) / ({total_pct:.1f}%)"
-            
-            row_data.append(cell_content)
-            
-        display_tab_data.append([row_name] + row_data) 
+# --- 1.1 DATA LOADER ---
+st.sidebar.header("1. Data Management")
 
-    # สร้าง DataFrame สำหรับแสดงผล
-    display_tab = pd.DataFrame(display_tab_data, columns=[col1] + col_names)
-    display_tab = display_tab.set_index(col1)
-        
-    return display_tab, results
+# 🟢 SUPER EXAMPLE DATA GENERATOR
+if st.sidebar.button("📄 Load Example Data"):
+    # สร้างข้อมูลจำลอง 150 เคส ที่เหมาะกับทุกสถิติ
+    np.random.seed(42)
+    n = 150
     
-# --- ROC & AUC FUNCTIONS ---
-
-def auc_ci_hanley_mcneil(auc, n1, n2):
-    # ... (unchanged) ...
-    q1 = auc / (2 - auc)
-    q2 = 2 * (auc**2) / (1 + auc)
+    # 1. Group (สำหรับ Table 1)
+    groups = np.random.choice(['Standard Care', 'New Drug'], n, p=[0.5, 0.5])
     
-    se_auc = np.sqrt(((auc * (1 - auc)) + (n1 - 1)*(q1 - auc**2) + (n2 - 1)*(q2 - auc**2)) / (n1 * n2))
-    lower = auc - 1.96 * se_auc
-    upper = auc + 1.96 * se_auc
-    return lower, upper, se_auc
-
-def auc_ci_delong(y_true, y_scores):
-    # ... (unchanged) ...
-    y_true = np.array(y_true)
-    y_scores = np.array(y_scores)
+    # 2. Continuous Vars (สำหรับ T-test/ANOVA)
+    age = np.random.normal(60, 12, n).astype(int)
+    bmi = np.random.normal(25, 4, n).round(1)
     
-    # Sort by score
-    desc_score_indices = np.argsort(y_scores, kind="mergesort")[::-1]
-    y_scores = y_scores[desc_score_indices]
-    y_true = y_true[desc_score_indices]
+    # 3. Categorical Vars (สำหรับ Chi-square)
+    sex = np.random.choice([0, 1], n) # 0=F, 1=M
     
-    distinct_value_indices = np.where(np.diff(y_scores))[0]
-    threshold_idxs = np.r_[distinct_value_indices, y_true.size - 1]
+    # โรคประจำตัว (สัมพันธ์กับอายุ)
+    ht_prob = (age - 20) / 80  # อายุมากเสี่ยงมาก
+    ht = np.random.binomial(1, np.clip(ht_prob, 0.1, 0.9))
     
-    tps = np.cumsum(y_true)[threshold_idxs]
-    fps = 1 + threshold_idxs - tps
+    # 4. Diagnostic Test Score (สำหรับ ROC)
+    # สร้าง Score ที่มีความสามารถในการแยกโรค (AUC ~ 0.85)
+    risk_score = np.random.normal(5, 2, n)
     
-    n_pos = tps[-1]
-    n_neg = fps[-1]
+    # คนที่มี Score สูง มีโอกาสเป็นโรคสูง (Logistic function)
+    # เพิ่มความชันเพื่อให้ ROC สวยและ Significant
+    prob_disease = 1 / (1 + np.exp(-(risk_score - 6)*0.8))
+    outcome = np.random.binomial(1, prob_disease)
     
-    if n_pos == 0 or n_neg == 0:
-        return np.nan, np.nan, np.nan # Cannot calc
-    
-    auc = roc_auc_score(y_true, y_scores)
-    
-    # DeLong Covariance Calculation
-    # Compute V10 (X) and V01 (Y)
-    
-    pos_scores = y_scores[y_true == 1]
-    neg_scores = y_scores[y_true == 0]
-    
-    def compute_mid_rank(x):
-        """Helper to get mid-ranks"""
-        argsort = np.argsort(x)
-        ranks = np.empty_like(argsort)
-        ranks[argsort] = np.arange(len(x))
-        return (ranks + 1) # dummy, actual logic below
-        
-    # Faster vectorization for V10, V01
-    # Concatenate all scores to rank them
-    all_scores = np.concatenate([pos_scores, neg_scores])
-    all_labels = np.concatenate([np.ones(len(pos_scores)), np.zeros(len(neg_scores))])
-    
-    # Rank (with average for ties)
-    order = np.argsort(all_scores)
-    ranks = stats.rankdata(all_scores) # 1-based, average ties
-    
-    # Sum of ranks for positives
-    # AUC = (Sum(R_pos) - n_pos(n_pos+1)/2 ) / (n_pos * n_neg)
-    
-    # DeLong variance components
-    # We need empirical Probabilities
-    
-    # V10: For each positive, what fraction of negatives is it greater than?
-    v10 = []
-    for p in pos_scores:
-        v10.append( (np.sum(p > neg_scores) + 0.5*np.sum(p == neg_scores)) / n_neg )
-    v10 = np.array(v10)
-    
-    # V01: For each negative, what fraction of positives is it smaller than?
-    v01 = []
-    for n in neg_scores:
-        v01.append( (np.sum(pos_scores > n) + 0.5*np.sum(pos_scores == n)) / n_pos )
-    v01 = np.array(v01)
-    
-    # Variance
-    s10 = np.var(v10, ddof=1)
-    s01 = np.var(v01, ddof=1)
-    
-    var_auc = (s10 / n_pos) + (s01 / n_neg)
-    se_auc = np.sqrt(var_auc)
-    
-    return auc - 1.96*se_auc, auc + 1.96*se_auc, se_auc
-
-
-def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
-    # ... (unchanged) ...
-    data = df[[truth_col, score_col]].dropna()
-    y_true_raw = data[truth_col]
-    y_score = pd.to_numeric(data[score_col], errors='coerce').dropna()
-    # Align indices
-    y_true_raw = y_true_raw.loc[y_score.index]
-    
-    unique_vals = y_true_raw.nunique()
-    if unique_vals != 2:
-        return None, "Outcome must have exactly 2 classes.", None, None 
-
-    # 🟢 START: Manual Encoding based on user input (Overriding LabelEncoder)
-    if pos_label_user is None:
-        # ควรถูกดักจับใน app.py แล้ว แต่มีไว้เพื่อความปลอดภัย
-        return None, "Positive label (pos_label) must be specified for binary outcome.", None, None
-        
-    # Map user's selected label to 1, and the other label to 0
-    # ใช้ str() เพื่อรองรับการเทียบ String ที่มาจาก Selectbox
-    if str(y_true_raw.iloc[0]) not in [str(x) for x in y_true_raw.unique()]:
-        # ในกรณีที่ข้อมูลมีการแปลงประเภทแล้ว ต้องทำการเทียบตามประเภทข้อมูลเดิม
-        # แต่เนื่องจากเราใช้ str() ใน selectbox และในโค้ดนี้จึงปลอดภัย
-        pass
-        
-    # หาค่า Negative label ที่เหลืออยู่
-    all_labels_raw = [str(x) for x in y_true_raw.unique()]
-    neg_label_raw = [lab for lab in all_labels_raw if lab != pos_label_user][0]
-    
-    # แปลงเป็น 0/1
-    y_true = np.where(y_true_raw.astype(str) == pos_label_user, 1, 0)
-    
-    # Cast y_true back to pd.Series for alignment/indexing safety
-    y_true = pd.Series(y_true, index=y_true_raw.index)
-    # 🟢 END: Manual Encoding
-        
-    # 1. Calculate AUC
-    fpr, tpr, thresholds = roc_curve(y_true, y_score)
-    auc_val = roc_auc_score(y_true, y_score)
-    
-    n1 = sum(y_true == 1)
-    n0 = sum(y_true == 0)
-    
-    # 2. Calculate CI
-    if method == 'delong':
-        ci_lower, ci_upper, se = auc_ci_delong(y_true.values, y_score.values)
-        method_name = "DeLong et al."
-    else:
-        # Binomial Exact / Hanley McNeil
-        ci_lower, ci_upper, se = auc_ci_hanley_mcneil(auc_val, n1, n0)
-        method_name = "Hanley & McNeil (Parametric/Binomial)"
-        
-    ci_lower = max(0.0, ci_lower)
-    ci_upper = min(1.0, ci_upper)
-
-    # 🟢 START: Calculate P-value for AUC (H0: AUC = 0.5)
-    p_value_auc = np.nan
-    try:
-        if se > 0:
-            # Z = (AUC - 0.5) / SE
-            Z_score = (auc_val - 0.5) / se
-            # Two-tailed P-value from Standard Normal Distribution
-            p_value_auc = stats.norm.sf(abs(Z_score)) * 2 
-        else:
-            # Perfect separation (AUC=1 or 0), P-value is effectively 0
-            p_value_auc = 0.0 
-    except:
-        p_value_auc = np.nan
-    # 🟢 END: Calculate P-value for AUC
-    
-    # 3. Youden Index
-    # J = Sensitivity + Specificity - 1 = TPR + (1 - FPR) - 1 = TPR - FPR
-    j_scores = tpr - fpr
-    best_idx = np.argmax(j_scores)
-    youden_j = j_scores[best_idx]
-    best_thresh = thresholds[best_idx]
-    best_sens = tpr[best_idx]
-    best_spec = 1 - fpr[best_idx]
-    
-    stats_res = {
-        "AUC": auc_val,
-        "SE": se,
-        "95% CI Lower": ci_lower,
-        "95% CI Upper": ci_upper,
-        "Method": method_name,
-        "P-value (H0: AUC=0.5)": p_value_auc, # 🟢 ADDED P-VALUE HERE
-        "Youden Index (J)": youden_j,
-        "Best Cut-off": best_thresh,
-        "Sensitivity": best_sens,
-        "Specificity": best_spec,
-        "N (Positive)": n1,
-        "N (Negative)": n0,
-        "Positive Label": pos_label_user, 
-        "Negative Label": neg_label_raw    
+    # Combine Data
+    data = {
+        'ID': range(1, n+1),
+        'Group_Treatment': groups,
+        'Age': age,
+        'Sex': sex,
+        'BMI': bmi,
+        'Hypertension': ht,
+        'Risk_Score': risk_score.round(2),
+        'Outcome_Disease': outcome
     }
     
-    # 4. Plot
-    fig, ax = plt.subplots(figsize=(6, 5))
-    ax.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {auc_val:.3f})')
-    ax.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    st.session_state.df = pd.DataFrame(data)
     
-    # Mark Youden point
-    ax.plot(1-best_spec, best_sens, 'ro', label=f'Best Cut-off ({best_thresh:.2f})')
+    # Pre-set Metadata (Labeling)
+    st.session_state.var_meta = {
+        'Sex': {'type': 'Categorical', 'map': {0:'Female', 1:'Male'}},
+        'Hypertension': {'type': 'Categorical', 'map': {0:'No', 1:'Yes'}},
+        'Outcome_Disease': {'type': 'Categorical', 'map': {0:'Healthy', 1:'Disease'}},
+        'Group_Treatment': {'type': 'Categorical', 'map': {}} 
+    }
     
-    ax.set_xlim([0.0, 1.0])
-    ax.set_ylim([0.0, 1.05])
-    ax.set_xlabel('False Positive Rate (1 - Specificity)')
-    ax.set_ylabel('True Positive Rate (Sensitivity)')
-    ax.set_title(f'ROC Curve: {score_col} vs {truth_col}')
-    ax.legend(loc="lower right")
-    ax.grid(alpha=0.3)
+    st.sidebar.success("Loaded! Ready for all tabs.")
+    safe_rerun()
 
-    # 5. Create Coordinates DataFrame for detailed table (เพิ่มส่วนนี้)
-    coords_df = pd.DataFrame({
-        'Threshold': thresholds,
-        'Sensitivity (TPR)': tpr,
-        'Specificity': 1 - fpr,
-        '1 - Specificity (FPR)': fpr,
-        'Youden J': tpr - fpr
-    }).sort_values('Threshold', ascending=False).reset_index(drop=True)
-    coords_df['Threshold'] = coords_df['Threshold'].round(4)
-    coords_df = coords_df.round(4)
-    
-    return stats_res, None, fig, coords_df # แก้ไขให้ return 4 ค่า
+# Upload File
+uploaded_file = st.sidebar.file_uploader("Upload CSV/Excel", type=['csv', 'xlsx'])
+if uploaded_file:
+    try:
+        if uploaded_file.name.endswith('.csv'): st.session_state.df = pd.read_csv(uploaded_file)
+        else: st.session_state.df = pd.read_excel(uploaded_file)
+        st.sidebar.success("File Uploaded!")
+    except Exception as e: st.sidebar.error(f"Error: {e}")
 
-def generate_report(title, elements):
-    """Generates a simple HTML report based on a list of elements (text, plot, table).
-    ใช้สำหรับแสดงผลลัพธ์ของ ROC, Chi-Square และ Descriptive
-    """
+# --- 1.2 VARIABLE SETTINGS ---
+if st.session_state.df is not None:
+    st.sidebar.header("2. Variable Settings")
+    df = st.session_state.df
+    all_cols = df.columns.tolist()
     
-    # --- CSS Styling (Fixed to use Streamlit CSS variables for theme compatibility) ---
-    css_style = """
-    <style>
-        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: var(--secondary-background-color); margin: 0; color: var(--text-color); }
-        .report-container { 
-            background: var(--background-color); 
-            border-radius: 8px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
-            padding: 20px;
-            width: 100%; 
-            box-sizing: border-box;
-            margin-bottom: 20px;
-        }
-        h2 { color: var(--primary-color); border-bottom: 2px solid var(--border-color); padding-bottom: 10px; }
-        h4 { color: var(--text-color); margin-top: 25px; margin-bottom: 10px; }
-        table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            font-family: 'Segoe UI', sans-serif; 
-            font-size: 0.9em;
-        }
-        th, td { 
-            padding: 10px 15px; 
-            border: 1px solid var(--border-color);
-            vertical-align: top;
-            text-align: left;
-        }
-        th {
-            background-color: var(--primary-color); 
-            color: var(--text-color-inverted);
-            font-weight: 600;
-        }
-        tr:nth-child(even) td { background-color: var(--secondary-background-color); }
-        .alert { background-color: var(--secondary-background-color); color: var(--warning-color); padding: 10px; border: 1px solid var(--border-color); border-radius: 5px; margin-bottom: 15px; }
+    selected_var = st.sidebar.selectbox("Edit Variable:", ["Select..."] + all_cols)
+    
+    if selected_var != "Select...":
+        # Load current settings
+        meta = st.session_state.var_meta.get(selected_var, {})
+        curr_type = meta.get('type', 'Auto-detect')
+        curr_map = meta.get('map', {})
         
-        .report-table th, .report-table td { text-align: center; } 
-        .report-table th:first-child, .report-table td:first-child { text-align: left; }
+        # Edit Type
+        new_type = st.sidebar.radio("Type:", ['Auto-detect', 'Categorical', 'Continuous'], 
+                                    index=['Auto-detect', 'Categorical', 'Continuous'].index(curr_type))
         
-        .report-footer {
-            text-align: right;
-            font-size: 0.75em;
-            color: var(--text-color);
-            margin-top: 20px;
-            border-top: 1px dashed var(--border-color);
-            padding-top: 10px;
-        }
-    </style>
-    """
-    
-    html = f"<!DOCTYPE html><html><head>{css_style}</head><body>"
-    html += f"<div class='report-container'><h2>{title}</h2>"
-    
-    for element in elements:
-        element_type = element['type']
-        data = element['data']
-        header = element.get('header', '')
+        # Edit Labels
+        map_str = "\n".join([f"{k}={v}" for k, v in curr_map.items()])
+        st.sidebar.markdown("Labels (e.g. 0=No):")
+        new_labels_str = st.sidebar.text_area("Label Map", value=map_str, height=80, label_visibility="collapsed")
         
-        if header:
-            html += f"<h4>{header}</h4>"
+        if st.sidebar.button("💾 Save Settings"):
+            # Parse Labels
+            new_map = {}
+            for line in new_labels_str.split('\n'):
+                if '=' in line:
+                    k, v = line.split('=', 1)
+                    try:
+                        k = k.strip()
+                        if k.replace('.','',1).isdigit():
+                            k = float(k) if '.' in k else int(k)
+                        new_map[k] = v.strip()
+                    except: pass
             
-        if element_type == 'text':
-            html += f"<p>{data}</p>"
-        elif element_type == 'table':
-            # Handle standard table (e.g., Key Statistics, Descriptive)
-            # 🟢 FIX: ใช้ 'in data.columns' แทน data.columns.contains()
-            include_index = not ('Category' in data.columns) and not ('Statistic' in data.columns)
-            html += data.to_html(index=include_index, classes='report-table')
+            # Save to Session State
+            if selected_var not in st.session_state.var_meta:
+                st.session_state.var_meta[selected_var] = {}
             
-        # 🟢 NEW: Handle Contingency Table with Two-Level Header
-        elif element_type == 'contingency_table':
-            # DataFrame should have V1 as index and V2 levels + 'Total' as columns
-            df_html = data.to_html(index=True, classes='report-table', header=False) # สร้าง HTML โดยไม่มี Header
-            
-            # 1. ดึงชื่อคอลัมน์ (0, 1, Total) และชื่อ Index (Exposure)
-            col_names_raw = data.columns.tolist()
-            index_name = data.index.name
-            outcome_col_name = element.get('outcome_col', 'Outcome')
-            
-            # 2. สร้าง Header สองชั้นด้วย HTML
-            
-            # Row 1: Merge cells for Outcome_Disease and Total
-            # (First TH is for Exposure/Row Variable)
-            header_row1 = f"<tr>"
-            header_row1 += f"<th rowspan='2' class='report-table' style='text-align: left;'>{index_name}</th>" # ชื่อ Exposure/V1
-            # Th ที่เหลือ Merge Cells เพื่อแสดงชื่อ Outcome (รวม Total ด้วย)
-            header_row1 += f"<th colspan='{len(col_names_raw)}' class='report-table'>{outcome_col_name}</th>" # FIX: colspan ควรครอบคลุมทุกคอลัมน์
-            header_row1 += f"</tr>"
-            
-            # Row 2: Actual Outcome Levels (0, 1, Total)
-            header_row2 = f"<tr>"
-            for col_name in col_names_raw:
-                 # แสดงชื่อระดับ (0, 1, Total)
-                 header_row2 += f"<th class='report-table'>{col_name}</th>"
-            header_row2 += f"</tr>"
-            
-            # 3. นำ Header ที่สร้างเองไปใส่ในตาราง HTML
-            # ค้นหาและแทนที่ส่วน <thead>
-            table_start_tag = df_html.split('<thead>')[0]
-            table_end_tag = df_html.split('</thead>')[1]
-            
-            custom_header = f"<thead>{header_row1}{header_row2}</thead>"
-            
-            html += table_start_tag + custom_header + table_end_tag
+            st.session_state.var_meta[selected_var]['type'] = new_type
+            st.session_state.var_meta[selected_var]['map'] = new_map
+            st.sidebar.success("Saved!")
+            safe_rerun()
+
+# 🟢 NEW: เพิ่มเครดิตที่ส่วนท้ายของ Sidebar (เฉพาะเมื่อมีการโหลดข้อมูลแล้ว)
+st.sidebar.markdown("""
+<hr style="margin-top: 20px; margin-bottom: 10px; border-color: var(--border-color);">
+<div style='text-align: center; font-size: 0.7em; color: var(--text-color);'>
+  &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
+</div>
+""", unsafe_allow_html=True)
 
 
-        elif element_type == 'plot':
-            # Save matplotlib figure to a string buffer and convert to base64 for embedding
-            buf = io.BytesIO()
-            if isinstance(data, plt.Figure):
-                data.savefig(buf, format='png')
-                plt.close(data) # Close the figure to free memory
-                data_uri = base64.b64encode(buf.getvalue()).decode('utf-8')
-                buf.close()
-                html += f'<img src="data:image/png;base64,{data_uri}" style="max-width: 100%; height: auto; display: block; margin: 15px auto;"/>'
+# ==========================================
+# 2. MAIN AREA: NAVIGATION & CONTENT
+# ==========================================
+
+if st.session_state.df is not None:
+    df = st.session_state.df
+    all_cols = df.columns.tolist()
+
+    # --- TOP NAVIGATION (Reordered Tabs) ---
+    main_tab0, main_tab1, main_tab2, main_tab3 = st.tabs([
+        "📄 Raw Data", 
+        "📋 Baseline Table 1", 
+        "🔬 Diagnostic Test (ROC/Chi2)", 
+        "📊 Logistic Regression" 
+    ])
+
+    # -----------------------------------------------
+    # TAB 0: RAW DATA
+    # -----------------------------------------------
+    with main_tab0:
+        st.subheader("Raw Data Table")
+        st.info("💡 You can view, scroll, and edit your raw data directly in this table.")
+        edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, height=500, key='editor_raw')
+        st.session_state.df = edited_df 
+        df = st.session_state.df 
+
+    # -----------------------------------------------
+    # TAB 1: BASELINE CHARACTERISTICS (TABLE 1)
+    # -----------------------------------------------
+    with main_tab1:
+        st.subheader("1. Baseline Characteristics (Table 1)")
+        st.markdown("""
+            <div style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 20px;">
+                <p>
+                The **Baseline Characteristics (Table 1)** tool generates a summary table of the study population, typically stratifying variables by treatment or outcome groups.
+                </p>
+                <p>
+                It reports continuous variables as **Mean ± SD** and categorical variables as **Counts (%)**, providing **P-values** to test for significant differences between groups (using T-test/ANOVA for continuous and Chi-square/Fisher's exact test for categorical variables).
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Try to find group column
+        grp_idx = 0
+        for i, c in enumerate(all_cols):
+            if 'group' in c.lower() or 'treat' in c.lower(): grp_idx = i; break
+        
+        c_t1, c_t2 = st.columns([1, 2])
+        with c_t1:
+            col_group = st.selectbox("Group By (Column):", ["None"] + all_cols, index=grp_idx+1, key='t1_group')
+        
+        with c_t2:
+            def_vars = [c for c in all_cols if c != col_group]
+            selected_vars = st.multiselect("Include Variables:", all_cols, default=def_vars, key='t1_vars')
+            
+        run_col_t1, download_col_t1 = st.columns([1, 1])
+        # if 'html_output_t1' not in st.session_state: # REMOVED: Initialized at top
+
+        if run_col_t1.button("📊 Generate Table 1", type="primary"):
+            with st.spinner("Generating Table 1..."):
+                try:
+                    grp = None if col_group == "None" else col_group
+                    html_t1 = table_one.generate_table(df, selected_vars, grp, st.session_state.var_meta)
+                    st.session_state.html_output_t1 = html_t1 # Store HTML
+                    st.components.v1.html(html_t1, height=600, scrolling=True)
+                except Exception as e:
+                    st.error(f"Error: {e}")
+                    st.session_state.html_output_t1 = None # Clear state on error
+                    
+        with download_col_t1:
+            if st.session_state.html_output_t1:
+                st.download_button("📥 Download HTML Report", st.session_state.html_output_t1, "table1.html", "text/html", key='dl_btn_t1')
             else:
-                 html += '<p class="alert">⚠️ Plot data is not a valid Matplotlib Figure object.</p>'
+                # Placeholder button to maintain alignment
+                st.button("📥 Download HTML Report", disabled=True, key='placeholder_t1')
+
+    # -----------------------------------------------
+    # TAB 2: DIAGNOSTIC TEST (Fixed Alignment and Logic)
+    # -----------------------------------------------
+    with main_tab2:
+        st.subheader("2. Diagnostic Test & Statistics")
         
-    # 🟢 NEW: เพิ่ม Footer ของ Report
-    html += """
-    <div class="report-footer">
-      &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
-    </div>
-    """
-    
-    html += "</div></body></html>"
-    return html
+        sub_tab1, sub_tab2, sub_tab3 = st.tabs(["📈 ROC Curve & AUC", "🎲 Chi-Square", "📊 Descriptive"])
+        
+        # --- ROC ---
+        with sub_tab1:
+            st.markdown("##### ROC Curve Analysis")
+            st.markdown("""
+                <p>
+                The **Receiver Operating Characteristic (ROC) Curve** evaluates the performance of a continuous test score in predicting a binary outcome.
+                </p>
+                <ul>
+                    <li>**AUC (Area Under the Curve):** Measures the overall discriminative ability (0.5 = random chance, 1.0 = perfect separation).</li>
+                    <li>**Youden Index:** Used to find the optimal cut-off point that maximizes both Sensitivity and Specificity.</li>
+                    <li>**P-value (H0: AUC=0.5):** Tests if the AUC is statistically better than random chance.</li>
+                </ul>
+            """, unsafe_allow_html=True)
+            
+            # Use 4 columns for ROC inputs
+            rc1, rc2, rc3, rc4 = st.columns(4)
+            # Find default outcome index
+            def_idx = 0
+            for i, c in enumerate(all_cols):
+                if 'outcome' in c.lower() or 'died' in c.lower():
+                    def_idx = i; break
+            
+            truth = rc1.selectbox("Gold Standard (Binary):", all_cols, index=def_idx, key='roc_truth')
+            
+            # Find default score index
+            score_idx = 0
+            for i, c in enumerate(all_cols):
+                if 'score' in c.lower(): score_idx = i; break
+            score = rc2.selectbox("Test Score (Continuous):", all_cols, index=score_idx, key='roc_score')
+            
+            method = rc3.radio("CI Method:", ["DeLong et al.", "Binomial (Hanley)"])
+
+            # Positive Label Selection
+            pos_label = None
+            unique_truth_vals = df[truth].dropna().unique()
+            if len(unique_truth_vals) == 2:
+                # เรียงค่าเพื่อให้ผู้ใช้เลือกได้ง่ายขึ้น
+                sorted_vals = sorted([str(x) for x in unique_truth_vals]) 
+                selected_pos_label = rc4.selectbox("Positive Label (1):", sorted_vals, key='roc_pos_label')
+                pos_label = selected_pos_label
+            elif len(unique_truth_vals) != 2:
+                rc4.warning("Requires 2 unique values.")
+
+            
+            run_col_roc, download_col_roc = st.columns([1, 1])
+            # if 'html_output_roc' not in st.session_state: # REMOVED: Initialized at top
+            
+            if run_col_roc.button("📉 Analyze ROC", key='btn_roc'):
+                if pos_label is None and len(unique_truth_vals) == 2:
+                    st.error("Error: Please select the Positive Label (1).")
+                    st.session_state.html_output_roc = None
+                elif len(unique_truth_vals) != 2:
+                    st.error("Error: Gold Standard must have exactly 2 classes.")
+                    st.session_state.html_output_roc = None
+                else:
+                    # Pass the selected pos_label to diag_test
+                    res, err, fig, coords_df = diag_test.analyze_roc(df, truth, score, 'delong' if 'DeLong' in method else 'hanley', pos_label_user=pos_label)
+                    
+                    if err: 
+                        st.error(err)
+                        st.session_state.html_output_roc = None 
+                    else:
+                        report_elements = [
+                            {'type': 'text', 'data': f"Analysis of Test Score: <b>{score}</b> vs Gold Standard: <b>{truth}</b>"},
+                            {'type': 'plot', 'header': 'ROC Curve', 'data': fig},
+                            {'type': 'table', 'header': 'Key Statistics', 'data': pd.DataFrame([res]).T},
+                            {'type': 'table', 'header': 'Diagnostic Performance (All Cut-offs)', 'data': coords_df}
+                        ]
+                        html_report = diag_test.generate_report(f"ROC Analysis: {score}", report_elements)
+                        st.session_state.html_output_roc = html_report # Store HTML
+                        st.components.v1.html(html_report, height=800, scrolling=True)
+
+            with download_col_roc:
+                if st.session_state.html_output_roc:
+                    st.download_button("📥 Download HTML Report", st.session_state.html_output_roc, "roc_report.html", "text/html", key='dl_btn_roc')
+                else:
+                    # Placeholder button to maintain alignment
+                    st.button("📥 Download HTML Report", disabled=True, key='placeholder_roc')
+
+
+        # --- Chi-Square ---
+        with sub_tab2:
+            st.markdown("##### Chi-Square Test & Risk Measures")
+            st.markdown("""
+                <p>
+                The **Chi-Square Test** examines the association between two categorical variables. For $2\times2$ tables, the analysis automatically includes **Risk Ratio (RR)**, **Risk Difference (RD)**, and **Number Needed to Treat (NNT)**.
+                </p>
+                <p>
+                **Variable 1** is interpreted as the **Exposure/Treatment (Row)**, and **Variable 2** as the **Outcome/Event (Column)**.
+                </p>
+            """, unsafe_allow_html=True)
+            
+            cc1, cc2 = st.columns(2)
+            v1 = cc1.selectbox("Variable 1 (Exposure/Group):", all_cols, key='chi1')
+            v2 = cc2.selectbox("Variable 2 (Outcome/Event):", all_cols, index=min(1, len(all_cols)-1), key='chi2')
+            
+            run_col_chi, download_col_chi = st.columns([1, 1])
+            # if 'html_output_chi' not in st.session_state: # REMOVED: Initialized at top
+            
+            if run_col_chi.button("Run Chi-Square", key='btn_chi'):
+                tab_res, results = diag_test.calculate_chi2(df, v1, v2) 
+                
+                if tab_res is not None and 'error' not in results:
+                    
+                    report_elements = [
+                        {'type': 'text', 'data': f"<b>Chi-square Test Result:</b> {results.get('chi2_msg', 'N/A')}"},
+                        
+                        # 🟢 FIX: ใช้ type: 'contingency_table' เพื่อ trigger Multi-level Header
+                        {'type': 'contingency_table', 
+                         'header': 'Contingency Table [Count (Row %) / (Total %)]', 
+                         'data': tab_res,
+                         'outcome_col': v2 # ส่งชื่อ Outcome Column ไปสำหรับ Header
+                        }
+                    ]
+                    
+                    # ADD RR/ARR/NNT IF IT'S A 2x2 TABLE
+                    if results.get('Is_2x2', False):
+                        rr = results.get('RR', np.nan)
+                        rd = results.get('RD', np.nan)
+                        nnt = results.get('NNT', np.nan)
+                        
+                        # Prepare RR/NNT table
+                        rr_stats = pd.DataFrame({
+                            "Statistic": [
+                                f"Risk in {results['R_exp_label']} (R1)",
+                                f"Risk in {results['R_unexp_label']} (R0)",
+                                "Risk Ratio (RR)",
+                                "Risk Difference (RD / ARR)",
+                                "Number Needed to Treat (NNT)"
+                            ],
+                            "Value": [
+                                f"{results.get('R_exp', np.nan):.4f}",
+                                f"{results.get('R_unexp', np.nan):.4f}",
+                                f"{rr:.4f}",
+                                f"{rd:.4f}",
+                                f"{nnt:.0f}" if pd.notna(nnt) and nnt != np.inf else "Inf"
+                            ],
+                            "Interpretation": [
+                                "Risk of Event in Group 1",
+                                "Risk of Event in Group 0 (Baseline)",
+                                f"Risk in Gp 1 / Risk in Gp 0 (Event: {results['Event_label']})",
+                                "Absolute difference in risk (R1 - R0)",
+                                "Number of patients to treat to prevent 1 Event (if RD < 0)"
+                            ]
+                        })
+                        
+                        # Add Interpretation Note
+                        exp_label = results['R_exp_label']
+                        unexp_label = results['R_unexp_label']
+                        event_label = results['Event_label']
+                        
+                        if pd.notna(rr) and pd.notna(rd):
+                            rr_interpret = f"RR/RD Interpretation (Assuming Row 0: '{exp_label}' is Exposure/Treatment, and Column 0: '{event_label}' is Event):"
+                            if rr > 1:
+                                rr_interpret += f" RR > 1: The risk of '{event_label}' is {rr:.2f} times higher in '{exp_label}' compared to '{unexp_label}'."
+                            elif rr < 1:
+                                rr_interpret += f" RR < 1: The risk of '{event_label}' is reduced by {(1 - rr) * 100:.1f}% in '{exp_label}' compared to '{unexp_label}'."
+                            else:
+                                rr_interpret += " RR = 1: No difference in risk."
+
+                            report_elements.append({'type': 'table', 'header': 'Risk & Effect Measures (2x2 Table)', 'data': rr_stats})
+                            report_elements.append({'type': 'text', 'data': f"<b>Interpretation Note:</b> {rr_interpret}"})
+                        
+                    # Generate report
+                    html_report = diag_test.generate_report(f"Chi-square & Risk Analysis: {v1} vs {v2}", report_elements)
+                    st.session_state.html_output_chi = html_report # Store HTML
+                    st.components.v1.html(html_report, height=700, scrolling=True)
+                else:
+                    st.error(results.get('error', 'Analysis Failed. Check if data is categorical and has non-zero counts.'))
+                    st.session_state.html_output_chi = None # Clear state on error
+                    
+            with download_col_chi:
+                if st.session_state.html_output_chi:
+                    st.download_button("📥 Download HTML Report", st.session_state.html_output_chi, "chi2_report.html", "text/html", key='dl_btn_chi')
+                else:
+                    st.button("📥 Download HTML Report", disabled=True, key='placeholder_chi')
+
+
+        # --- Descriptive ---
+        with sub_tab3:
+            st.markdown("##### Descriptive Statistics")
+            st.markdown("""
+                <p>
+                **Descriptive Statistics** summarizes the basic features of the data in a study. 
+                </p>
+                <p>
+                For **Continuous** variables, it reports Count, Mean, Standard Deviation (SD), and Quartiles. For **Categorical** variables, it reports Counts and Percentages.
+                </p>
+            """, unsafe_allow_html=True)
+            
+            dv = st.selectbox("Select Variable:", all_cols, key='desc_var')
+            
+            run_col_desc, download_col_desc = st.columns([1, 1])
+            # if 'html_output_desc' not in st.session_state: # REMOVED: Initialized at top
+            
+            if run_col_desc.button("Show Stats", key='btn_desc'):
+                res_df = diag_test.calculate_descriptive(df, dv)
+                if res_df is not None:
+                    report_elements = [
+                        {'type': 'table', 'header': '', 'data': res_df}
+                    ]
+                    html_report = diag_test.generate_report(f"Descriptive Statistics: {dv}", report_elements)
+                    st.session_state.html_output_desc = html_report # Store HTML
+                    st.components.v1.html(html_report, height=500, scrolling=True)
+                else:
+                    st.session_state.html_output_desc = None # Clear state on error
+                    
+            with download_col_desc:
+                if st.session_state.html_output_desc:
+                    st.download_button("📥 Download HTML Report", st.session_state.html_output_desc, "desc_report.html", "text/html", key='dl_btn_desc')
+                else:
+                    st.button("📥 Download HTML Report", disabled=True, key='placeholder_desc')
+
+    # -----------------------------------------------
+    # TAB 3: LOGISTIC REGRESSION (UNCHANGED)
+    # -----------------------------------------------
+    with main_tab3:
+        st.subheader("3. Logistic Regression Analysis")
+        
+        # English Description of Logistic Regression
+        st.markdown("""
+            <div style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 20px;">
+                <p>
+                <b>Binary Logistic Regression</b> is used to model the probability of a binary outcome (e.g., 0 or 1, disease presence/absence) based on one or more predictor variables.
+                </p>
+                <ul>
+                    <li><b>Univariate Analysis (Crude OR):</b> Calculates the association of each individual variable with the outcome, providing the Crude Odds Ratio (OR).</li>
+                    <li><b>Multivariate Analysis (Adjusted OR):</b> Includes potential confounding variables (screened at P-value < 0.20) into a single model to determine independent predictors, providing the Adjusted Odds Ratio (aOR).</li>
+                </ul>
+                <p style='font-size:0.9em;'><i>You can view and edit the data in the 📄 Raw Data tab.</i></p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("### Analysis Configuration")
+        col1, col2 = st.columns([1, 2])
+        
+        with col1:
+            # Find default outcome
+            def_idx = 0
+            for i, c in enumerate(all_cols):
+                if 'outcome' in c.lower() or 'died' in c.lower():
+                    def_idx = i; break
+            
+            target = st.selectbox("Select Outcome (Y):", all_cols, index=def_idx, key='logit_target')
+            
+        with col2:
+            # Check Perfect Separation
+            risky_vars = check_perfect_separation(df, target)
+            exclude_cols = []
+            
+            if risky_vars:
+                st.warning(f"⚠️ Risk of Perfect Separation: {', '.join(risky_vars)}")
+                exclude_cols = st.multiselect("Exclude Variables:", all_cols, default=risky_vars, key='logit_exclude')
+            else:
+                exclude_cols = st.multiselect("Exclude Variables (Optional):", all_cols, key='logit_exclude_optional')
+
+        run_col, download_col = st.columns([1, 1])
+        # if 'html_output_logit' not in st.session_state: # REMOVED: Initialized at top
+        
+        if run_col.button("🚀 Run Logistic Regression", type="primary"):
+            if df[target].nunique() < 2:
+                st.error("Error: Outcome must have at least 2 values (e.g., 0 and 1).")
+                st.session_state.html_output_logit = None # Clear state on error
+            else:
+                with st.spinner("Calculating..."):
+                    try:
+                        final_df = df.drop(columns=exclude_cols, errors='ignore')
+                        html = process_data_and_generate_html(final_df, target, var_meta=st.session_state.var_meta)
+                        st.session_state.html_output_logit = html # Store HTML
+                        st.components.v1.html(html, height=600, scrolling=True)
+                    except Exception as e:
+                        st.error(f"Analysis Failed: {e}")
+                        st.session_state.html_output_logit = None # Clear state on error
+                        
+        with download_col:
+            if st.session_state.html_output_logit:
+                st.download_button("📥 Download Report", st.session_state.html_output_logit, "logit_report.html", "text/html", key='dl_btn_logit')
+            else:
+                # Placeholder button to maintain alignment
+                st.button("📥 Download Report", disabled=True, key='placeholder_logit')
+
+else:
+    st.info("👈 Please load example data or upload a file to start.")
+    st.markdown("""
+    ### Features:
+    1.  **Logistic Regression:** Univariate & Multivariate with Auto-selection.
+    2.  **Diagnostic Test:** ROC Curve, AUC, Best Cut-off Table, Chi-square (with Report Export).
+    3.  **Table 1:** Auto-generated Baseline Characteristics with P-values.
+    """)
+
+# ==========================================
+# 3. GLOBAL CSS (Cleanup)
+# ==========================================
+
+# 🟢 NEW: Inject CSS to hide the default Streamlit footer (Keep this part)
+st.markdown("""
+<style>
+/* FIX: ทำให้ Sidebar Background ยาวลงมาถึงด้านล่างสุด */
+[data-testid="stSidebar"] > div {
+    height: 100vh !important; /* บังคับให้ Sidebar background ยาวเท่าความสูงของหน้าจอ */
+}
+
+/* โค้ดสำหรับซ่อน Streamlit footer เดิม (ยังจำเป็นต้องมี) */
+footer {
+    visibility: hidden;
+    height: 0px;
+}
+footer:after {
+    content: none;
+}
+</style>
+""", unsafe_allow_html=True)
