@@ -353,20 +353,22 @@ if st.session_state.df is not None:
             v2 = cc2.selectbox("Variable 2 (Outcome/Event):", all_cols, index=min(1, len(all_cols)-1), key='chi2')
             
             run_col_chi, download_col_chi = st.columns([1, 1])
-            if 'html_output_chi' not in st.session_state:
-                st.session_state.html_output_chi = None
-            
             if run_col_chi.button("Run Chi-Square", key='btn_chi'):
-                tab_res, results = diag_test.calculate_chi2(df, v1, v2) # Changed to get results dict
+                    tab_res, results = diag_test.calculate_chi2(df, v1, v2)
     
-                if tab_res is not None and 'error' not in results:
-                    # 🟢 tab_res ไม่จำเป็นต้อง reset_index() แล้ว เพราะเรา set index ใน diag_test แล้ว
+                    if tab_res is not None and 'error' not in results:
+                    # display_tab = tab_res.reset_index() # ไม่จำเป็นต้อง reset_index แล้ว เพราะ set_index ใน diag_test แล้ว
         
-                    report_elements = [
+                        report_elements = [
                         {'type': 'text', 'data': f"<b>Chi-square Test Result:</b> {results.get('chi2_msg', 'N/A')}"},
-                        # 🟢 ปรับปรุง Header ให้บอกว่ามี Count และ Percentage
-                        {'type': 'table', 'header': 'Contingency Table (Rows: V1, Columns: V2) [Count (Row %) / (Total %)]', 'data': tab_res} 
-                    ]
+            
+                        # 🟢 NEW: ส่ง tab_res ไปในรูปแบบพิเศษสำหรับ Multi-level Header
+                            {'type': 'contingency_table', 
+                         'header': 'Contingency Table (Count (Row %) / (Total %))', 
+                         'data': tab_res,
+                         'outcome_col': v2 # 🟢 ส่งชื่อคอลัมน์ Outcome ไป
+                            }
+                        ]
                     
                     # ADD RR/ARR/NNT IF IT'S A 2x2 TABLE
                     if results.get('Is_2x2', False):
@@ -416,7 +418,6 @@ if st.session_state.df is not None:
                             report_elements.append({'type': 'table', 'header': 'Risk & Effect Measures (2x2 Table)', 'data': rr_stats})
                             report_elements.append({'type': 'text', 'data': f"<b>Interpretation Note:</b> {rr_interpret}"})
                         
-                    # Generate report
                    # Generate report
                             html_report = diag_test.generate_report(f"Chi-square & Risk Analysis: {v1} vs {v2}", report_elements)
                             st.session_state.html_output_chi = html_report # Store HTML
