@@ -223,7 +223,7 @@ if st.session_state.df is not None:
                         st.error(f"Analysis Failed: {e}")
 
     # -----------------------------------------------
-    # TAB 2: DIAGNOSTIC TEST
+    # 🟢 TAB 2: DIAGNOSTIC TEST (Report Style Updated)
     # -----------------------------------------------
     with main_tab2:
         st.subheader("2. Diagnostic Test & Statistics")
@@ -244,39 +244,27 @@ if st.session_state.df is not None:
             
             method = rc3.radio("CI Method:", ["DeLong et al.", "Binomial (Hanley)"])
             
-            if st.button("📉 Plot ROC", key='btn_roc'):
-                # เรียกฟังก์ชันใหม่ที่คืนค่า coords ด้วย
+            if st.button("📉 Analyze ROC", key='btn_roc'):
+                # Call analysis
                 res, err, fig, coords_df = diag_test.analyze_roc(df, truth, score, 'delong' if 'DeLong' in method else 'hanley')
                 
                 if err: 
                     st.error(err)
                 else:
-                    # 1. Main Stats
-                    st.success(f"AUC = {res['AUC']:.3f} ({res['95% CI']})")
+                    # Prepare Report Elements
+                    report_elements = [
+                        {'type': 'text', 'data': f"Analysis of Test Score: <b>{score}</b> vs Gold Standard: <b>{truth}</b>"},
+                        {'type': 'plot', 'header': 'ROC Curve', 'data': fig},
+                        {'type': 'table', 'header': 'Key Statistics', 'data': pd.DataFrame([res]).T},
+                        {'type': 'table', 'header': 'Diagnostic Performance (All Cut-offs)', 'data': coords_df}
+                    ]
                     
-                    c_plot, c_stat = st.columns([1.5, 1])
-                    with c_plot:
-                        st.pyplot(fig)
-                        
-                    with c_stat:
-                        st.markdown("**Best Cut-off Statistics:**")
-                        # Transpose for better view
-                        st.dataframe(pd.DataFrame([res]).T, use_container_width=True)
-                        st.caption(f"Chi-square P-value at Best Cut-off: {res['Chi-square P-value']:.4f}")
-
-                    # 2. Coordinate Table
-                    st.markdown("---")
-                    st.markdown("### 📋 Diagnostic Performance at Each Cut-off")
-                    st.markdown("ตารางแสดงค่า Sen/Spec ของทุกจุดตัด (เรียงตาม Youden Index มากไปน้อย)")
+                    # Generate HTML
+                    html_report = diag_test.generate_report(f"ROC Analysis: {score}", report_elements)
                     
-                    if coords_df is not None:
-                        disp_cols = ['Cut-off', 'Sensitivity', 'Specificity', 'Youden Index', 'PPV', 'NPV']
-                        st.dataframe(
-                            coords_df[disp_cols].style.format("{:.3f}")
-                            .background_gradient(subset=['Youden Index'], cmap='Greens'),
-                            use_container_width=True,
-                            height=300
-                        )
+                    # Display & Download
+                    st.components.v1.html(html_report, height=800, scrolling=True)
+                    st.download_button("📥 Download HTML Report", html_report, "roc_report.html", "text/html")
 
         # --- Chi-Square ---
         with sub_tab2:
@@ -287,15 +275,38 @@ if st.session_state.df is not None:
             
             if st.button("Run Chi-Square", key='btn_chi'):
                 tab_res, msg = diag_test.calculate_chi2(df, v1, v2)
-                st.info(msg)
-                if tab_res is not None: st.dataframe(tab_res)
+                
+                if tab_res is not None:
+                    # Prepare Report Elements
+                    # Reset index to include row labels in table
+                    display_tab = tab_res.reset_index()
+                    report_elements = [
+                        {'type': 'text', 'data': f"<b>Result:</b> {msg}"},
+                        {'type': 'table', 'header': 'Contingency Table', 'data': display_tab}
+                    ]
+                    
+                    html_report = diag_test.generate_report(f"Chi-square: {v1} vs {v2}", report_elements)
+                    
+                    st.components.v1.html(html_report, height=500, scrolling=True)
+                    st.download_button("📥 Download HTML Report", html_report, "chi2_report.html", "text/html")
+                else:
+                    st.error(msg)
 
         # --- Descriptive ---
         with sub_tab3:
             st.markdown("##### Descriptive Statistics")
             dv = st.selectbox("Select Variable:", all_cols, key='desc_var')
-            if dv:
-                st.table(diag_test.calculate_descriptive(df, dv))
+            
+            if st.button("Show Stats", key='btn_desc'):
+                res_df = diag_test.calculate_descriptive(df, dv)
+                if res_df is not None:
+                    report_elements = [
+                        {'type': 'table', 'header': '', 'data': res_df}
+                    ]
+                    html_report = diag_test.generate_report(f"Descriptive Statistics: {dv}", report_elements)
+                    
+                    st.components.v1.html(html_report, height=500, scrolling=True)
+                    st.download_button("📥 Download HTML Report", html_report, "desc_report.html", "text/html")
 
     # -----------------------------------------------
     # TAB 3: TABLE 1
@@ -331,6 +342,6 @@ else:
     st.markdown("""
     ### Features:
     1.  **Logistic Regression:** Univariate & Multivariate with Auto-selection.
-    2.  **Diagnostic Test:** ROC Curve, AUC, Best Cut-off Table, Chi-square.
+    2.  **Diagnostic Test:** ROC Curve, AUC, Best Cut-off Table, Chi-square (with Report Export).
     3.  **Table 1:** Auto-generated Baseline Characteristics with P-values.
     """)
