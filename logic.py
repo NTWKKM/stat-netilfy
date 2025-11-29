@@ -303,6 +303,14 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None):
         .sheet-header td { background-color: #e8f4f8; color: #2980b9; font-weight: bold; letter-spacing: 1px; padding: 8px 15px; }
         .n-badge { font-size: 0.75em; color: #888; background: #eee; padding: 1px 4px; border-radius: 3px; }
         .summary-box { padding: 15px; background: #fff; font-size: 0.9em; color: #555; }
+        .report-footer {
+            text-align: right;
+            font-size: 0.75em;
+            color: var(--text-color);
+            margin-top: 20px;
+            border-top: 1px dashed var(--border-color);
+            padding-top: 10px;
+        }
     </style>
     """
     
@@ -310,4 +318,11 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None):
     html += "<h1>Analysis Report</h1>"
     html += analyze_outcome(target_outcome, df, var_meta)
     html += "</body></html>"
+    # 🟢 NEW: เพิ่ม Footer ของ Report
+    html += """
+    <div class="report-footer">
+      &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
+    </div>
+    """
+    # <---- สิ้นสุดการเพิ่มโค้ด Footer ใหม่ ---->
     return html
