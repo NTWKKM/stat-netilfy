@@ -172,9 +172,9 @@ if st.session_state.df is not None:
     # --- TOP NAVIGATION (Reordered Tabs) ---
     main_tab0, main_tab1, main_tab2, main_tab3 = st.tabs([
         "📄 Raw Data", 
-        "📋 Baseline Table 1", # New Tab 1
-        "🔬 Diagnostic Test (ROC/Chi2)", # New Tab 2
-        "📊 Logistic Regression" # New Tab 3
+        "📋 Baseline Table 1", 
+        "🔬 Diagnostic Test (ROC/Chi2)", 
+        "📊 Logistic Regression" 
     ])
 
     # -----------------------------------------------
@@ -216,7 +216,6 @@ if st.session_state.df is not None:
             def_vars = [c for c in all_cols if c != col_group]
             selected_vars = st.multiselect("Include Variables:", all_cols, default=def_vars, key='t1_vars')
             
-        # 🟢 FIX ALIGNMENT HERE
         run_col_t1, download_col_t1 = st.columns([1, 1])
         if 'html_output_t1' not in st.session_state:
             st.session_state.html_output_t1 = None
@@ -236,11 +235,10 @@ if st.session_state.df is not None:
             if st.session_state.html_output_t1:
                 st.download_button("📥 Download HTML Report", st.session_state.html_output_t1, "table1.html", "text/html", key='dl_btn_t1')
             else:
-                # Placeholder button to maintain alignment
                 st.button("📥 Download HTML Report", disabled=True, key='placeholder_t1')
 
     # -----------------------------------------------
-    # 🟢 TAB 2: DIAGNOSTIC TEST (With Descriptions)
+    # 🟢 TAB 2: DIAGNOSTIC TEST (Fixed Alignment and Logic)
     # -----------------------------------------------
     with main_tab2:
         st.subheader("2. Diagnostic Test & Statistics")
@@ -260,7 +258,7 @@ if st.session_state.df is not None:
                 </ul>
             """, unsafe_allow_html=True)
             
-            # 🟢 เปลี่ยนเป็น 4 คอลัมน์เพื่อรองรับ Positive Label Selection
+            # 🟢 Use 4 columns for ROC inputs
             rc1, rc2, rc3, rc4 = st.columns(4)
             # Find default outcome index
             def_idx = 0
@@ -278,7 +276,7 @@ if st.session_state.df is not None:
             
             method = rc3.radio("CI Method:", ["DeLong et al.", "Binomial (Hanley)"])
 
-            # 🟢 NEW: Positive Label Selection
+            # 🟢 Positive Label Selection
             pos_label = None
             unique_truth_vals = df[truth].dropna().unique()
             if len(unique_truth_vals) == 2:
@@ -290,6 +288,7 @@ if st.session_state.df is not None:
                 rc4.warning("Requires 2 unique values.")
 
             
+            # 🟢 FIX ALIGNMENT AND REMOVE DUPLICATION
             run_col_roc, download_col_roc = st.columns([1, 1])
             if 'html_output_roc' not in st.session_state:
                 st.session_state.html_output_roc = None
@@ -297,33 +296,27 @@ if st.session_state.df is not None:
             if run_col_roc.button("📉 Analyze ROC", key='btn_roc'):
                 if pos_label is None and len(unique_truth_vals) == 2:
                     st.error("Error: Please select the Positive Label (1).")
+                    st.session_state.html_output_roc = None
                 elif len(unique_truth_vals) != 2:
                     st.error("Error: Gold Standard must have exactly 2 classes.")
+                    st.session_state.html_output_roc = None
                 else:
                     # 🟢 Pass the selected pos_label to diag_test
                     res, err, fig, coords_df = diag_test.analyze_roc(df, truth, score, 'delong' if 'DeLong' in method else 'hanley', pos_label_user=pos_label)
-           
-            # 🟢 FIX ALIGNMENT HERE
-            run_col_roc, download_col_roc = st.columns([1, 1])
-            if 'html_output_roc' not in st.session_state:
-                st.session_state.html_output_roc = None
-            
-            if run_col_roc.button("📉 Analyze ROC", key='btn_roc'):
-                res, err, fig, coords_df = diag_test.analyze_roc(df, truth, score, 'delong' if 'DeLong' in method else 'hanley')
-                
-                if err: 
-                    st.error(err)
-                    st.session_state.html_output_roc = None # Clear state on error
-                else:
-                    report_elements = [
-                        {'type': 'text', 'data': f"Analysis of Test Score: <b>{score}</b> vs Gold Standard: <b>{truth}</b>"},
-                        {'type': 'plot', 'header': 'ROC Curve', 'data': fig},
-                        {'type': 'table', 'header': 'Key Statistics', 'data': pd.DataFrame([res]).T},
-                        {'type': 'table', 'header': 'Diagnostic Performance (All Cut-offs)', 'data': coords_df}
-                    ]
-                    html_report = diag_test.generate_report(f"ROC Analysis: {score}", report_elements)
-                    st.session_state.html_output_roc = html_report # Store HTML
-                    st.components.v1.html(html_report, height=800, scrolling=True)
+                    
+                    if err: 
+                        st.error(err)
+                        st.session_state.html_output_roc = None 
+                    else:
+                        report_elements = [
+                            {'type': 'text', 'data': f"Analysis of Test Score: <b>{score}</b> vs Gold Standard: <b>{truth}</b>"},
+                            {'type': 'plot', 'header': 'ROC Curve', 'data': fig},
+                            {'type': 'table', 'header': 'Key Statistics', 'data': pd.DataFrame([res]).T},
+                            {'type': 'table', 'header': 'Diagnostic Performance (All Cut-offs)', 'data': coords_df}
+                        ]
+                        html_report = diag_test.generate_report(f"ROC Analysis: {score}", report_elements)
+                        st.session_state.html_output_roc = html_report # Store HTML
+                        st.components.v1.html(html_report, height=800, scrolling=True)
 
             with download_col_roc:
                 if st.session_state.html_output_roc:
@@ -331,7 +324,8 @@ if st.session_state.df is not None:
                 else:
                     # Placeholder button to maintain alignment
                     st.button("📥 Download HTML Report", disabled=True, key='placeholder_roc')
-                    
+
+
         # --- Chi-Square ---
         with sub_tab2:
             st.markdown("##### Chi-Square Test")
@@ -348,7 +342,6 @@ if st.session_state.df is not None:
             v1 = cc1.selectbox("Variable 1:", all_cols, key='chi1')
             v2 = cc2.selectbox("Variable 2:", all_cols, index=min(1, len(all_cols)-1), key='chi2')
             
-            # 🟢 FIX ALIGNMENT HERE
             run_col_chi, download_col_chi = st.columns([1, 1])
             if 'html_output_chi' not in st.session_state:
                 st.session_state.html_output_chi = None
@@ -373,8 +366,8 @@ if st.session_state.df is not None:
                 if st.session_state.html_output_chi:
                     st.download_button("📥 Download HTML Report", st.session_state.html_output_chi, "chi2_report.html", "text/html", key='dl_btn_chi')
                 else:
-                    # Placeholder button to maintain alignment
                     st.button("📥 Download HTML Report", disabled=True, key='placeholder_chi')
+
 
         # --- Descriptive ---
         with sub_tab3:
@@ -390,7 +383,6 @@ if st.session_state.df is not None:
             
             dv = st.selectbox("Select Variable:", all_cols, key='desc_var')
             
-            # 🟢 FIX ALIGNMENT HERE
             run_col_desc, download_col_desc = st.columns([1, 1])
             if 'html_output_desc' not in st.session_state:
                 st.session_state.html_output_desc = None
@@ -411,7 +403,6 @@ if st.session_state.df is not None:
                 if st.session_state.html_output_desc:
                     st.download_button("📥 Download HTML Report", st.session_state.html_output_desc, "desc_report.html", "text/html", key='dl_btn_desc')
                 else:
-                    # Placeholder button to maintain alignment
                     st.button("📥 Download HTML Report", disabled=True, key='placeholder_desc')
 
     # -----------------------------------------------
@@ -457,7 +448,6 @@ if st.session_state.df is not None:
             else:
                 exclude_cols = st.multiselect("Exclude Variables (Optional):", all_cols, key='logit_exclude_optional')
 
-        # 🟢 FIX ALIGNMENT HERE
         run_col, download_col = st.columns([1, 1])
         if 'html_output_logit' not in st.session_state:
             st.session_state.html_output_logit = None 
@@ -465,7 +455,7 @@ if st.session_state.df is not None:
         if run_col.button("🚀 Run Logistic Regression", type="primary"):
             if df[target].nunique() < 2:
                 st.error("Error: Outcome must have at least 2 values (e.g., 0 and 1).")
-                st.session_state.html_output_logit = None # Clear state on error
+                st.session_state.html_output_logit = None 
             else:
                 with st.spinner("Calculating..."):
                     try:
@@ -475,13 +465,12 @@ if st.session_state.df is not None:
                         st.components.v1.html(html, height=600, scrolling=True)
                     except Exception as e:
                         st.error(f"Analysis Failed: {e}")
-                        st.session_state.html_output_logit = None # Clear state on error
+                        st.session_state.html_output_logit = None 
                         
         with download_col:
             if st.session_state.html_output_logit:
                 st.download_button("📥 Download Report", st.session_state.html_output_logit, "logit_report.html", "text/html", key='dl_btn_logit')
             else:
-                # Placeholder button to maintain alignment
                 st.button("📥 Download Report", disabled=True, key='placeholder_logit')
 
 else:
