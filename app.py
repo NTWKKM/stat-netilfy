@@ -54,7 +54,7 @@ st.sidebar.title("MENU")
 st.sidebar.header("1. Data Management")
 
 # 🟢 SUPER EXAMPLE DATA GENERATOR
-if st.sidebar.button("📄 Load Super Example Data"):
+if st.sidebar.button("📄 Load Example Data"):
     # สร้างข้อมูลจำลอง 150 เคส ที่เหมาะกับทุกสถิติ
     np.random.seed(42)
     n = 150
