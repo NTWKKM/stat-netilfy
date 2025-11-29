@@ -4,23 +4,20 @@
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <title>Stat Tool</title>
+    <title>Medical Stat Tool</title>
     <script src="https://cdn.jsdelivr.net/npm/@stlite/mountable@0.39.0/build/stlite.js"></script>
   </head>
   <body>
     <div id="root"></div>
     <script>
       stlite.mount({
-        requirements: ["pandas", "scipy", "statsmodels", "openpyxl"], // Library ที่ต้องใช้
-        entrypoint: "app.py", // ไฟล์หลัก
+        // ⚠️ เพิ่ม scikit-learn และ matplotlib ตรงนี้
+        requirements: ["pandas", "scipy", "statsmodels", "openpyxl", "scikit-learn", "matplotlib"],
+        entrypoint: "app.py",
         files: {
-          "app.py": {
-            url: "./app.py", // โหลดไฟล์ app.py
-          },
-          "logic.py": {
-            url: "./logic.py", // โหลดไฟล์ logic ของคุณ
-          },
-          // "codebook.xlsx": { url: "./codebook.xlsx" } // ถ้าจำเป็นต้องใช้ไฟล์แนบ
+          "app.py": { url: "./app.py" },
+          "logic.py": { url: "./logic.py" },     // ไฟล์ Logic เดิมของคุณ
+          "diag_test.py": { url: "./diag_test.py" } // 🟢 ไฟล์ใหม่ที่เราจะสร้าง
         },
       }, document.getElementById("root"));
     </script>
