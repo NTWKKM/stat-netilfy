@@ -360,11 +360,12 @@ if st.session_state.df is not None:
                 </p>
             """, unsafe_allow_html=True)
             
-            cc1, cc2 = st.columns(2)
+            # เปลี่ยนจาก 2 เป็น 3 คอลัมน์
+            cc1, cc2, cc3 = st.columns(3)
             v1 = cc1.selectbox("Variable 1 (Exposure/Group):", all_cols, key='chi1')
             v2 = cc2.selectbox("Variable 2 (Outcome/Event):", all_cols, index=min(1, len(all_cols)-1), key='chi2')
-
             # ADDED: Correction selection
+            with cc3:
             correction_flag = st.radio("Correction Method (for 2x2 table):", 
                                          ['Pearson (Standard)', "Yates' correction"], 
                                          index=0, key='chi_corr_method') == "Yates' correction"
