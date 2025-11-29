@@ -266,7 +266,7 @@ if st.session_state.df is not None:
     with main_tab2:
         st.subheader("2. Diagnostic Test & Statistics")
         
-        sub_tab1, sub_tab2, sub_tab3 = st.tabs(["📈 ROC Curve & AUC", "🎲 Chi-Square", "📊 Descriptive"])
+        sub_tab1, sub_tab2, sub_tab3 = st.tabs(["📈 ROC Curve & AUC", "🎲 2x2 analysis : Chi square, RR, NNT", "📊 Descriptive"])
         
         # --- ROC ---
         with sub_tab1:
@@ -363,6 +363,11 @@ if st.session_state.df is not None:
             cc1, cc2 = st.columns(2)
             v1 = cc1.selectbox("Variable 1 (Exposure/Group):", all_cols, key='chi1')
             v2 = cc2.selectbox("Variable 2 (Outcome/Event):", all_cols, index=min(1, len(all_cols)-1), key='chi2')
+
+            # ADDED: Correction selection
+            correction_flag = st.radio("Correction Method (for 2x2 table):", 
+                                         ['Pearson (Standard)', "Yates' correction"], 
+                                         index=0, key='chi_corr_method') == "Yates' correction"
             
             run_col_chi, download_col_chi = st.columns([1, 1])
             # if 'html_output_chi' not in st.session_state: # REMOVED: Initialized at top
