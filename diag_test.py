@@ -113,30 +113,41 @@ def calculate_chi2(df, col1, col2):
 # --- Formatting Display Table (Count, Row %, Total %) ---
     
     # 1. Calculate Row Percentages (Horizontal %)
+    # NOTE: tab_row_percent มี Total column ที่มีค่า 1.0 (หรือ 100%)
     tab_row_percent = pd.crosstab(data[col1], data[col2], normalize='index', margins=True, margins_name="Total") * 100
     
     # 2. Calculate Total Percentages (Grand Total %)
     tab_total_percent = pd.crosstab(data[col1], data[col2], normalize='all', margins=True, margins_name="Total") * 100
     
     # สร้างตาราง Display Final
-    col_names = tab_raw.columns.tolist()
-    index_names = tab_raw.index.tolist()
+    col_names = tab_raw.columns.tolist() # Includes all V2 categories + 'Total'
+    index_names = tab_raw.index.tolist() # Includes all V1 categories + 'Total'
     
     display_tab_data = []
     
     for row_name in index_names:
-        row_data = [row_name] # คอลัมน์แรกเป็นชื่อแถว (Exposure)
+        row_data = [] # ลบ [row_name] ออก เนื่องจากจะ set_index ด้วยคอลัมน์นี้ภายหลัง
         
         for col_name in col_names:
             count = tab_raw.loc[row_name, col_name]
-            row_pct = tab_row_percent.loc[row_name, col_name]
             total_pct = tab_total_percent.loc[row_name, col_name]
+
+            if col_name == 'Total' and row_name == 'Total':
+                # Grand Total Cell: แสดงเฉพาะ Count และ Total %
+                row_pct = 100.0 # Row % สำหรับ Total/Total คือ 100%
+                cell_content = f"{count} / ({total_pct:.1f}%)"
+            elif col_name == 'Total':
+                # Row Marginal Total Cell: แสดง Count และ Row % (ซึ่งคือ 100%)
+                row_pct = 100.0
+                cell_content = f"{count} ({row_pct:.1f}%) / ({total_pct:.1f}%)"
+            else:
+                # Normal Data Cell: แสดง Count, Row %, Total %
+                row_pct = tab_row_percent.loc[row_name, col_name]
+                cell_content = f"{count} ({row_pct:.1f}%) / ({total_pct:.1f}%)"
             
-            # Format: Count (Row %) / (Total %)
-            cell_content = f"{count} ({row_pct:.1f}%) / ({total_pct:.1f}%)"
             row_data.append(cell_content)
             
-        display_tab_data.append(row_data)
+        display_tab_data.append([row_name] + row_data) # เพิ่มชื่อแถวกลับเข้าไปในแถวข้อมูล
 
     # สร้าง DataFrame สำหรับแสดงผล
     display_tab = pd.DataFrame(display_tab_data, columns=[col1] + col_names)
