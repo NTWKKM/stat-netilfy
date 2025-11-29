@@ -1,138 +1,315 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-# Import logic ทั้งหมด
-from logic import process_data_and_generate_html
-import diag_test 
-import table_one # 🟢 Import ไฟล์ใหม่
 
+# Import Module ที่เราแยกไฟล์ไว้ (ต้องมีไฟล์เหล่านี้ในโฟลเดอร์เดียวกัน)
+from logic import process_data_and_generate_html
+import diag_test
+import table_one
+
+# --- CONFIGURATION ---
 st.set_page_config(page_title="Medical Stat Tool", layout="wide")
 
 st.title("🏥 Medical Statistical Tool")
 
-# --- GLOBAL DATA STATE ---
+# --- INITIALIZE STATE ---
 if 'df' not in st.session_state:
     st.session_state.df = None
 if 'var_meta' not in st.session_state:
     st.session_state.var_meta = {} 
 
-# --- SIDEBAR NAVIGATION ---
-st.sidebar.title("Navigation")
-# 🟢 เพิ่มเมนูที่ 3
-page = st.sidebar.radio("Go to:", [
-    "1. Data & Logistic Regression", 
-    "2. Diagnostic Test (ROC / Chi2)",
-    "3. Baseline Characteristics (Table 1)"
-])
+# --- HELPER FUNCTIONS ---
+def check_perfect_separation(df, target_col):
+    """ตรวจสอบว่าตัวแปรไหนแยกกลุ่มผลลัพธ์ได้สมบูรณ์เกินไป (เสี่ยง Error ใน Logistic)"""
+    risky_vars = []
+    try:
+        y = pd.to_numeric(df[target_col], errors='coerce').dropna()
+        if y.nunique() < 2: return []
+    except: return []
 
-st.sidebar.markdown("---")
-st.sidebar.header("Data Management")
+    for col in df.columns:
+        if col == target_col: continue
+        # เช็คเฉพาะ Categorical
+        if df[col].nunique() < 10: 
+            try:
+                tab = pd.crosstab(df[col], y)
+                if (tab == 0).any().any():
+                    risky_vars.append(col)
+            except: pass
+    return risky_vars
 
-# --- DATA INPUT (Shared) ---
-if st.sidebar.button("📄 Load Example Data"):
-    # (ใช้ Data เดิมได้เลยครับ ละไว้เพื่อความกระชับ)
+def safe_rerun():
+    """รองรับคำสั่ง Rerun ทุกเวอร์ชันของ Streamlit"""
+    if hasattr(st, "rerun"):
+        st.rerun()
+    else:
+        st.experimental_rerun()
+
+# ==========================================
+# 1. SIDEBAR: DATA & SETTINGS
+# ==========================================
+st.sidebar.title("MENU")
+
+# --- 1.1 DATA LOADER ---
+st.sidebar.header("1. Data Management")
+
+# 🟢 SUPER EXAMPLE DATA GENERATOR
+if st.sidebar.button("📄 Load Super Example Data"):
+    # สร้างข้อมูลจำลอง 150 เคส ที่เหมาะกับทุกสถิติ
+    np.random.seed(42)
+    n = 150
+    
+    # -- Data Generation Logic --
+    # 1. Group (สำหรับ Table 1): แบ่งกลุ่ม Treatment
+    groups = np.random.choice(['Standard Care', 'New Drug'], n, p=[0.5, 0.5])
+    
+    # 2. Continuous Vars (สำหรับ T-test/ANOVA)
+    age = np.random.normal(60, 12, n).astype(int)
+    bmi = np.random.normal(25, 4, n).round(1)
+    
+    # 3. Categorical Vars (สำหรับ Chi-square)
+    sex = np.random.choice([0, 1], n) # 0=F, 1=M
+    
+    # โรคประจำตัว (สัมพันธ์กับอายุ)
+    ht_prob = (age - 20) / 80  # อายุมากเสี่ยงมาก
+    ht = np.random.binomial(1, np.clip(ht_prob, 0.1, 0.9))
+    
+    # 4. Diagnostic Test Score (สำหรับ ROC)
+    # สร้าง Score ที่มีความสามารถในการแยกโรค (AUC ~ 0.85)
+    disease_status = np.zeros(n)
+    risk_score = np.random.normal(5, 2, n)
+    
+    # คนที่มี Score สูง มีโอกาสเป็นโรคสูง (Logistic function)
+    prob_disease = 1 / (1 + np.exp(-(risk_score - 6)*0.8))
+    outcome = np.random.binomial(1, prob_disease)
+    
+    # Combine Data
     data = {
-        'age': [25, 28, 30, 35, 40, 42, 45, 22, 29, 33, 50, 55, 52, 58, 60, 62, 51, 59, 54, 57, 65, 70, 72, 75, 80, 82, 85, 78, 88, 90] * 2,
-        'sex': [0, 1] * 30,
-        'score_test': [1.2, 1.5, 1.1, 2.0, 2.5, 3.1, 4.0, 1.0, 1.8, 2.2, 5.0, 5.5, 4.8, 6.0, 6.5, 5.2, 4.9, 6.1, 5.3, 5.8, 8.0, 8.5, 9.0, 7.5, 9.2, 9.5, 9.8, 8.8, 9.9, 9.1] * 2,
-        'outcome_disease': [0,0,0,0,0, 0,0,0,0,0, 1,1,0,1,0, 0,1,0,1,0, 1,1,1,1,1, 1,1,1,1,1] * 2,
-        'group_treatment': [0,0,1,1,0, 0,1,1,0,1] * 6 # เพิ่มตัวแปรกลุ่ม
+        'ID': range(1, n+1),
+        'Group': groups,
+        'Age': age,
+        'Sex': sex,
+        'BMI': bmi,
+        'Hypertension': ht,
+        'Risk_Score': risk_score.round(2),
+        'Outcome_Disease': outcome
     }
+    
     st.session_state.df = pd.DataFrame(data)
+    
+    # Pre-set Metadata (Labeling)
     st.session_state.var_meta = {
-        'sex': {'type': 'Categorical', 'map': {0:'Female', 1:'Male'}},
-        'outcome_disease': {'type': 'Categorical', 'map': {0:'Healthy', 1:'Disease'}},
-        'group_treatment': {'type': 'Categorical', 'map': {0:'Placebo', 1:'Drug A'}}
+        'Sex': {'type': 'Categorical', 'map': {0:'Female', 1:'Male'}},
+        'Hypertension': {'type': 'Categorical', 'map': {0:'No', 1:'Yes'}},
+        'Outcome_Disease': {'type': 'Categorical', 'map': {0:'Healthy', 1:'Disease'}},
+        'Group': {'type': 'Categorical', 'map': {}} # Auto-detect string
     }
-    st.sidebar.success("Loaded!")
+    
+    st.sidebar.success("Loaded! Ready for all tabs.")
+    safe_rerun()
 
+# Upload File
 uploaded_file = st.sidebar.file_uploader("Upload CSV/Excel", type=['csv', 'xlsx'])
 if uploaded_file:
     try:
         if uploaded_file.name.endswith('.csv'): st.session_state.df = pd.read_csv(uploaded_file)
         else: st.session_state.df = pd.read_excel(uploaded_file)
-    except: st.sidebar.error("Load failed")
+        st.sidebar.success("File Uploaded!")
+    except Exception as e: st.sidebar.error(f"Error: {e}")
 
-# 🟢 MAIN LOGIC
+# --- 1.2 VARIABLE SETTINGS ---
+if st.session_state.df is not None:
+    st.sidebar.header("2. Variable Settings")
+    df = st.session_state.df
+    all_cols = df.columns.tolist()
+    
+    selected_var = st.sidebar.selectbox("Edit Variable:", ["Select..."] + all_cols)
+    
+    if selected_var != "Select...":
+        # Load current settings
+        meta = st.session_state.var_meta.get(selected_var, {})
+        curr_type = meta.get('type', 'Auto-detect')
+        curr_map = meta.get('map', {})
+        
+        # Edit Type
+        new_type = st.sidebar.radio("Type:", ['Auto-detect', 'Categorical', 'Continuous'], 
+                                    index=['Auto-detect', 'Categorical', 'Continuous'].index(curr_type))
+        
+        # Edit Labels
+        map_str = "\n".join([f"{k}={v}" for k, v in curr_map.items()])
+        st.sidebar.markdown("Labels (e.g. 0=No):")
+        new_labels_str = st.sidebar.text_area("Label Map", value=map_str, height=80, label_visibility="collapsed")
+        
+        if st.sidebar.button("💾 Save Settings"):
+            # Parse Labels
+            new_map = {}
+            for line in new_labels_str.split('\n'):
+                if '=' in line:
+                    k, v = line.split('=', 1)
+                    try:
+                        k = k.strip()
+                        if k.replace('.','',1).isdigit():
+                            k = float(k) if '.' in k else int(k)
+                        new_map[k] = v.strip()
+                    except: pass
+            
+            # Save to Session State
+            if selected_var not in st.session_state.var_meta:
+                st.session_state.var_meta[selected_var] = {}
+            
+            st.session_state.var_meta[selected_var]['type'] = new_type
+            st.session_state.var_meta[selected_var]['map'] = new_map
+            st.sidebar.success("Saved!")
+            safe_rerun()
+
+# ==========================================
+# 2. MAIN AREA: NAVIGATION & CONTENT
+# ==========================================
+
 if st.session_state.df is not None:
     df = st.session_state.df
     all_cols = df.columns.tolist()
 
-    # -----------------------------------------------
-    # PAGE 1: LOGISTIC REGRESSION
-    # -----------------------------------------------
-    if page == "1. Data & Logistic Regression":
-        st.subheader("Data Review")
-        st.data_editor(df, num_rows="dynamic", use_container_width=True, height=300)
-        
-        st.subheader("Logistic Regression Analysis")
-        target = st.selectbox("Select Outcome (Y)", all_cols)
-        if st.button("🚀 Run Logistic Regression"):
-             html = process_data_and_generate_html(df, target, var_meta=st.session_state.var_meta)
-             st.components.v1.html(html, height=600, scrolling=True)
+    # --- TOP NAVIGATION ---
+    # ใช้ Tabs ใหญ่ด้านบนเพื่อเปลี่ยนโหมด (UX ดีกว่า Radio)
+    main_tab1, main_tab2, main_tab3 = st.tabs([
+        "📊 Logistic Regression", 
+        "🔬 Diagnostic Test (ROC/Chi2)", 
+        "📋 Baseline Table 1"
+    ])
 
     # -----------------------------------------------
-    # PAGE 2: DIAGNOSTIC TEST
+    # TAB 1: LOGISTIC REGRESSION
     # -----------------------------------------------
-    elif page == "2. Diagnostic Test (ROC / Chi2)":
-        st.header("🔬 Diagnostic Test & Statistics")
-        tab1, tab2, tab3 = st.tabs(["📊 Descriptive", "🎲 Chi-Square", "📈 ROC Curve"])
+    with main_tab1:
+        st.subheader("1. Logistic Regression Analysis")
+        st.info("💡 Edit data below if needed. Changes apply instantly.")
         
-        with tab1:
-            col_desc = st.selectbox("Select Variable:", all_cols)
-            if col_desc: st.table(diag_test.calculate_descriptive(df, col_desc))
-                
-        with tab2:
-            c1, c2 = st.columns(2)
-            v1 = c1.selectbox("Var 1:", all_cols, key='chi1')
-            v2 = c2.selectbox("Var 2:", all_cols, key='chi2')
-            if st.button("Run Chi-Square"):
+        # Data Editor
+        edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, height=250, key='editor_logit')
+        
+        st.markdown("### Analysis Configuration")
+        col1, col2 = st.columns([1, 2])
+        
+        with col1:
+            # Find default outcome
+            def_idx = 0
+            for i, c in enumerate(all_cols):
+                if 'outcome' in c.lower() or 'died' in c.lower():
+                    def_idx = i; break
+            
+            target = st.selectbox("Select Outcome (Y):", all_cols, index=def_idx)
+            
+        with col2:
+            # Check Perfect Separation
+            risky_vars = check_perfect_separation(edited_df, target)
+            exclude_cols = []
+            
+            if risky_vars:
+                st.warning(f"⚠️ Risk of Perfect Separation: {', '.join(risky_vars)}")
+                exclude_cols = st.multiselect("Exclude Variables:", all_cols, default=risky_vars)
+            else:
+                exclude_cols = st.multiselect("Exclude Variables (Optional):", all_cols)
+
+        if st.button("🚀 Run Logistic Regression", type="primary"):
+            if edited_df[target].nunique() < 2:
+                st.error("Error: Outcome must have at least 2 values (e.g., 0 and 1).")
+            else:
+                with st.spinner("Calculating..."):
+                    try:
+                        final_df = edited_df.drop(columns=exclude_cols, errors='ignore')
+                        html = process_data_and_generate_html(final_df, target, var_meta=st.session_state.var_meta)
+                        st.components.v1.html(html, height=600, scrolling=True)
+                        st.download_button("📥 Download Report", html, "logit_report.html", "text/html")
+                    except Exception as e:
+                        st.error(f"Analysis Failed: {e}")
+
+    # -----------------------------------------------
+    # TAB 2: DIAGNOSTIC TEST
+    # -----------------------------------------------
+    with main_tab2:
+        st.subheader("2. Diagnostic Test & Statistics")
+        
+        sub_tab1, sub_tab2, sub_tab3 = st.tabs(["📈 ROC Curve & AUC", "🎲 Chi-Square", "📊 Descriptive"])
+        
+        # --- ROC ---
+        with sub_tab1:
+            st.markdown("##### ROC Curve Analysis")
+            rc1, rc2, rc3 = st.columns(3)
+            truth = rc1.selectbox("Gold Standard (Binary):", all_cols, index=def_idx, key='roc_truth')
+            
+            # Find default score
+            score_idx = 0
+            for i, c in enumerate(all_cols):
+                if 'score' in c.lower(): score_idx = i; break
+            score = rc2.selectbox("Test Score (Continuous):", all_cols, index=score_idx, key='roc_score')
+            
+            method = rc3.radio("CI Method:", ["DeLong et al.", "Binomial (Hanley)"])
+            
+            if st.button("📉 Plot ROC", key='btn_roc'):
+                res, err, fig = diag_test.analyze_roc(df, truth, score, 'delong' if 'DeLong' in method else 'hanley')
+                if err: 
+                    st.error(err)
+                else:
+                    st.success(f"AUC = {res['AUC']:.4f} (95% CI: {res['95% CI Lower']:.4f} - {res['95% CI Upper']:.4f})")
+                    c_plot, c_stat = st.columns([1.5, 1])
+                    c_plot.pyplot(fig)
+                    c_stat.write("**Detailed Statistics:**")
+                    c_stat.dataframe(pd.DataFrame([res]).T, use_container_width=True)
+
+        # --- Chi-Square ---
+        with sub_tab2:
+            st.markdown("##### Chi-Square Test")
+            cc1, cc2 = st.columns(2)
+            v1 = cc1.selectbox("Variable 1:", all_cols, key='chi1')
+            v2 = cc2.selectbox("Variable 2:", all_cols, index=1, key='chi2')
+            
+            if st.button("Run Chi-Square", key='btn_chi'):
                 tab_res, msg = diag_test.calculate_chi2(df, v1, v2)
-                st.write(msg)
+                st.info(msg)
                 if tab_res is not None: st.dataframe(tab_res)
 
-        with tab3:
-            rc1, rc2 = st.columns(2)
-            truth = rc1.selectbox("Gold Standard (0/1):", all_cols, key='roc_truth')
-            score = rc2.selectbox("Test Score:", all_cols, key='roc_score')
-            method = st.radio("CI Method:", ["DeLong", "Binomial (Hanley)"])
-            
-            if st.button("📉 Plot ROC"):
-                res, err, fig = diag_test.analyze_roc(df, truth, score, 'delong' if 'DeLong' in method else 'hanley')
-                if err: st.error(err)
-                else:
-                    st.success(f"AUC = {res['AUC']:.4f}")
-                    st.pyplot(fig)
-                    st.json(res)
+        # --- Descriptive ---
+        with sub_tab3:
+            st.markdown("##### Descriptive Statistics")
+            dv = st.selectbox("Select Variable:", all_cols, key='desc_var')
+            if dv:
+                st.table(diag_test.calculate_descriptive(df, dv))
 
     # -----------------------------------------------
-    # PAGE 3: TABLE 1 (BASELINE CHARACTERISTICS) - NEW!
+    # TAB 3: TABLE 1
     # -----------------------------------------------
-    elif page == "3. Baseline Characteristics (Table 1)":
-        st.header("📋 Baseline Characteristics (Table 1)")
+    with main_tab3:
+        st.subheader("3. Baseline Characteristics (Table 1)")
         
-        st.markdown("""
-        สร้างตารางข้อมูลพื้นฐาน (Demographic Table) เปรียบเทียบระหว่างกลุ่มอัตโนมัติ
-        * **Continuous:** แสดง Mean ± SD (ใช้ T-test/ANOVA)
-        * **Categorical:** แสดง n (%) (ใช้ Chi-square)
-        """)
+        col_group_idx = 0
+        for i, c in enumerate(all_cols):
+            if 'group' in c.lower() or 'treat' in c.lower(): col_group_idx = i; break
         
-        col_group = st.selectbox("Select Group Column (Optional):", ["None"] + all_cols, index=0)
+        c_t1, c_t2 = st.columns([1, 2])
+        with c_t1:
+            col_group = st.selectbox("Group By (Column):", ["None"] + all_cols, index=col_group_idx+1)
         
-        # เลือกตัวแปรที่จะใส่ในตาราง (Default คือทั้งหมด ยกเว้นตัว Group เอง)
-        default_vars = [c for c in all_cols if c != col_group]
-        selected_vars = st.multiselect("Select Variables to Include:", all_cols, default=default_vars)
-        
-        if st.button("📊 Generate Table 1"):
-            with st.spinner("Generating table..."):
+        with c_t2:
+            def_vars = [c for c in all_cols if c != col_group]
+            selected_vars = st.multiselect("Include Variables:", all_cols, default=def_vars)
+            
+        if st.button("📊 Generate Table 1", type="primary"):
+            with st.spinner("Generating Table 1..."):
                 try:
-                    group_val = None if col_group == "None" else col_group
-                    html_table = table_one.generate_table(df, selected_vars, group_val, st.session_state.var_meta)
-                    
-                    st.components.v1.html(html_table, height=800, scrolling=True)
-                    st.download_button("📥 Download HTML Table", html_table, "table1.html", "text/html")
+                    grp = None if col_group == "None" else col_group
+                    html_t1 = table_one.generate_table(df, selected_vars, grp, st.session_state.var_meta)
+                    st.components.v1.html(html_t1, height=600, scrolling=True)
+                    st.download_button("📥 Download HTML", html_t1, "table1.html", "text/html")
                 except Exception as e:
-                    st.error(f"Error generating table: {e}")
+                    st.error(f"Error: {e}")
 
 else:
-    st.info("👈 Please upload data first.")
+    st.info("👈 Please load example data or upload a file to start.")
+    # Show features list when empty
+    st.markdown("""
+    ### Features:
+    1.  **Logistic Regression:** Univariate & Multivariate with Auto-selection.
+    2.  **Diagnostic Test:** ROC Curve, AUC (DeLong/Hanley), Chi-square.
+    3.  **Table 1:** Auto-generated Baseline Characteristics with P-values.
+    """)
