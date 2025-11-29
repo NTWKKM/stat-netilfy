@@ -358,13 +358,14 @@ if st.session_state.df is not None:
             
             if run_col_chi.button("Run Chi-Square", key='btn_chi'):
                 tab_res, results = diag_test.calculate_chi2(df, v1, v2) # Changed to get results dict
-                
+    
                 if tab_res is not None and 'error' not in results:
-                    display_tab = tab_res.reset_index()
-                    
+                    # 🟢 tab_res ไม่จำเป็นต้อง reset_index() แล้ว เพราะเรา set index ใน diag_test แล้ว
+        
                     report_elements = [
                         {'type': 'text', 'data': f"<b>Chi-square Test Result:</b> {results.get('chi2_msg', 'N/A')}"},
-                        {'type': 'table', 'header': 'Contingency Table (Rows: V1, Columns: V2)', 'data': display_tab}
+                        # 🟢 ปรับปรุง Header ให้บอกว่ามี Count และ Percentage
+                        {'type': 'table', 'header': 'Contingency Table (Rows: V1, Columns: V2) [Count (Row %) / (Total %)]', 'data': tab_res} 
                     ]
                     
                     # ADD RR/ARR/NNT IF IT'S A 2x2 TABLE
@@ -416,12 +417,13 @@ if st.session_state.df is not None:
                             report_elements.append({'type': 'text', 'data': f"<b>Interpretation Note:</b> {rr_interpret}"})
                         
                     # Generate report
-                    html_report = diag_test.generate_report(f"Chi-square & Risk Analysis: {v1} vs {v2}", report_elements)
-                    st.session_state.html_output_chi = html_report # Store HTML
-                    st.components.v1.html(html_report, height=700, scrolling=True)
-                else:
-                    st.error(results.get('error', 'Analysis Failed. Check if data is categorical and has non-zero counts.'))
-                    st.session_state.html_output_chi = None # Clear state on error
+                   # Generate report
+                            html_report = diag_test.generate_report(f"Chi-square & Risk Analysis: {v1} vs {v2}", report_elements)
+                            st.session_state.html_output_chi = html_report # Store HTML
+                            st.components.v1.html(html_report, height=700, scrolling=True)
+                    else:
+                            st.error(results.get('error', 'Analysis Failed. Check if data is categorical and has non-zero counts.'))
+                            st.session_state.html_output_chi = None # Clear state on error
                     
             with download_col_chi:
                 if st.session_state.html_output_chi:
