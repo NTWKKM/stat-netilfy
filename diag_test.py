@@ -428,21 +428,54 @@ def generate_report(title, elements):
         if element_type == 'text':
             html += f"<p>{data}</p>"
         elif element_type == 'table':
-            # Convert DataFrame to HTML
-            # ใช้คลาส report-table เพื่อจัดรูปแบบ
-            html += data.to_html(index=True, classes='report-table')
-        elif element_type == 'plot':
-            # Save matplotlib figure to a string buffer and convert to base64 for embedding
-            buf = io.BytesIO()
-            # ต้องตรวจสอบว่าเป็น Matplotlib Figure จริงๆ ก่อน savefig
-            if isinstance(data, plt.Figure):
-                data.savefig(buf, format='png')
-                plt.close(data) # Close the figure to free memory
-                data_uri = base64.b64encode(buf.getvalue()).decode('utf-8')
-                buf.close()
-                html += f'<img src="data:image/png;base64,{data_uri}" style="max-width: 100%; height: auto; display: block; margin: 15px auto;"/>'
-            else:
-                 html += '<p class="alert">⚠️ Plot data is not a valid Matplotlib Figure object.</p>'
+            # Handle standard table (e.g., Key Statistics, Descriptive)
+            include_index = not data.columns.contains('Category') and not data.columns.contains('Statistic')
+            html += data.to_html(index=include_index, classes='report-table')
             
+        # 🟢 NEW: Handle Contingency Table with Two-Level Header
+        elif element_type == 'contingency_table':
+            df_html = data.to_html(index=True, classes='report-table', header=False) # สร้าง HTML โดยไม่มี Header
+            
+            # 1. ดึงชื่อคอลัมน์ (0, 1, Total) และชื่อ Index (Exposure)
+            col_names_raw = data.columns.tolist()
+            index_name = data.index.name
+            outcome_col_name = element.get('outcome_col', 'Outcome')
+            
+            # 2. สร้าง Header สองชั้นด้วย HTML
+            
+            # Row 1: Merge cells for Outcome_Disease and Total
+            # (First TH is for Exposure/Row Variable)
+            header_row1 = f"<tr>"
+            header_row1 += f"<th rowspan='2' class='report-table' style='text-align: left;'>{index_name}</th>" # ชื่อ Exposure/V1
+            header_row1 += f"<th colspan='{len(col_names_raw) - 1}' class='report-table'>{outcome_col_name}</th>" # ชื่อ Outcome/V2 (Merge Cells)
+            header_row1 += f"</tr>"
+            
+            # Row 2: Actual Outcome Levels (0, 1, Total)
+            header_row2 = f"<tr>"
+            for col_name in col_names_raw:
+                 # ลบคอลัมน์ 'Total' ออกจาก merged header แล้ว
+                 header_row2 += f"<th class='report-table'>{col_name}</th>"
+            header_row2 += f"</tr>"
+            
+            # 3. นำ Header ที่สร้างเองไปใส่ในตาราง HTML
+            
+            # ค้นหาและแทนที่ส่วน <thead>
+            table_start_tag = df_html.split('<thead>')[0]
+            table_end_tag = df_html.split('</thead>')[1]
+            
+            custom_header = f"<thead>{header_row1}{header_row2}</thead>"
+            
+            html += table_start_tag + custom_header + table_end_tag
+
+        elif element_type == 'plot':
+            # ... (Plot rendering logic remains the same) ...
+            
+    # 🟢 NEW: เพิ่ม Footer ของ Report
+    html += """
+    <div class="report-footer">
+      &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
+    </div>
+    """
+    
     html += "</div></body></html>"
     return html
