@@ -31,6 +31,14 @@
       .footer a:hover {
           text-decoration: underline;
       }
+      /* 🟢 โค้ดสำหรับซ่อน Streamlit footer 🟢 */
+      footer {
+          visibility: hidden;
+          height: 0px;
+      }
+      footer:after {
+          content: none;
+      }
     </style>
   </head>
   <body>
