@@ -43,7 +43,7 @@ def calculate_descriptive(df, col):
             "Percentage (%)": percent.values
         }).sort_values("Count", ascending=False)
 
-def calculate_chi2(df, col1, col2):
+def calculate_chi2(df, col1, col2, correction=False):
     """คำนวณ Chi-square พร้อมทั้ง RR, ARR, NNT และสร้างตารางแสดงผลที่มี Count และ Percent"""
     if col1 not in df.columns or col2 not in df.columns: 
         return None, {"error": "Columns not found"}
@@ -61,17 +61,18 @@ def calculate_chi2(df, col1, col2):
     tab_for_chi2 = pd.crosstab(data[col1], data[col2]) 
     
     try:
-        # MODIFIED: Pass correction parameter to chi2_contingency
+        # Pass correction parameter to chi2_contingency
         chi2, p, dof, ex = stats.chi2_contingency(tab_for_chi2, correction=correction)
-        
+
         # Determine the name of the test used for the message
         test_name = "Chi-square (Pearson)"
         if correction:
             test_name = "Chi-square (Yates' corrected)"
-            
-        # MODIFIED: Update chi2_msg to include the test name
+
+        # Update chi2_msg to include the test name
         results['chi2_msg'] = f"{test_name} statistic: {chi2:.4f}, p-value: {p:.4f}, df: {dof}"
         results['p_value'] = p
+        
     except Exception as e:
         
         results['chi2_msg'] = f"Chi-square calculation error: {str(e)}"
