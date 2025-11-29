@@ -232,7 +232,7 @@ if st.session_state.df is not None:
                     
         if st.session_state.html_output_t1:
             with download_col_t1:
-                st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True) # เว้นระยะ
+                # 🔴 REMOVED: st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True)
                 st.download_button("📥 Download HTML", st.session_state.html_output_t1, "table1.html", "text/html", key='dl_btn_t1')
 
     # -----------------------------------------------
@@ -295,7 +295,7 @@ if st.session_state.df is not None:
 
             if st.session_state.html_output_roc:
                 with download_col_roc:
-                    st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True) # เว้นระยะ
+                    # 🔴 REMOVED: st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True)
                     st.download_button("📥 Download HTML Report", st.session_state.html_output_roc, "roc_report.html", "text/html", key='dl_btn_roc')
 
 
@@ -336,7 +336,7 @@ if st.session_state.df is not None:
                     
             if st.session_state.html_output_chi:
                 with download_col_chi:
-                    st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True) # เว้นระยะ
+                    # 🔴 REMOVED: st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True)
                     st.download_button("📥 Download HTML Report", st.session_state.html_output_chi, "chi2_report.html", "text/html", key='dl_btn_chi')
 
 
@@ -370,7 +370,7 @@ if st.session_state.df is not None:
                     
             if st.session_state.html_output_desc:
                 with download_col_desc:
-                    st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True) # เว้นระยะ
+                    # 🔴 REMOVED: st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True)
                     st.download_button("📥 Download HTML Report", st.session_state.html_output_desc, "desc_report.html", "text/html", key='dl_btn_desc')
 
     # -----------------------------------------------
@@ -437,7 +437,7 @@ if st.session_state.df is not None:
         # แสดงปุ่ม Download
         if st.session_state.html_output_logit:
             with download_col:
-                st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True) # เว้นระยะ
+                # 🔴 REMOVED: st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True)
                 st.download_button("📥 Download Report", st.session_state.html_output_logit, "logit_report.html", "text/html", key='dl_btn_logit')
 
 else:
