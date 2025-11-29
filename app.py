@@ -46,13 +46,120 @@ def safe_rerun():
         st.experimental_rerun()
 
 # ==========================================
-# 1. SIDEBAR: DATA & SETTINGS (UNCHANGED)
+# 1. SIDEBAR: DATA & SETTINGS
 # ==========================================
 st.sidebar.title("MENU")
-# ... (Data loading and Variable Settings code remains unchanged) ...
+
+# --- 1.1 DATA LOADER ---
+st.sidebar.header("1. Data Management")
+
+# 🟢 SUPER EXAMPLE DATA GENERATOR
+if st.sidebar.button("📄 Load Example Data"):
+    # สร้างข้อมูลจำลอง 150 เคส ที่เหมาะกับทุกสถิติ
+    np.random.seed(42)
+    n = 150
+    
+    # 1. Group (สำหรับ Table 1)
+    groups = np.random.choice(['Standard Care', 'New Drug'], n, p=[0.5, 0.5])
+    
+    # 2. Continuous Vars (สำหรับ T-test/ANOVA)
+    age = np.random.normal(60, 12, n).astype(int)
+    bmi = np.random.normal(25, 4, n).round(1)
+    
+    # 3. Categorical Vars (สำหรับ Chi-square)
+    sex = np.random.choice([0, 1], n) # 0=F, 1=M
+    
+    # โรคประจำตัว (สัมพันธ์กับอายุ)
+    ht_prob = (age - 20) / 80  # อายุมากเสี่ยงมาก
+    ht = np.random.binomial(1, np.clip(ht_prob, 0.1, 0.9))
+    
+    # 4. Diagnostic Test Score (สำหรับ ROC)
+    # สร้าง Score ที่มีความสามารถในการแยกโรค (AUC ~ 0.85)
+    risk_score = np.random.normal(5, 2, n)
+    
+    # คนที่มี Score สูง มีโอกาสเป็นโรคสูง (Logistic function)
+    # เพิ่มความชันเพื่อให้ ROC สวยและ Significant
+    prob_disease = 1 / (1 + np.exp(-(risk_score - 6)*0.8))
+    outcome = np.random.binomial(1, prob_disease)
+    
+    # Combine Data
+    data = {
+        'ID': range(1, n+1),
+        'Group_Treatment': groups,
+        'Age': age,
+        'Sex': sex,
+        'BMI': bmi,
+        'Hypertension': ht,
+        'Risk_Score': risk_score.round(2),
+        'Outcome_Disease': outcome
+    }
+    
+    st.session_state.df = pd.DataFrame(data)
+    
+    # Pre-set Metadata (Labeling)
+    st.session_state.var_meta = {
+        'Sex': {'type': 'Categorical', 'map': {0:'Female', 1:'Male'}},
+        'Hypertension': {'type': 'Categorical', 'map': {0:'No', 1:'Yes'}},
+        'Outcome_Disease': {'type': 'Categorical', 'map': {0:'Healthy', 1:'Disease'}},
+        'Group_Treatment': {'type': 'Categorical', 'map': {}} 
+    }
+    
+    st.sidebar.success("Loaded! Ready for all tabs.")
+    safe_rerun()
+
+# Upload File
+uploaded_file = st.sidebar.file_uploader("Upload CSV/Excel", type=['csv', 'xlsx']) # <--- บรรทัดนี้คือบรรทัดที่ขาดหายไปและถูกเพิ่มกลับมา
+if uploaded_file:
+    try:
+        if uploaded_file.name.endswith('.csv'): st.session_state.df = pd.read_csv(uploaded_file)
+        else: st.session_state.df = pd.read_excel(uploaded_file)
+        st.sidebar.success("File Uploaded!")
+    except Exception as e: st.sidebar.error(f"Error: {e}")
+
+# --- 1.2 VARIABLE SETTINGS ---
 if st.session_state.df is not None:
-    # ... (Variable Settings code remains unchanged) ...
-    pass
+    st.sidebar.header("2. Variable Settings")
+    df = st.session_state.df
+    all_cols = df.columns.tolist()
+    
+    selected_var = st.sidebar.selectbox("Edit Variable:", ["Select..."] + all_cols)
+    
+    if selected_var != "Select...":
+        # Load current settings
+        meta = st.session_state.var_meta.get(selected_var, {})
+        curr_type = meta.get('type', 'Auto-detect')
+        curr_map = meta.get('map', {})
+        
+        # Edit Type
+        new_type = st.sidebar.radio("Type:", ['Auto-detect', 'Categorical', 'Continuous'], 
+                                    index=['Auto-detect', 'Categorical', 'Continuous'].index(curr_type))
+        
+        # Edit Labels
+        map_str = "\n".join([f"{k}={v}" for k, v in curr_map.items()])
+        st.sidebar.markdown("Labels (e.g. 0=No):")
+        new_labels_str = st.sidebar.text_area("Label Map", value=map_str, height=80, label_visibility="collapsed")
+        
+        if st.sidebar.button("💾 Save Settings"):
+            # Parse Labels
+            new_map = {}
+            for line in new_labels_str.split('\n'):
+                if '=' in line:
+                    k, v = line.split('=', 1)
+                    try:
+                        k = k.strip()
+                        if k.replace('.','',1).isdigit():
+                            k = float(k) if '.' in k else int(k)
+                        new_map[k] = v.strip()
+                    except: pass
+            
+            # Save to Session State
+            if selected_var not in st.session_state.var_meta:
+                st.session_state.var_meta[selected_var] = {}
+            
+            st.session_state.var_meta[selected_var]['type'] = new_type
+            st.session_state.var_meta[selected_var]['map'] = new_map
+            st.sidebar.success("Saved!")
+            safe_rerun()
 
 # ==========================================
 # 2. MAIN AREA: NAVIGATION & CONTENT
@@ -71,7 +178,7 @@ if st.session_state.df is not None:
     ])
 
     # -----------------------------------------------
-    # TAB 0: RAW DATA (UNCHANGED)
+    # TAB 0: RAW DATA
     # -----------------------------------------------
     with main_tab0:
         st.subheader("Raw Data Table")
@@ -81,7 +188,7 @@ if st.session_state.df is not None:
         df = st.session_state.df 
 
     # -----------------------------------------------
-    # TAB 1: BASELINE CHARACTERISTICS (TABLE 1) (UNCHANGED)
+    # TAB 1: BASELINE CHARACTERISTICS (TABLE 1)
     # -----------------------------------------------
     with main_tab1:
         st.subheader("1. Baseline Characteristics (Table 1)")
@@ -128,6 +235,7 @@ if st.session_state.df is not None:
             if st.session_state.html_output_t1:
                 st.download_button("📥 Download HTML Report", st.session_state.html_output_t1, "table1.html", "text/html", key='dl_btn_t1')
             else:
+                # Placeholder button to maintain alignment
                 st.button("📥 Download HTML Report", disabled=True, key='placeholder_t1')
 
     # -----------------------------------------------
@@ -138,7 +246,7 @@ if st.session_state.df is not None:
         
         sub_tab1, sub_tab2, sub_tab3 = st.tabs(["📈 ROC Curve & AUC", "🎲 Chi-Square", "📊 Descriptive"])
         
-        # --- ROC --- (UNCHANGED)
+        # --- ROC ---
         with sub_tab1:
             st.markdown("##### ROC Curve Analysis")
             st.markdown("""
@@ -352,7 +460,20 @@ if st.session_state.df is not None:
     # -----------------------------------------------
     with main_tab3:
         st.subheader("3. Logistic Regression Analysis")
-        # ... (Rest of Logistic Regression code remains unchanged) ...
+        
+        # English Description of Logistic Regression
+        st.markdown("""
+            <div style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 20px;">
+                <p>
+                <b>Binary Logistic Regression</b> is used to model the probability of a binary outcome (e.g., 0 or 1, disease presence/absence) based on one or more predictor variables.
+                </p>
+                <ul>
+                    <li><b>Univariate Analysis (Crude OR):</b> Calculates the association of each individual variable with the outcome, providing the Crude Odds Ratio (OR).</li>
+                    <li><b>Multivariate Analysis (Adjusted OR):</b> Includes potential confounding variables (screened at P-value < 0.20) into a single model to determine independent predictors, providing the Adjusted Odds Ratio (aOR).</li>
+                </ul>
+                <p style='font-size:0.9em;'><i>You can view and edit the data in the 📄 Raw Data tab.</i></p>
+            </div>
+        """, unsafe_allow_html=True)
         
         st.markdown("### Analysis Configuration")
         col1, col2 = st.columns([1, 2])
@@ -400,6 +521,7 @@ if st.session_state.df is not None:
             if st.session_state.html_output_logit:
                 st.download_button("📥 Download Report", st.session_state.html_output_logit, "logit_report.html", "text/html", key='dl_btn_logit')
             else:
+                # Placeholder button to maintain alignment
                 st.button("📥 Download Report", disabled=True, key='placeholder_logit')
 
 else:
