@@ -1,14 +1,15 @@
 # diag_test.py
+
 import pandas as pd
 import numpy as np
 import scipy.stats as stats
 from sklearn.metrics import roc_curve, roc_auc_score
 import matplotlib.pyplot as plt
-import io, base64 # เพิ่ม io และ base64 สำหรับการฝังรูปใน HTML
+import io, base64 
 
 def calculate_descriptive(df, col):
     """คำนวณสถิติพื้นฐาน"""
-    if col not in df.columns: return "Column not found"
+    if col not in df.columns: return None, "Column not found"
     
     data = df[col].dropna()
     try:
@@ -32,7 +33,7 @@ def calculate_descriptive(df, col):
                 f"{desc['25%']:.4f}",
                 f"{desc['75%']:.4f}"
             ]
-        })
+        }), None
     else:
         # Categorical
         counts = data.value_counts()
@@ -41,7 +42,7 @@ def calculate_descriptive(df, col):
             "Category": counts.index,
             "Count": counts.values,
             "Percentage (%)": percent.values
-        }).sort_values("Count", ascending=False)
+        }).sort_values("Count", ascending=False), None
 
 def calculate_chi2(df, col1, col2):
     """คำนวณ Chi-square พร้อมทั้ง RR, ARR, NNT และสร้างตารางแสดงผลที่มี Count และ Percent"""
@@ -49,7 +50,6 @@ def calculate_chi2(df, col1, col2):
         return None, {"error": "Columns not found"}
     
     data = df[[col1, col2]].dropna()
-    N_total = len(data)
     
     # Contingency Table (Frequency Count)
     tab_raw = pd.crosstab(data[col1], data[col2], margins=True, margins_name="Total")
@@ -69,29 +69,20 @@ def calculate_chi2(df, col1, col2):
         
     # --- RR / ARR / NNT Calculation (Only for 2x2 table) ---
     if tab_for_chi2.shape == (2, 2):
-        # Assumption: Row 0 = Exposed, Row 1 = Unexposed, Col 0 = Event (Positive)
         tab_arr = tab_for_chi2.values 
         a, b = tab_arr[0, 0], tab_arr[0, 1] 
-        c, d = tab_arr[1, 0], tab_arr[1, 1]
+        c, d = tab_arr[1, 0], tab_arr[1, 1] 
         
         N_exp = a + b 
         N_unexp = c + d 
         
-        # Calculate Risk
-        R_exp = a / N_exp if N_exp > 0 else 0 # Risk in Exposed (R1)
-        R_unexp = c / N_unexp if N_unexp > 0 else 0 # Risk in Unexposed (R0)
+        R_exp = a / N_exp if N_exp > 0 else 0 
+        R_unexp = c / N_unexp if N_unexp > 0 else 0 
         
         if N_exp > 0 and N_unexp > 0:
-            # RR
             RR = R_exp / R_unexp if R_unexp > 0 else np.inf
-            
-            # Risk Difference (RD) / Absolute Risk Reduction (ARR)
             RD = R_exp - R_unexp
-            
-            # NNT = 1 / |RD|
             NNT = 1 / abs(RD) if RD != 0 and abs(RD) <= 1 else np.inf
-            
-            # Odds Ratio (for reference)
             OR = (a * d) / (b * c) if b != 0 and c != 0 else np.inf
             
             results['Is_2x2'] = True
@@ -110,23 +101,22 @@ def calculate_chi2(df, col1, col2):
             results['RD'] = np.nan
             results['Is_2x2'] = True
             
-# --- Formatting Display Table (Count, Row %, Total %) ---
+    # --- Formatting Display Table (Count, Row %, Total %) ---
     
     # 1. Calculate Row Percentages (Horizontal %)
-    # NOTE: tab_row_percent มี Total column ที่มีค่า 1.0 (หรือ 100%)
     tab_row_percent = pd.crosstab(data[col1], data[col2], normalize='index', margins=True, margins_name="Total") * 100
     
     # 2. Calculate Total Percentages (Grand Total %)
     tab_total_percent = pd.crosstab(data[col1], data[col2], normalize='all', margins=True, margins_name="Total") * 100
     
     # สร้างตาราง Display Final
-    col_names = tab_raw.columns.tolist() # Includes all V2 categories + 'Total'
-    index_names = tab_raw.index.tolist() # Includes all V1 categories + 'Total'
+    col_names = tab_raw.columns.tolist() 
+    index_names = tab_raw.index.tolist() 
     
     display_tab_data = []
     
     for row_name in index_names:
-        row_data = [] # ลบ [row_name] ออก เนื่องจากจะ set_index ด้วยคอลัมน์นี้ภายหลัง
+        row_data = [] 
         
         for col_name in col_names:
             count = tab_raw.loc[row_name, col_name]
@@ -134,10 +124,10 @@ def calculate_chi2(df, col1, col2):
 
             if col_name == 'Total' and row_name == 'Total':
                 # Grand Total Cell: แสดงเฉพาะ Count และ Total %
-                row_pct = 100.0 # Row % สำหรับ Total/Total คือ 100%
+                row_pct = 100.0
                 cell_content = f"{count} / ({total_pct:.1f}%)"
             elif col_name == 'Total':
-                # Row Marginal Total Cell: แสดง Count และ Row % (ซึ่งคือ 100%)
+                # Row Marginal Total Cell: แสดง Count และ Total %
                 row_pct = 100.0
                 cell_content = f"{count} ({row_pct:.1f}%) / ({total_pct:.1f}%)"
             else:
@@ -147,7 +137,7 @@ def calculate_chi2(df, col1, col2):
             
             row_data.append(cell_content)
             
-        display_tab_data.append([row_name] + row_data) # เพิ่มชื่อแถวกลับเข้าไปในแถวข้อมูล
+        display_tab_data.append([row_name] + row_data) 
 
     # สร้าง DataFrame สำหรับแสดงผล
     display_tab = pd.DataFrame(display_tab_data, columns=[col1] + col_names)
@@ -372,16 +362,14 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
     return stats_res, None, fig, coords_df # แก้ไขให้ return 4 ค่า
 
 def generate_report(title, elements):
-    """Generates a simple HTML report based on a list of elements (text, plot, table).
-    ใช้สำหรับแสดงผลลัพธ์ของ ROC, Chi-Square และ Descriptive
-    """
+    """Generates a simple HTML report based on a list of elements (text, plot, table)."""
     
-    # --- CSS Styling (คล้ายกับ logic.py และ table_one.py) ---
+    # --- CSS Styling (Fixed to use Streamlit CSS variables for theme compatibility) ---
     css_style = """
     <style>
-        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; margin: 0; color: #333; }
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: var(--secondary-background-color); margin: 0; color: var(--text-color); }
         .report-container { 
-            background: white; 
+            background: var(--background-color); 
             border-radius: 8px; 
             box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
             padding: 20px;
@@ -389,8 +377,8 @@ def generate_report(title, elements):
             box-sizing: border-box;
             margin-bottom: 20px;
         }
-        h2 { color: #2c3e50; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
-        h4 { color: #34495e; margin-top: 25px; margin-bottom: 10px; }
+        h2 { color: var(--primary-color); border-bottom: 2px solid var(--border-color); padding-bottom: 10px; }
+        h4 { color: var(--text-color); margin-top: 25px; margin-bottom: 10px; }
         table { 
             width: 100%; 
             border-collapse: collapse; 
@@ -399,18 +387,29 @@ def generate_report(title, elements):
         }
         th, td { 
             padding: 10px 15px; 
-            border: 1px solid #e0e0e0;
+            border: 1px solid var(--border-color);
             vertical-align: top;
             text-align: left;
         }
         th {
-            background-color: #f0f2f6; 
+            background-color: var(--primary-color); 
+            color: var(--text-color-inverted);
             font-weight: 600;
         }
-        tr:nth-child(even) td { background-color: #f9f9f9; }
-        .alert { background-color: #fff3cd; color: #856404; padding: 10px; border: 1px solid #ffeeba; border-radius: 5px; margin-bottom: 15px; }
-        .report-table th, .report-table td { text-align: center; } /* จัดกลางสำหรับตารางข้อมูลสถิติ/พิกัด */
+        tr:nth-child(even) td { background-color: var(--secondary-background-color); }
+        .alert { background-color: var(--secondary-background-color); color: var(--warning-color); padding: 10px; border: 1px solid var(--border-color); border-radius: 5px; margin-bottom: 15px; }
+        
+        .report-table th, .report-table td { text-align: center; } 
         .report-table th:first-child, .report-table td:first-child { text-align: left; }
+        
+        .report-footer {
+            text-align: right;
+            font-size: 0.75em;
+            color: var(--text-color);
+            margin-top: 20px;
+            border-top: 1px dashed var(--border-color);
+            padding-top: 10px;
+        }
     </style>
     """
     
@@ -434,6 +433,7 @@ def generate_report(title, elements):
             
         # 🟢 NEW: Handle Contingency Table with Two-Level Header
         elif element_type == 'contingency_table':
+            # DataFrame should have V1 as index and V2 levels + 'Total' as columns
             df_html = data.to_html(index=True, classes='report-table', header=False) # สร้าง HTML โดยไม่มี Header
             
             # 1. ดึงชื่อคอลัมน์ (0, 1, Total) และชื่อ Index (Exposure)
@@ -444,22 +444,22 @@ def generate_report(title, elements):
             # 2. สร้าง Header สองชั้นด้วย HTML
             
             # Row 1: Merge cells for Outcome_Disease and Total
-            # (First TH is for Exposure/Row Variable)
+            # (First TH is for Exposure/Row Variable, colspan should cover all data columns)
             header_row1 = f"<tr>"
-            header_row1 += f"<th rowspan='2' class='report-table' style='text-align: left;'>{index_name}</th>" # ชื่อ Exposure/V1
-            header_row1 += f"<th colspan='{len(col_names_raw) - 1}' class='report-table'>{outcome_col_name}</th>" # ชื่อ Outcome/V2 (Merge Cells)
+            # Th แรกสำหรับคอลัมน์ Index (V1)
+            header_row1 += f"<th rowspan='2' class='report-table' style='text-align: left;'>{index_name}</th>" 
+            # Th ที่เหลือ Merge Cells เพื่อแสดงชื่อ Outcome (รวม Total ด้วย)
+            header_row1 += f"<th colspan='{len(col_names_raw)}' class='report-table'>{outcome_col_name}</th>" 
             header_row1 += f"</tr>"
             
             # Row 2: Actual Outcome Levels (0, 1, Total)
             header_row2 = f"<tr>"
             for col_name in col_names_raw:
-                 # ลบคอลัมน์ 'Total' ออกจาก merged header แล้ว
+                 # แสดงชื่อระดับ (0, 1, Total)
                  header_row2 += f"<th class='report-table'>{col_name}</th>"
             header_row2 += f"</tr>"
             
             # 3. นำ Header ที่สร้างเองไปใส่ในตาราง HTML
-            
-            # ค้นหาและแทนที่ส่วน <thead>
             table_start_tag = df_html.split('<thead>')[0]
             table_end_tag = df_html.split('</thead>')[1]
             
@@ -467,15 +467,25 @@ def generate_report(title, elements):
             
             html += table_start_tag + custom_header + table_end_tag
 
+
         elif element_type == 'plot':
-            # ... (Plot rendering logic remains the same) ...
-            
-    # 🟢 NEW: เพิ่ม Footer ของ Report
+            # Save matplotlib figure to a string buffer and convert to base64 for embedding
+            buf = io.BytesIO()
+            if isinstance(data, plt.Figure):
+                data.savefig(buf, format='png')
+                plt.close(data) # Close the figure to free memory
+                data_uri = base64.b64encode(buf.getvalue()).decode('utf-8')
+                buf.close()
+                html += f'<img src="data:image/png;base64,{data_uri}" style="max-width: 100%; height: auto; display: block; margin: 15px auto;"/>'
+            else:
+                 html += '<p class="alert">⚠️ Plot data is not a valid Matplotlib Figure object.</p>'
+        
+    # 🟢 NEW: เพิ่ม Footer ของ Report (อยู่หลัง loop for และเยื้องถูกต้องแล้ว)
     html += """
     <div class="report-footer">
       &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
     </div>
     """
-    
+            
     html += "</div></body></html>"
     return html
