@@ -169,22 +169,44 @@ if st.session_state.df is not None:
     df = st.session_state.df
     all_cols = df.columns.tolist()
 
-    # --- TOP NAVIGATION ---
-    main_tab1, main_tab2, main_tab3 = st.tabs([
+    # --- TOP NAVIGATION (เพิ่ม Raw Data Tab) ---
+    main_tab0, main_tab1, main_tab2, main_tab3 = st.tabs([
+        "📄 Raw Data", 
         "📊 Logistic Regression", 
         "🔬 Diagnostic Test (ROC/Chi2)", 
         "📋 Baseline Table 1"
     ])
 
     # -----------------------------------------------
-    # TAB 1: LOGISTIC REGRESSION
+    # 🟢 TAB 0: RAW DATA
+    # -----------------------------------------------
+    with main_tab0:
+        st.subheader("Raw Data Table")
+        st.info("💡 You can view, scroll, and edit your raw data directly in this table.")
+        # ย้าย Data Editor มาไว้ที่นี่
+        edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, height=500, key='editor_raw')
+        st.session_state.df = edited_df # อัปเดตข้อมูลที่แก้ไขกลับเข้าสู่ session state
+        df = st.session_state.df # ให้ตัวแปร df ในปัจจุบันชี้ไปที่ข้อมูลที่แก้ไขแล้ว
+
+    # -----------------------------------------------
+    # TAB 1: LOGISTIC REGRESSION (ปรับปรุง)
     # -----------------------------------------------
     with main_tab1:
         st.subheader("1. Logistic Regression Analysis")
-        st.info("💡 You can edit data in the table below.")
         
-        # Data Editor (Scrollable)
-        edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, height=300, key='editor_logit')
+        # เพิ่มรายละเอียดของ Logistic Regression Analysis คร่าวๆ
+        st.markdown("""
+            <div style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 20px;">
+                <p>
+                <b>Binary Logistic Regression</b> ใช้ในการสร้างแบบจำลองความน่าจะเป็นของผลลัพธ์แบบไบนารี (เช่น 0 หรือ 1, เป็นโรคหรือไม่เป็น) โดยอาศัยตัวแปรทำนายตั้งแต่หนึ่งตัวขึ้นไป
+                </p>
+                <ul>
+                    <li><b>Univariate Analysis (Crude OR):</b> วิเคราะห์ความสัมพันธ์ของตัวแปรแต่ละตัวกับผลลัพธ์เพื่อหาค่า Crude Odds Ratio (OR)</li>
+                    <li><b>Multivariate Analysis (Adjusted OR):</b> เลือกตัวแปรที่มีนัยสำคัญ (P-value < 0.20) จากการวิเคราะห์แบบ Univariate เพื่อนำมาสร้างแบบจำลองรวม เพื่อหาค่า Adjusted Odds Ratio (aOR) ซึ่งเป็นตัวทำนายอิสระ</li>
+                </ul>
+                <p style='font-size:0.9em;'><i>ท่านสามารถดูและแก้ไขข้อมูลได้ในแท็บ 📄 Raw Data</i></p>
+            </div>
+        """, unsafe_allow_html=True)
         
         st.markdown("### Analysis Configuration")
         col1, col2 = st.columns([1, 2])
@@ -200,7 +222,7 @@ if st.session_state.df is not None:
             
         with col2:
             # Check Perfect Separation
-            risky_vars = check_perfect_separation(edited_df, target)
+            risky_vars = check_perfect_separation(df, target)
             exclude_cols = []
             
             if risky_vars:
@@ -209,21 +231,34 @@ if st.session_state.df is not None:
             else:
                 exclude_cols = st.multiselect("Exclude Variables (Optional):", all_cols)
 
-        if st.button("🚀 Run Logistic Regression", type="primary"):
-            if edited_df[target].nunique() < 2:
+        # จัดวางปุ่ม Run และ Download ในคอลัมน์เดียวกัน
+        run_col, download_col = st.columns([1, 1])
+        
+        if 'html_output_logit' not in st.session_state:
+            st.session_state.html_output_logit = None # Initialize 
+        
+        if run_col.button("🚀 Run Logistic Regression", type="primary"):
+            if df[target].nunique() < 2:
                 st.error("Error: Outcome must have at least 2 values (e.g., 0 and 1).")
             else:
                 with st.spinner("Calculating..."):
                     try:
-                        final_df = edited_df.drop(columns=exclude_cols, errors='ignore')
+                        final_df = df.drop(columns=exclude_cols, errors='ignore')
                         html = process_data_and_generate_html(final_df, target, var_meta=st.session_state.var_meta)
+                        st.session_state.html_output_logit = html # Store HTML in session state
                         st.components.v1.html(html, height=600, scrolling=True)
-                        st.download_button("📥 Download Report", html, "logit_report.html", "text/html")
                     except Exception as e:
                         st.error(f"Analysis Failed: {e}")
+                        
+        # แสดงปุ่ม Download
+        if st.session_state.html_output_logit:
+            with download_col:
+                st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True) # เว้นระยะ
+                st.download_button("📥 Download Report", st.session_state.html_output_logit, "logit_report.html", "text/html", key='dl_btn_logit')
+
 
     # -----------------------------------------------
-    # 🟢 TAB 2: DIAGNOSTIC TEST (Report Style Updated)
+    # 🟢 TAB 2: DIAGNOSTIC TEST (ปรับปรุงปุ่ม)
     # -----------------------------------------------
     with main_tab2:
         st.subheader("2. Diagnostic Test & Statistics")
@@ -234,9 +269,15 @@ if st.session_state.df is not None:
         with sub_tab1:
             st.markdown("##### ROC Curve Analysis")
             rc1, rc2, rc3 = st.columns(3)
+            # Find default outcome index
+            def_idx = 0
+            for i, c in enumerate(all_cols):
+                if 'outcome' in c.lower() or 'died' in c.lower():
+                    def_idx = i; break
+            
             truth = rc1.selectbox("Gold Standard (Binary):", all_cols, index=def_idx, key='roc_truth')
             
-            # Find default score
+            # Find default score index
             score_idx = 0
             for i, c in enumerate(all_cols):
                 if 'score' in c.lower(): score_idx = i; break
@@ -244,27 +285,31 @@ if st.session_state.df is not None:
             
             method = rc3.radio("CI Method:", ["DeLong et al.", "Binomial (Hanley)"])
             
-            if st.button("📉 Analyze ROC", key='btn_roc'):
-                # Call analysis
+            run_col_roc, download_col_roc = st.columns([1, 1])
+            if 'html_output_roc' not in st.session_state:
+                st.session_state.html_output_roc = None
+            
+            if run_col_roc.button("📉 Analyze ROC", key='btn_roc'):
                 res, err, fig, coords_df = diag_test.analyze_roc(df, truth, score, 'delong' if 'DeLong' in method else 'hanley')
                 
                 if err: 
                     st.error(err)
                 else:
-                    # Prepare Report Elements
                     report_elements = [
                         {'type': 'text', 'data': f"Analysis of Test Score: <b>{score}</b> vs Gold Standard: <b>{truth}</b>"},
                         {'type': 'plot', 'header': 'ROC Curve', 'data': fig},
                         {'type': 'table', 'header': 'Key Statistics', 'data': pd.DataFrame([res]).T},
                         {'type': 'table', 'header': 'Diagnostic Performance (All Cut-offs)', 'data': coords_df}
                     ]
-                    
-                    # Generate HTML
                     html_report = diag_test.generate_report(f"ROC Analysis: {score}", report_elements)
-                    
-                    # Display & Download
+                    st.session_state.html_output_roc = html_report # Store HTML
                     st.components.v1.html(html_report, height=800, scrolling=True)
-                    st.download_button("📥 Download HTML Report", html_report, "roc_report.html", "text/html")
+
+            if st.session_state.html_output_roc:
+                with download_col_roc:
+                    st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True) # เว้นระยะ
+                    st.download_button("📥 Download HTML Report", st.session_state.html_output_roc, "roc_report.html", "text/html", key='dl_btn_roc')
+
 
         # --- Chi-Square ---
         with sub_tab2:
@@ -273,43 +318,57 @@ if st.session_state.df is not None:
             v1 = cc1.selectbox("Variable 1:", all_cols, key='chi1')
             v2 = cc2.selectbox("Variable 2:", all_cols, index=min(1, len(all_cols)-1), key='chi2')
             
-            if st.button("Run Chi-Square", key='btn_chi'):
+            run_col_chi, download_col_chi = st.columns([1, 1])
+            if 'html_output_chi' not in st.session_state:
+                st.session_state.html_output_chi = None
+            
+            if run_col_chi.button("Run Chi-Square", key='btn_chi'):
                 tab_res, msg = diag_test.calculate_chi2(df, v1, v2)
                 
                 if tab_res is not None:
-                    # Prepare Report Elements
-                    # Reset index to include row labels in table
                     display_tab = tab_res.reset_index()
                     report_elements = [
                         {'type': 'text', 'data': f"<b>Result:</b> {msg}"},
                         {'type': 'table', 'header': 'Contingency Table', 'data': display_tab}
                     ]
-                    
                     html_report = diag_test.generate_report(f"Chi-square: {v1} vs {v2}", report_elements)
-                    
+                    st.session_state.html_output_chi = html_report # Store HTML
                     st.components.v1.html(html_report, height=500, scrolling=True)
-                    st.download_button("📥 Download HTML Report", html_report, "chi2_report.html", "text/html")
                 else:
                     st.error(msg)
+                    
+            if st.session_state.html_output_chi:
+                with download_col_chi:
+                    st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True) # เว้นระยะ
+                    st.download_button("📥 Download HTML Report", st.session_state.html_output_chi, "chi2_report.html", "text/html", key='dl_btn_chi')
+
 
         # --- Descriptive ---
         with sub_tab3:
             st.markdown("##### Descriptive Statistics")
             dv = st.selectbox("Select Variable:", all_cols, key='desc_var')
             
-            if st.button("Show Stats", key='btn_desc'):
+            run_col_desc, download_col_desc = st.columns([1, 1])
+            if 'html_output_desc' not in st.session_state:
+                st.session_state.html_output_desc = None
+            
+            if run_col_desc.button("Show Stats", key='btn_desc'):
                 res_df = diag_test.calculate_descriptive(df, dv)
                 if res_df is not None:
                     report_elements = [
                         {'type': 'table', 'header': '', 'data': res_df}
                     ]
                     html_report = diag_test.generate_report(f"Descriptive Statistics: {dv}", report_elements)
-                    
+                    st.session_state.html_output_desc = html_report # Store HTML
                     st.components.v1.html(html_report, height=500, scrolling=True)
-                    st.download_button("📥 Download HTML Report", html_report, "desc_report.html", "text/html")
+                    
+            if st.session_state.html_output_desc:
+                with download_col_desc:
+                    st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True) # เว้นระยะ
+                    st.download_button("📥 Download HTML Report", st.session_state.html_output_desc, "desc_report.html", "text/html", key='dl_btn_desc')
 
     # -----------------------------------------------
-    # TAB 3: TABLE 1
+    # TAB 3: TABLE 1 (ปรับปรุงปุ่ม)
     # -----------------------------------------------
     with main_tab3:
         st.subheader("3. Baseline Characteristics (Table 1)")
@@ -327,15 +386,24 @@ if st.session_state.df is not None:
             def_vars = [c for c in all_cols if c != col_group]
             selected_vars = st.multiselect("Include Variables:", all_cols, default=def_vars)
             
-        if st.button("📊 Generate Table 1", type="primary"):
+        run_col_t1, download_col_t1 = st.columns([1, 1])
+        if 'html_output_t1' not in st.session_state:
+            st.session_state.html_output_t1 = None
+
+        if run_col_t1.button("📊 Generate Table 1", type="primary"):
             with st.spinner("Generating Table 1..."):
                 try:
                     grp = None if col_group == "None" else col_group
                     html_t1 = table_one.generate_table(df, selected_vars, grp, st.session_state.var_meta)
+                    st.session_state.html_output_t1 = html_t1 # Store HTML
                     st.components.v1.html(html_t1, height=600, scrolling=True)
-                    st.download_button("📥 Download HTML", html_t1, "table1.html", "text/html")
                 except Exception as e:
                     st.error(f"Error: {e}")
+                    
+        if st.session_state.html_output_t1:
+            with download_col_t1:
+                st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True) # เว้นระยะ
+                st.download_button("📥 Download HTML", st.session_state.html_output_t1, "table1.html", "text/html", key='dl_btn_t1')
 
 else:
     st.info("👈 Please load example data or upload a file to start.")
