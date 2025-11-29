@@ -44,30 +44,35 @@ def calculate_descriptive(df, col):
         }).sort_values("Count", ascending=False)
 
 def calculate_chi2(df, col1, col2):
-    """คำนวณ Chi-square พร้อมทั้ง RR, ARR, NNT สำหรับตาราง 2x2"""
+    """คำนวณ Chi-square พร้อมทั้ง RR, ARR, NNT และสร้างตารางแสดงผลที่มี Count และ Percent"""
     if col1 not in df.columns or col2 not in df.columns: 
         return None, {"error": "Columns not found"}
     
     data = df[[col1, col2]].dropna()
+    N_total = len(data)
     
-    # Contingency Table: col1 (Row/Exposure) vs col2 (Column/Outcome)
-    tab = pd.crosstab(data[col1], data[col2])
+    # Contingency Table (Frequency Count)
+    tab_raw = pd.crosstab(data[col1], data[col2], margins=True, margins_name="Total")
     
+    # --- Chi-square Calculation ---
     results = {}
     
+    # ต้องแยก Chi-square ออกจาก margins
+    tab_for_chi2 = pd.crosstab(data[col1], data[col2]) 
+    
     try:
-        chi2, p, dof, ex = stats.chi2_contingency(tab)
+        chi2, p, dof, ex = stats.chi2_contingency(tab_for_chi2)
         results['chi2_msg'] = f"Chi-square statistic: {chi2:.4f}, p-value: {p:.4f}, df: {dof}"
         results['p_value'] = p
     except Exception as e:
         results['chi2_msg'] = f"Chi-square calculation error: {str(e)}"
         
     # --- RR / ARR / NNT Calculation (Only for 2x2 table) ---
-    if tab.shape == (2, 2):
+    if tab_for_chi2.shape == (2, 2):
         # Assumption: Row 0 = Exposed, Row 1 = Unexposed, Col 0 = Event (Positive)
-        tab_arr = tab.values 
+        tab_arr = tab_for_chi2.values 
         a, b = tab_arr[0, 0], tab_arr[0, 1] 
-        c, d = tab_arr[1, 0], tab_arr[1, 1] 
+        c, d = tab_arr[1, 0], tab_arr[1, 1]
         
         N_exp = a + b 
         N_unexp = c + d 
@@ -96,9 +101,9 @@ def calculate_chi2(df, col1, col2):
             results['OR'] = OR
             results['R_exp'] = R_exp
             results['R_unexp'] = R_unexp
-            results['R_exp_label'] = tab.index[0] # Label assumed to be Exposed
-            results['R_unexp_label'] = tab.index[1] # Label assumed to be Unexposed
-            results['Event_label'] = tab.columns[0] # Label assumed to be the Event
+            results['R_exp_label'] = tab_for_chi2.index[0]
+            results['R_unexp_label'] = tab_for_chi2.index[1]
+            results['Event_label'] = tab_for_chi2.columns[0]
         else:
             results['RR'] = np.nan
             results['NNT'] = np.nan
@@ -106,7 +111,40 @@ def calculate_chi2(df, col1, col2):
             results['Is_2x2'] = True
             
     return tab, results
+# --- Formatting Display Table (Count, Row %, Total %) ---
+    
+    # 1. Calculate Row Percentages (Horizontal %)
+    tab_row_percent = pd.crosstab(data[col1], data[col2], normalize='index', margins=True, margins_name="Total") * 100
+    
+    # 2. Calculate Total Percentages (Grand Total %)
+    tab_total_percent = pd.crosstab(data[col1], data[col2], normalize='all', margins=True, margins_name="Total") * 100
+    
+    # สร้างตาราง Display Final
+    col_names = tab_raw.columns.tolist()
+    index_names = tab_raw.index.tolist()
+    
+    display_tab_data = []
+    
+    for row_name in index_names:
+        row_data = [row_name] # คอลัมน์แรกเป็นชื่อแถว (Exposure)
+        
+        for col_name in col_names:
+            count = tab_raw.loc[row_name, col_name]
+            row_pct = tab_row_percent.loc[row_name, col_name]
+            total_pct = tab_total_percent.loc[row_name, col_name]
+            
+            # Format: Count (Row %) / (Total %)
+            cell_content = f"{count} ({row_pct:.1f}%) / ({total_pct:.1f}%)"
+            row_data.append(cell_content)
+            
+        display_tab_data.append(row_data)
 
+    # สร้าง DataFrame สำหรับแสดงผล
+    display_tab = pd.DataFrame(display_tab_data, columns=[col1] + col_names)
+    display_tab = display_tab.set_index(col1)
+        
+    return display_tab, results
+    
 # --- ROC & AUC FUNCTIONS ---
 
 def auc_ci_hanley_mcneil(auc, n1, n2):
