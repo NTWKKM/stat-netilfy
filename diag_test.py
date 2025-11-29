@@ -152,16 +152,40 @@ def auc_ci_delong(y_true, y_scores):
     return auc - 1.96*se_auc, auc + 1.96*se_auc, se_auc
 
 
-def analyze_roc(df, truth_col, score_col, method='delong'):
+def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
     """Main ROC Analysis"""
     data = df[[truth_col, score_col]].dropna()
-    y_true = data[truth_col]
+    y_true_raw = data[truth_col]
     y_score = pd.to_numeric(data[score_col], errors='coerce').dropna()
     # Align indices
-    y_true = y_true.loc[y_score.index]
+    y_true_raw = y_true_raw.loc[y_score.index]
     
-    if y_true.nunique() < 2:
-        return None, "Outcome must have 2 classes (0 and 1)", None, None # แก้ไขให้ return 4 ค่า
+    unique_vals = y_true_raw.nunique()
+    if unique_vals != 2:
+        return None, "Outcome must have exactly 2 classes.", None, None 
+
+    # 🟢 START: Manual Encoding based on user input (Overriding LabelEncoder)
+    if pos_label_user is None:
+        # ควรถูกดักจับใน app.py แล้ว แต่มีไว้เพื่อความปลอดภัย
+        return None, "Positive label (pos_label) must be specified for binary outcome.", None, None
+        
+    # Map user's selected label to 1, and the other label to 0
+    # ใช้ str() เพื่อรองรับการเทียบ String ที่มาจาก Selectbox
+    if str(y_true_raw.iloc[0]) not in [str(x) for x in y_true_raw.unique()]:
+        # ในกรณีที่ข้อมูลมีการแปลงประเภทแล้ว ต้องทำการเทียบตามประเภทข้อมูลเดิม
+        # แต่เนื่องจากเราใช้ str() ใน selectbox และในโค้ดนี้จึงปลอดภัย
+        pass
+        
+    # หาค่า Negative label ที่เหลืออยู่
+    all_labels_raw = [str(x) for x in y_true_raw.unique()]
+    neg_label_raw = [lab for lab in all_labels_raw if lab != pos_label_user][0]
+    
+    # แปลงเป็น 0/1
+    y_true = np.where(y_true_raw.astype(str) == pos_label_user, 1, 0)
+    
+    # Cast y_true back to pd.Series for alignment/indexing safety
+    y_true = pd.Series(y_true, index=y_true_raw.index)
+    # 🟢 END: Manual Encoding
         
     # 1. Calculate AUC
     fpr, tpr, thresholds = roc_curve(y_true, y_score)
@@ -181,6 +205,21 @@ def analyze_roc(df, truth_col, score_col, method='delong'):
         
     ci_lower = max(0.0, ci_lower)
     ci_upper = min(1.0, ci_upper)
+
+    # 🟢 START: Calculate P-value for AUC (H0: AUC = 0.5)
+    p_value_auc = np.nan
+    try:
+        if se > 0:
+            # Z = (AUC - 0.5) / SE
+            Z_score = (auc_val - 0.5) / se
+            # Two-tailed P-value from Standard Normal Distribution
+            p_value_auc = stats.norm.sf(abs(Z_score)) * 2 
+        else:
+            # Perfect separation (AUC=1 or 0), P-value is effectively 0
+            p_value_auc = 0.0 
+    except:
+        p_value_auc = np.nan
+    # 🟢 END: Calculate P-value for AUC
     
     # 3. Youden Index
     # J = Sensitivity + Specificity - 1 = TPR + (1 - FPR) - 1 = TPR - FPR
@@ -197,12 +236,15 @@ def analyze_roc(df, truth_col, score_col, method='delong'):
         "95% CI Lower": ci_lower,
         "95% CI Upper": ci_upper,
         "Method": method_name,
+        "P-value (H0: AUC=0.5)": p_value_auc, # 🟢 ADDED P-VALUE HERE
         "Youden Index (J)": youden_j,
         "Best Cut-off": best_thresh,
         "Sensitivity": best_sens,
         "Specificity": best_spec,
         "N (Positive)": n1,
-        "N (Negative)": n0
+        "N (Negative)": n0,
+        "Positive Label": pos_label_user, 
+        "Negative Label": neg_label_raw    
     }
     
     # 4. Plot
