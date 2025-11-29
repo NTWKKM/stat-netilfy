@@ -110,7 +110,6 @@ def calculate_chi2(df, col1, col2):
             results['RD'] = np.nan
             results['Is_2x2'] = True
             
-    return tab, results
 # --- Formatting Display Table (Count, Row %, Total %) ---
     
     # 1. Calculate Row Percentages (Horizontal %)
