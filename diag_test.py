@@ -4,6 +4,7 @@ import numpy as np
 import scipy.stats as stats
 from sklearn.metrics import roc_curve, roc_auc_score
 import matplotlib.pyplot as plt
+import io, base64 # เพิ่ม io และ base64 สำหรับการฝังรูปใน HTML
 
 def calculate_descriptive(df, col):
     """คำนวณสถิติพื้นฐาน"""
@@ -103,13 +104,9 @@ def auc_ci_delong(y_true, y_scores):
     
     # DeLong Covariance Calculation
     # Compute V10 (X) and V01 (Y)
-    # Using simple loop for clarity (optimized versions exist but this is fine for N < 10k)
     
     pos_scores = y_scores[y_true == 1]
     neg_scores = y_scores[y_true == 0]
-    
-    # Mann-Whitney statistic elements
-    # V10[i] = mean( I(pos_score[i] > neg_scores) + 0.5 * I(pos_score[i] == neg_scores) )
     
     def compute_mid_rank(x):
         """Helper to get mid-ranks"""
@@ -132,9 +129,6 @@ def auc_ci_delong(y_true, y_scores):
     
     # DeLong variance components
     # We need empirical Probabilities
-    # This is complex to code from scratch without bug.
-    # Alternative: Use simpler bootstrap if DeLong is too heavy, 
-    # BUT user asked for DeLong. Let's use a known robust snippet logic.
     
     # V10: For each positive, what fraction of negatives is it greater than?
     v10 = []
@@ -167,7 +161,7 @@ def analyze_roc(df, truth_col, score_col, method='delong'):
     y_true = y_true.loc[y_score.index]
     
     if y_true.nunique() < 2:
-        return None, "Outcome must have 2 classes (0 and 1)", None
+        return None, "Outcome must have 2 classes (0 and 1)", None, None # แก้ไขให้ return 4 ค่า
         
     # 1. Calculate AUC
     fpr, tpr, thresholds = roc_curve(y_true, y_score)
@@ -226,5 +220,92 @@ def analyze_roc(df, truth_col, score_col, method='delong'):
     ax.set_title(f'ROC Curve: {score_col} vs {truth_col}')
     ax.legend(loc="lower right")
     ax.grid(alpha=0.3)
+
+    # 5. Create Coordinates DataFrame for detailed table (เพิ่มส่วนนี้)
+    coords_df = pd.DataFrame({
+        'Threshold': thresholds,
+        'Sensitivity (TPR)': tpr,
+        'Specificity': 1 - fpr,
+        '1 - Specificity (FPR)': fpr,
+        'Youden J': tpr - fpr
+    }).sort_values('Threshold', ascending=False).reset_index(drop=True)
+    coords_df['Threshold'] = coords_df['Threshold'].round(4)
+    coords_df = coords_df.round(4)
     
-    return stats_res, None, fig
+    return stats_res, None, fig, coords_df # แก้ไขให้ return 4 ค่า
+
+def generate_report(title, elements):
+    """Generates a simple HTML report based on a list of elements (text, plot, table).
+    ใช้สำหรับแสดงผลลัพธ์ของ ROC, Chi-Square และ Descriptive
+    """
+    
+    # --- CSS Styling (คล้ายกับ logic.py และ table_one.py) ---
+    css_style = """
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; margin: 0; color: #333; }
+        .report-container { 
+            background: white; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+            padding: 20px;
+            width: 100%; 
+            box-sizing: border-box;
+            margin-bottom: 20px;
+        }
+        h2 { color: #2c3e50; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
+        h4 { color: #34495e; margin-top: 25px; margin-bottom: 10px; }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            font-family: 'Segoe UI', sans-serif; 
+            font-size: 0.9em;
+        }
+        th, td { 
+            padding: 10px 15px; 
+            border: 1px solid #e0e0e0;
+            vertical-align: top;
+            text-align: left;
+        }
+        th {
+            background-color: #f0f2f6; 
+            font-weight: 600;
+        }
+        tr:nth-child(even) td { background-color: #f9f9f9; }
+        .alert { background-color: #fff3cd; color: #856404; padding: 10px; border: 1px solid #ffeeba; border-radius: 5px; margin-bottom: 15px; }
+        .report-table th, .report-table td { text-align: center; } /* จัดกลางสำหรับตารางข้อมูลสถิติ/พิกัด */
+        .report-table th:first-child, .report-table td:first-child { text-align: left; }
+    </style>
+    """
+    
+    html = f"<!DOCTYPE html><html><head>{css_style}</head><body>"
+    html += f"<div class='report-container'><h2>{title}</h2>"
+    
+    for element in elements:
+        element_type = element['type']
+        data = element['data']
+        header = element.get('header', '')
+        
+        if header:
+            html += f"<h4>{header}</h4>"
+            
+        if element_type == 'text':
+            html += f"<p>{data}</p>"
+        elif element_type == 'table':
+            # Convert DataFrame to HTML
+            # ใช้คลาส report-table เพื่อจัดรูปแบบ
+            html += data.to_html(index=True, classes='report-table')
+        elif element_type == 'plot':
+            # Save matplotlib figure to a string buffer and convert to base64 for embedding
+            buf = io.BytesIO()
+            # ต้องตรวจสอบว่าเป็น Matplotlib Figure จริงๆ ก่อน savefig
+            if isinstance(data, plt.Figure):
+                data.savefig(buf, format='png')
+                plt.close(data) # Close the figure to free memory
+                data_uri = base64.b64encode(buf.getvalue()).decode('utf-8')
+                buf.close()
+                html += f'<img src="data:image/png;base64,{data_uri}" style="max-width: 100%; height: auto; display: block; margin: 15px auto;"/>'
+            else:
+                 html += '<p class="alert">⚠️ Plot data is not a valid Matplotlib Figure object.</p>'
+            
+    html += "</div></body></html>"
+    return html
