@@ -144,8 +144,13 @@ def analyze_outcome(outcome_name, df, var_meta=None):
                 if contingency.size > 0:
                     chi2, p, dof, ex = stats.chi2_contingency(contingency)
                     res['p_comp'] = p
-                else: res['p_comp'] = np.nan
-            except: res['p_comp'] = np.nan
+                    res['test_name'] = "Chi-square" # 🟢 ADDED: Test Name
+                else: 
+                    res['p_comp'] = np.nan
+                    res['test_name'] = "-" # 🟢 ADDED: Test Name
+            except: 
+                res['p_comp'] = np.nan
+                res['test_name'] = "-" # 🟢 ADDED: Test Name
             
         else:
             # === CONTINUOUS ===
@@ -162,7 +167,10 @@ def analyze_outcome(outcome_name, df, var_meta=None):
             try:
                 u, p = stats.mannwhitneyu(pd.to_numeric(X_neg, errors='coerce').dropna(), pd.to_numeric(X_pos, errors='coerce').dropna())
                 res['p_comp'] = p
-            except: res['p_comp'] = np.nan
+                res['test_name'] = "Mann-Whitney U" # 🟢 ADDED: Test Name
+            except: 
+                res['p_comp'] = np.nan
+                res['test_name'] = "-" # 🟢 ADDED: Test Name
 
         # Univariate Regression
         data_uni = pd.DataFrame({'y': y, 'x': X_num}).dropna()
@@ -218,7 +226,8 @@ def analyze_outcome(outcome_name, df, var_meta=None):
         # ตัด prefix ชื่อ sheet (ถ้ามี) เพื่อทำ grouping
         sheet = col.split('_')[0] if '_' in col else "Variables"
         if sheet != current_sheet:
-            html_rows.append(f"<tr class='sheet-header'><td colspan='8'>{sheet}</td></tr>")
+            # 🟢 CHANGED: colspan เป็น 9 (เดิม 8)
+            html_rows.append(f"<tr class='sheet-header'><td colspan='9'>{sheet}</td></tr>")
             current_sheet = sheet
             
         lbl = get_label(col, var_meta)
@@ -248,7 +257,7 @@ def analyze_outcome(outcome_name, df, var_meta=None):
             <td>{res.get('desc_neg','')}</td>
             <td>{res.get('desc_pos','')}</td>
             <td>{or_s}</td>
-            <td>{p_s}</td>
+            <td>{res.get('test_name', '-')}</td> <td>{p_s}</td>
             <td>{aor_s}</td>
             <td>{ap_s}</td>
         </tr>"""
@@ -265,7 +274,7 @@ def analyze_outcome(outcome_name, df, var_meta=None):
                 <th>Group 0</th>
                 <th>Group 1</th>
                 <th>Crude OR (95% CI)</th>
-                <th>P-value</th>
+                <th>Test Used</th> <th>Crude P-value</th>
                 <th>aOR (95% CI)<br><span style='font-size:0.8em; font-weight:normal'>(n={final_n_multi})</span></th>
                 <th>aP-value</th>
             </tr>
@@ -274,6 +283,7 @@ def analyze_outcome(outcome_name, df, var_meta=None):
     </table>
     <div class='summary-box'>
         <b>Method:</b> Binary Logistic Regression (BFGS). Complete Case Analysis.<br>
+        <i>Univariate comparison uses Chi-square test (Categorical) or Mann-Whitney U test (Continuous).</i>
     </div>
     </div><br>
     """
