@@ -324,16 +324,14 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
     return stats_res, None, fig, coords_df # แก้ไขให้ return 4 ค่า
 
 def generate_report(title, elements):
-    """Generates a simple HTML report based on a list of elements (text, plot, table).
-    ใช้สำหรับแสดงผลลัพธ์ของ ROC, Chi-Square และ Descriptive
-    """
+    """Generates a simple HTML report based on a list of elements (text, plot, table)."""
     
-    # --- CSS Styling (คล้ายกับ logic.py และ table_one.py) ---
+    # --- CSS Styling (Fixed to use Streamlit CSS variables for theme compatibility) ---
     css_style = """
     <style>
-        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; margin: 0; color: #333; }
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; margin: 0; color: var(--text-color); background-color: var(--background-color); }
         .report-container { 
-            background: white; 
+            background: var(--secondary-background-color); 
             border-radius: 8px; 
             box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
             padding: 20px;
@@ -341,8 +339,16 @@ def generate_report(title, elements):
             box-sizing: border-box;
             margin-bottom: 20px;
         }
-        h2 { color: #2c3e50; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
-        h4 { color: #34495e; margin-top: 25px; margin-bottom: 10px; }
+        h2 { 
+            color: var(--primary-color); 
+            border-bottom: 2px solid var(--border-color); 
+            padding-bottom: 10px; 
+        }
+        h4 { 
+            color: var(--text-color); 
+            margin-top: 25px; 
+            margin-bottom: 10px; 
+        }
         table { 
             width: 100%; 
             border-collapse: collapse; 
@@ -351,18 +357,36 @@ def generate_report(title, elements):
         }
         th, td { 
             padding: 10px 15px; 
-            border: 1px solid #e0e0e0;
+            border: 1px solid var(--border-color); 
             vertical-align: top;
             text-align: left;
         }
         th {
-            background-color: #f0f2f6; 
+            background-color: var(--primary-color); 
+            color: var(--text-color-inverted); 
             font-weight: 600;
         }
-        tr:nth-child(even) td { background-color: #f9f9f9; }
-        .alert { background-color: #fff3cd; color: #856404; padding: 10px; border: 1px solid #ffeeba; border-radius: 5px; margin-bottom: 15px; }
-        .report-table th, .report-table td { text-align: center; } /* จัดกลางสำหรับตารางข้อมูลสถิติ/พิกัด */
+        tr:nth-child(even) td { background-color: var(--secondary-background-color); }
+        .alert { 
+            background-color: var(--secondary-background-color); 
+            color: var(--warning-color); 
+            padding: 10px; 
+            border: 1px solid var(--border-color); 
+            border-radius: 5px; 
+            margin-bottom: 15px; 
+        }
+        .report-table th, .report-table td { text-align: center; } 
         .report-table th:first-child, .report-table td:first-child { text-align: left; }
+        
+        /* สไตล์สำหรับ Footer ใน Report */
+        .report-footer {
+            text-align: right;
+            font-size: 0.75em;
+            color: var(--text-color);
+            margin-top: 20px;
+            border-top: 1px dashed var(--border-color);
+            padding-top: 10px;
+        }
     </style>
     """
     
@@ -381,12 +405,11 @@ def generate_report(title, elements):
             html += f"<p>{data}</p>"
         elif element_type == 'table':
             # Convert DataFrame to HTML
-            # ใช้คลาส report-table เพื่อจัดรูปแบบ
-            html += data.to_html(index=True, classes='report-table')
+            include_index = not data.columns.contains('Category') and not data.columns.contains('Statistic')
+            html += data.to_html(index=include_index, classes='report-table')
         elif element_type == 'plot':
             # Save matplotlib figure to a string buffer and convert to base64 for embedding
             buf = io.BytesIO()
-            # ต้องตรวจสอบว่าเป็น Matplotlib Figure จริงๆ ก่อน savefig
             if isinstance(data, plt.Figure):
                 data.savefig(buf, format='png')
                 plt.close(data) # Close the figure to free memory
@@ -395,6 +418,13 @@ def generate_report(title, elements):
                 html += f'<img src="data:image/png;base64,{data_uri}" style="max-width: 100%; height: auto; display: block; margin: 15px auto;"/>'
             else:
                  html += '<p class="alert">⚠️ Plot data is not a valid Matplotlib Figure object.</p>'
+            
+    # 🟢 NEW: เพิ่ม Footer ของ Report
+    html += """
+    <div class="report-footer">
+      &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
+    </div>
+    """
             
     html += "</div></body></html>"
     return html
