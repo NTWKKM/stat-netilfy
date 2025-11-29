@@ -216,7 +216,7 @@ if st.session_state.df is not None:
     with main_tab1:
         st.subheader("1. Baseline Characteristics (Table 1)")
         st.markdown("""
-            <div style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 20px;">
+            <div style="padding: 15px; border: 1px solid var(--border-color); border-radius: 5px; background-color: var(--secondary-background-color); margin-bottom: 20px;">
                 <p>
                 The **Baseline Characteristics (Table 1)** tool generates a summary table of the study population, typically stratifying variables by treatment or outcome groups.
                 </p>
@@ -494,7 +494,7 @@ if st.session_state.df is not None:
         
         # English Description of Logistic Regression
         st.markdown("""
-            <div style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 20px;">
+            <div style="padding: 15px; border: 1px solid var(--border-color); border-radius: 5px; background-color: var(--secondary-background-color); margin-bottom: 20px;">
                 <p>
                 <b>Binary Logistic Regression</b> is used to model the probability of a binary outcome (e.g., 0 or 1, disease presence/absence) based on one or more predictor variables.
                 </p>
