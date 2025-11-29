@@ -532,3 +532,50 @@ else:
     2.  **Diagnostic Test:** ROC Curve, AUC, Best Cut-off Table, Chi-square (with Report Export).
     3.  **Table 1:** Auto-generated Baseline Characteristics with P-values.
     """)
+
+# ==========================================
+# 3. GLOBAL FOOTER (Moved from index.html)
+# ==========================================
+
+# 🟢 Inject Custom CSS for fixed footer (Must be run once)
+# ใช้คลาส .app-footer เพื่อหลีกเลี่ยงการชนกับคลาส .footer ภายใน Streamlit
+st.markdown("""
+<style>
+/* CSS เพื่อให้ Footer อยู่ติดด้านล่างสุด */
+.stApp {
+    margin-bottom: 30px; /* เพิ่มระยะห่างด้านล่างสำหรับ Footer */
+}
+.app-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    padding: 8px 0;
+    
+    /* ใช้ CSS Variables ของ Streamlit */
+    background-color: var(--secondary-background-color); 
+    color: var(--text-color);
+    
+    text-align: center;
+    font-size: 0.75em;
+    border-top: 1px solid var(--border-color);
+    z-index: 1000;
+}
+/* โค้ดสำหรับซ่อน Streamlit footer เดิม (ยังจำเป็นต้องมี) */
+footer {
+    visibility: hidden;
+    height: 0px;
+}
+footer:after {
+    content: none;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+# 🟢 Render the Footer HTML
+st.markdown("""
+<div class="app-footer">
+  &copy; 2025 NTWKKM &nbsp;|&nbsp; Powered by GitHub, Gemini, Streamlit
+</div>
+""", unsafe_allow_html=True)
