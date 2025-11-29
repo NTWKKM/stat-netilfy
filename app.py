@@ -216,6 +216,7 @@ if st.session_state.df is not None:
             def_vars = [c for c in all_cols if c != col_group]
             selected_vars = st.multiselect("Include Variables:", all_cols, default=def_vars, key='t1_vars')
             
+        # 🟢 FIX ALIGNMENT HERE
         run_col_t1, download_col_t1 = st.columns([1, 1])
         if 'html_output_t1' not in st.session_state:
             st.session_state.html_output_t1 = None
@@ -229,13 +230,14 @@ if st.session_state.df is not None:
                     st.components.v1.html(html_t1, height=600, scrolling=True)
                 except Exception as e:
                     st.error(f"Error: {e}")
+                    st.session_state.html_output_t1 = None # Clear state on error
                     
         with download_col_t1:
             if st.session_state.html_output_t1:
-                st.download_button("📥 Download HTML", st.session_state.html_output_t1, "table1.html", "text/html", key='dl_btn_t1')
+                st.download_button("📥 Download HTML Report", st.session_state.html_output_t1, "table1.html", "text/html", key='dl_btn_t1')
             else:
-                # 🟢 Placeholder Button: ใช้ปุ่ม Disabled เพื่อยึดพื้นที่และรักษา Alignment
-                st.button("📥 Download HTML", disabled=True, key='placeholder_t1')
+                # Placeholder button to maintain alignment
+                st.button("📥 Download HTML Report", disabled=True, key='placeholder_t1')
 
     # -----------------------------------------------
     # 🟢 TAB 2: DIAGNOSTIC TEST (With Descriptions)
@@ -275,22 +277,35 @@ if st.session_state.df is not None:
             
             method = rc3.radio("CI Method:", ["DeLong et al.", "Binomial (Hanley)"])
             
+            # 🟢 FIX ALIGNMENT HERE
             run_col_roc, download_col_roc = st.columns([1, 1])
             if 'html_output_roc' not in st.session_state:
                 st.session_state.html_output_roc = None
             
             if run_col_roc.button("📉 Analyze ROC", key='btn_roc'):
-                # ... (Analysis Code) ...
-                st.session_state.html_output_roc = html_report 
+                res, err, fig, coords_df = diag_test.analyze_roc(df, truth, score, 'delong' if 'DeLong' in method else 'hanley')
+                
+                if err: 
+                    st.error(err)
+                    st.session_state.html_output_roc = None # Clear state on error
+                else:
+                    report_elements = [
+                        {'type': 'text', 'data': f"Analysis of Test Score: <b>{score}</b> vs Gold Standard: <b>{truth}</b>"},
+                        {'type': 'plot', 'header': 'ROC Curve', 'data': fig},
+                        {'type': 'table', 'header': 'Key Statistics', 'data': pd.DataFrame([res]).T},
+                        {'type': 'table', 'header': 'Diagnostic Performance (All Cut-offs)', 'data': coords_df}
+                    ]
+                    html_report = diag_test.generate_report(f"ROC Analysis: {score}", report_elements)
+                    st.session_state.html_output_roc = html_report # Store HTML
+                    st.components.v1.html(html_report, height=800, scrolling=True)
 
             with download_col_roc:
                 if st.session_state.html_output_roc:
                     st.download_button("📥 Download HTML Report", st.session_state.html_output_roc, "roc_report.html", "text/html", key='dl_btn_roc')
                 else:
-                    # 🟢 Placeholder Button
+                    # Placeholder button to maintain alignment
                     st.button("📥 Download HTML Report", disabled=True, key='placeholder_roc')
-
-
+                    
         # --- Chi-Square ---
         with sub_tab2:
             st.markdown("##### Chi-Square Test")
@@ -307,19 +322,32 @@ if st.session_state.df is not None:
             v1 = cc1.selectbox("Variable 1:", all_cols, key='chi1')
             v2 = cc2.selectbox("Variable 2:", all_cols, index=min(1, len(all_cols)-1), key='chi2')
             
+            # 🟢 FIX ALIGNMENT HERE
             run_col_chi, download_col_chi = st.columns([1, 1])
             if 'html_output_chi' not in st.session_state:
                 st.session_state.html_output_chi = None
             
             if run_col_chi.button("Run Chi-Square", key='btn_chi'):
-                # ... (Analysis Code) ...
-                st.session_state.html_output_chi = html_report
+                tab_res, msg = diag_test.calculate_chi2(df, v1, v2)
+                
+                if tab_res is not None:
+                    display_tab = tab_res.reset_index()
+                    report_elements = [
+                        {'type': 'text', 'data': f"<b>Result:</b> {msg}"},
+                        {'type': 'table', 'header': 'Contingency Table', 'data': display_tab}
+                    ]
+                    html_report = diag_test.generate_report(f"Chi-square: {v1} vs {v2}", report_elements)
+                    st.session_state.html_output_chi = html_report # Store HTML
+                    st.components.v1.html(html_report, height=500, scrolling=True)
+                else:
+                    st.error(msg)
+                    st.session_state.html_output_chi = None # Clear state on error
                     
             with download_col_chi:
                 if st.session_state.html_output_chi:
                     st.download_button("📥 Download HTML Report", st.session_state.html_output_chi, "chi2_report.html", "text/html", key='dl_btn_chi')
                 else:
-                    # 🟢 Placeholder Button
+                    # Placeholder button to maintain alignment
                     st.button("📥 Download HTML Report", disabled=True, key='placeholder_chi')
 
         # --- Descriptive ---
@@ -336,19 +364,28 @@ if st.session_state.df is not None:
             
             dv = st.selectbox("Select Variable:", all_cols, key='desc_var')
             
+            # 🟢 FIX ALIGNMENT HERE
             run_col_desc, download_col_desc = st.columns([1, 1])
             if 'html_output_desc' not in st.session_state:
                 st.session_state.html_output_desc = None
             
             if run_col_desc.button("Show Stats", key='btn_desc'):
-                # ... (Analysis Code) ...
-                st.session_state.html_output_desc = html_report
+                res_df = diag_test.calculate_descriptive(df, dv)
+                if res_df is not None:
+                    report_elements = [
+                        {'type': 'table', 'header': '', 'data': res_df}
+                    ]
+                    html_report = diag_test.generate_report(f"Descriptive Statistics: {dv}", report_elements)
+                    st.session_state.html_output_desc = html_report # Store HTML
+                    st.components.v1.html(html_report, height=500, scrolling=True)
+                else:
+                    st.session_state.html_output_desc = None # Clear state on error
                     
             with download_col_desc:
                 if st.session_state.html_output_desc:
                     st.download_button("📥 Download HTML Report", st.session_state.html_output_desc, "desc_report.html", "text/html", key='dl_btn_desc')
                 else:
-                    # 🟢 Placeholder Button
+                    # Placeholder button to maintain alignment
                     st.button("📥 Download HTML Report", disabled=True, key='placeholder_desc')
 
     # -----------------------------------------------
@@ -394,20 +431,31 @@ if st.session_state.df is not None:
             else:
                 exclude_cols = st.multiselect("Exclude Variables (Optional):", all_cols, key='logit_exclude_optional')
 
-        # จัดวางปุ่ม Run และ Download ในคอลัมน์เดียวกัน
+        # 🟢 FIX ALIGNMENT HERE
         run_col, download_col = st.columns([1, 1])
         if 'html_output_logit' not in st.session_state:
             st.session_state.html_output_logit = None 
         
         if run_col.button("🚀 Run Logistic Regression", type="primary"):
-            # ... (Analysis Code) ...
-            st.session_state.html_output_logit = html
+            if df[target].nunique() < 2:
+                st.error("Error: Outcome must have at least 2 values (e.g., 0 and 1).")
+                st.session_state.html_output_logit = None # Clear state on error
+            else:
+                with st.spinner("Calculating..."):
+                    try:
+                        final_df = df.drop(columns=exclude_cols, errors='ignore')
+                        html = process_data_and_generate_html(final_df, target, var_meta=st.session_state.var_meta)
+                        st.session_state.html_output_logit = html # Store HTML
+                        st.components.v1.html(html, height=600, scrolling=True)
+                    except Exception as e:
+                        st.error(f"Analysis Failed: {e}")
+                        st.session_state.html_output_logit = None # Clear state on error
                         
         with download_col:
             if st.session_state.html_output_logit:
                 st.download_button("📥 Download Report", st.session_state.html_output_logit, "logit_report.html", "text/html", key='dl_btn_logit')
             else:
-                # 🟢 Placeholder Button
+                # Placeholder button to maintain alignment
                 st.button("📥 Download Report", disabled=True, key='placeholder_logit')
 
 else:
