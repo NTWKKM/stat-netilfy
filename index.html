@@ -7,9 +7,9 @@
     <title>Medical Stat Tool</title>
     <script src="https://cdn.jsdelivr.net/npm/@stlite/mountable@0.39.0/build/stlite.js"></script>
     <style>
-      /* เพิ่ม CSS เพื่อจัดตำแหน่งและสไตล์ของ Footer */
+      /* CSS สำหรับ Footer (ไม่มีการกำหนดสีตายตัว) */
       .stApp {
-          margin-bottom: 30px; /* เพิ่มระยะห่างด้านล่างสำหรับ Footer */
+          margin-bottom: 30px;
       }
       .footer {
           position: fixed;
@@ -17,21 +17,24 @@
           left: 0;
           width: 100%;
           padding: 8px 0;
-          background-color: #f0f2f6; /* สีพื้นหลังอ่อนๆ ให้เข้ากับ Light theme */
-          color: #666;
+          
+          /* ใช้ CSS Variables ของ Streamlit */
+          background-color: var(--secondary-background-color); 
+          color: var(--text-color);
+          
           text-align: center;
           font-size: 0.75em;
-          border-top: 1px solid #ddd;
+          border-top: 1px solid var(--border-color);
           z-index: 1000;
       }
       .footer a {
-          color: #666;
+          color: var(--text-color);
           text-decoration: none;
       }
       .footer a:hover {
           text-decoration: underline;
       }
-      /* 🟢 โค้ดสำหรับซ่อน Streamlit footer 🟢 */
+      /* โค้ดสำหรับซ่อน Streamlit footer */
       footer {
           visibility: hidden;
           height: 0px;
@@ -48,14 +51,7 @@
     </div>
     <script>
       stlite.mount({
-        // 🟢 การตั้งค่าธีมบังคับ Light Mode
-        theme: {
-          "base": "light",
-          "primaryColor": "#2c3e50",
-          "backgroundColor": "#ffffff",
-          "secondaryBackgroundColor": "#f0f2f6",
-          "textColor": "#31333F"
-        },
+        /* 🟢 ลบส่วน theme config ออกไปแล้ว */
         requirements: ["pandas", "scipy", "statsmodels", "openpyxl", "scikit-learn", "matplotlib"],
         entrypoint: "app.py",
         files: {
