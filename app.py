@@ -196,7 +196,7 @@ if st.session_state.df is not None:
     main_tab0, main_tab1, main_tab2, main_tab3 = st.tabs([
         "📄 Raw Data", 
         "📋 Baseline Table 1", 
-        "🔬 Diagnostic Test (ROC/Chi2)", 
+        "🔬 Diagnostic Test (ROC/Chi2/RR/NNT)", 
         "📊 Logistic Regression" 
     ])
 
