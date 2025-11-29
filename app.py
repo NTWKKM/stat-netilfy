@@ -260,7 +260,8 @@ if st.session_state.df is not None:
                 </ul>
             """, unsafe_allow_html=True)
             
-            rc1, rc2, rc3 = st.columns(3)
+            # 🟢 เปลี่ยนเป็น 4 คอลัมน์เพื่อรองรับ Positive Label Selection
+            rc1, rc2, rc3, rc4 = st.columns(4)
             # Find default outcome index
             def_idx = 0
             for i, c in enumerate(all_cols):
@@ -276,7 +277,32 @@ if st.session_state.df is not None:
             score = rc2.selectbox("Test Score (Continuous):", all_cols, index=score_idx, key='roc_score')
             
             method = rc3.radio("CI Method:", ["DeLong et al.", "Binomial (Hanley)"])
+
+            # 🟢 NEW: Positive Label Selection
+            pos_label = None
+            unique_truth_vals = df[truth].dropna().unique()
+            if len(unique_truth_vals) == 2:
+                # เรียงค่าเพื่อให้ผู้ใช้เลือกได้ง่ายขึ้น
+                sorted_vals = sorted([str(x) for x in unique_truth_vals]) 
+                selected_pos_label = rc4.selectbox("Positive Label (1):", sorted_vals, key='roc_pos_label')
+                pos_label = selected_pos_label
+            elif len(unique_truth_vals) != 2:
+                rc4.warning("Requires 2 unique values.")
+
             
+            run_col_roc, download_col_roc = st.columns([1, 1])
+            if 'html_output_roc' not in st.session_state:
+                st.session_state.html_output_roc = None
+            
+            if run_col_roc.button("📉 Analyze ROC", key='btn_roc'):
+                if pos_label is None and len(unique_truth_vals) == 2:
+                    st.error("Error: Please select the Positive Label (1).")
+                elif len(unique_truth_vals) != 2:
+                    st.error("Error: Gold Standard must have exactly 2 classes.")
+                else:
+                    # 🟢 Pass the selected pos_label to diag_test
+                    res, err, fig, coords_df = diag_test.analyze_roc(df, truth, score, 'delong' if 'DeLong' in method else 'hanley', pos_label_user=pos_label)
+           
             # 🟢 FIX ALIGNMENT HERE
             run_col_roc, download_col_roc = st.columns([1, 1])
             if 'html_output_roc' not in st.session_state:
