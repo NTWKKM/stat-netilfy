@@ -317,10 +317,12 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None):
     html = f"<!DOCTYPE html><html><head>{css_style}</head><body>"
     html += "<h1>Analysis Report</h1>"
     html += analyze_outcome(target_outcome, df, var_meta)
-    html += "</body></html>"
-    # 🟢 NEW: เพิ่ม Footer ของ Report
-   html += """<div class='report-footer'>
+    
+    # 🟢 NEW: เพิ่ม Footer ของ Report (ใส่ก่อนปิด body)
+    html += """<div class='report-footer'>
     &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
-    </div></body></html>"""
-    # <---- สิ้นสุดการเพิ่มโค้ด Footer ใหม่ ---->
+    </div>"""
+    
+    html += "</body></html>"
+    
     return html
