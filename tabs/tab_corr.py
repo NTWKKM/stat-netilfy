@@ -78,14 +78,19 @@ def render(df):
     with sub_tab2:
         st.markdown("##### Continuous Correlation Analysis")
         st.info("""
-            **💡 Guide:** Used to measure the relationship between **two continuous (numeric) variables**.
-            * **Pearson (r):** Best for data that follows a normal distribution (Linear Relationship).
-            * **Spearman (rho):** Best for non-normal data, ordinal data, or outliers (Monotonic Relationship).
-            
-             **Interpretation of Coefficient:**             
-            * **Close to +1:** Strong positive relationship (Both increase together).
-            * **Close to -1:** Strong negative relationship (One increases, the other decreases).
-            * **Close to  0:** No relationship.
+    **💡 Guide:** Measures the relationship between **two continuous (numeric) variables**.
+
+    * **Pearson (r):** Assesses **linear** correlation; best for normally distributed data.
+    * **Spearman (rho):** Assesses **monotonic** (directional) correlation; best for non-normal data or ranks/outliers.
+
+    **Interpretation of Coefficient (r/rho):**
+    * **Close to +1:** Strong positive association (Both variables increase together).
+    * **Close to -1:** Strong negative association (One increases as the other decreases).
+    * **Close to 0:** Weak or no association.
+
+    **X/Y Axis (for Plotting):**
+    * The coefficient (r/rho) is **symmetrical** (X,Y is the same as Y,X).
+    * For visual clarity, the **Predictor (Independent)** should be on the **X-axis** and the **Outcome (Dependent)** on the **Y-axis**.
         """)
         
         c1, c2, c3 = st.columns(3)
