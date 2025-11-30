@@ -80,12 +80,6 @@ if st.session_state.df is not None:
             st.experimental_rerun()
 
 # 🟢 NEW: เพิ่มเครดิตที่ส่วนท้ายของ Sidebar (เฉพาะเมื่อมีการโหลดข้อมูลแล้ว)
-st.sidebar.markdown("""
-<hr style="margin-top: 20px; margin-bottom: 10px; border-color: var(--border-color);">
-<div style='text-align: center; font-size: 0.7em; color: var(--text-color);'>
-  &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
-</div>
-""", unsafe_allow_html=True)
 
 # ==========================================
 # 2. MAIN AREA
@@ -142,7 +136,13 @@ else:
     * Univariate & Multivariate Analysis.
     * Calculates **Odds Ratio (OR)** and **Adjusted Odds Ratio (AOR)**, controlling for confounding variables.
     """)
-
+    
+st.sidebar.markdown("""
+<hr style="margin-top: 20px; margin-bottom: 10px; border-color: var(--border-color);">
+<div style='text-align: center; font-size: 0.7em; color: var(--text-color);'>
+  &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
+</div>
+""", unsafe_allow_html=True)
 # ==========================================
 # 3. GLOBAL CSS (Cleanup)
 # ==========================================
