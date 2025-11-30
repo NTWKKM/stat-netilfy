@@ -34,42 +34,67 @@ def calculate_descriptive(df, col):
 
 def calculate_chi2(df, col1, col2, correction=True):
     """
-    คำนวณ Chi-square พร้อมตาราง 2 ชั้น และ Risk Interpretation
+    (SYNCED WITH correlation.py)
+    คำนวณ Chi-square พร้อมตาราง 2 ชั้น, Risk Interpretation และการจัดเรียง Label (1 ก่อน 0)
     """
     if col1 not in df.columns or col2 not in df.columns: 
         return None, None, "Columns not found", None
     
     data = df[[col1, col2]].dropna()
     
-    # 1. Contingency Table (Frequency Count for Chi2 calculation)
+    # 1. สร้างตาราง Crosstab ทั้ง 3 แบบ
     tab_chi2 = pd.crosstab(data[col1], data[col2])
-    
-    # 2. สร้างตาราง Display (Format: Count (Row%) / (Total%))
     tab_raw = pd.crosstab(data[col1], data[col2], margins=True, margins_name="Total")
     tab_row_pct = pd.crosstab(data[col1], data[col2], normalize='index', margins=True, margins_name="Total") * 100
-    tab_total_pct = pd.crosstab(data[col1], data[col2], normalize='all', margins=True, margins_name="Total") * 100
     
-    col_names = tab_raw.columns.tolist() 
-    index_names = tab_raw.index.tolist()
+    # --- 🟢 START SYNC: REORDERING LOGIC (1 ก่อน 0) ---
+    all_col_labels = tab_raw.columns.tolist() 
+    all_row_labels = tab_raw.index.tolist()
+    base_col_labels = [col for col in all_col_labels if col != 'Total']
+    base_row_labels = [row for row in all_row_labels if row != 'Total']
+
+    def custom_sort(label):
+        try:
+            return float(label)
+        except (ValueError, TypeError):
+            return str(label)
+
+    base_col_labels.sort(key=custom_sort, reverse=True)
+    base_row_labels.sort(key=custom_sort, reverse=True)
+
+    final_col_order = base_col_labels + ['Total'] 
+    final_row_order = base_row_labels + ['Total']
+
+    tab_raw = tab_raw.reindex(index=final_row_order, columns=final_col_order)
+    tab_row_pct = tab_row_pct.reindex(index=final_row_order, columns=final_col_order)
+    tab_chi2 = tab_chi2.reindex(index=base_row_labels, columns=base_col_labels)
+    
+    col_names = final_col_order 
+    index_names = final_row_order
+    # --- 🟢 END SYNC: REORDERING LOGIC ---
+
     display_data = []
     
     for row_name in index_names:
         row_data = []
         for col_name in col_names:
             count = tab_raw.loc[row_name, col_name]
-            total_pct = tab_total_pct.loc[row_name, col_name]
             
-            if col_name == 'Total' and row_name == 'Total':
-                cell_content = f"{count} / ({total_pct:.1f}%)"
-            elif col_name == 'Total' or row_name == 'Total':
-                cell_content = f"{count} / ({total_pct:.1f}%)"
+            # 🟢 FIX: Handle 'Total' column explicitly (KeyError fix)
+            if col_name == 'Total':
+                pct = 100.0
             else:
-                row_pct = tab_row_pct.loc[row_name, col_name]
-                cell_content = f"{count} ({row_pct:.1f}%) / ({total_pct:.1f}%)"
+                pct = tab_row_pct.loc[row_name, col_name]
+                
+            # 🟢 FIX: Format only Count (Row%)
+            cell_content = f"{count} ({pct:.1f}%)"
             row_data.append(cell_content)
+            
+        display_data.append(row_data)
     
-    display_tab = pd.DataFrame(display_data, columns=[col1] + col_names).set_index(col1)
-
+    display_tab = pd.DataFrame(display_data, columns=col_names, index=index_names)
+    display_tab.index.name = col1
+    
     # 3. คำนวณ Chi-square Stats
     try:
         chi2, p, dof, ex = stats.chi2_contingency(tab_chi2, correction=correction)
@@ -81,37 +106,23 @@ def calculate_chi2(df, col1, col2, correction=True):
         msg = f"{method_name}: Chi2={chi2:.4f}, p={p:.4f}"
         
         stats_res = {
-            "Test": method_name,
-            "Statistic": chi2,
-            "P-value": p,
-            "Degrees of Freedom": dof,
-            "N": len(data)
+            "Test": method_name, "Statistic": chi2, "P-value": p, "Degrees of Freedom": dof, "N": len(data)
         }
         
-        # 4. สร้างตาราง Risk Measures พร้อม Interpretation
+        # 4. Risk Calculation
         risk_df = None
         if tab_chi2.shape == (2, 2):
             try:
-                # ดึง Label เพื่อมาทำ Interpretation
-                row_labels = tab_chi2.index.tolist()
-                col_labels = tab_chi2.columns.tolist()
-                
-                label_exp = str(row_labels[0])
-                label_unexp = str(row_labels[1])
-                label_event = str(col_labels[0])
-                
                 vals = tab_chi2.values
                 a, b = vals[0, 0], vals[0, 1]
                 c, d = vals[1, 0], vals[1, 1]
                 
-                # Calculations
-                risk_exp = a / (a + b) if (a + b) > 0 else 0
-                risk_unexp = c / (c + d) if (c + d) > 0 else 0
+                row_labels = tab_chi2.index.tolist(); col_labels = tab_chi2.columns.tolist()
+                label_exp = str(row_labels[0]); label_unexp = str(row_labels[1]); label_event = str(col_labels[0])
                 
-                rr = risk_exp / risk_unexp if risk_unexp > 0 else np.nan
-                rd = risk_exp - risk_unexp 
-                nnt = abs(1/rd) if rd != 0 else np.inf
-                
+                risk_exp = a/(a+b) if (a+b)>0 else 0; risk_unexp = c/(c+d) if (c+d)>0 else 0
+                rr = risk_exp/risk_unexp if risk_unexp>0 else np.nan
+                rd = risk_exp - risk_unexp; nnt = abs(1/rd) if rd!=0 else np.inf
                 odd_ratio, _ = stats.fisher_exact(tab_chi2)
                 
                 risk_data = [
@@ -123,16 +134,14 @@ def calculate_chi2(df, col1, col2, correction=True):
                     {"Statistic": "Odds Ratio (OR)", "Value": f"{odd_ratio:.4f}", "Interpretation": "Odds of Event (Exp vs Unexp)"}
                 ]
                 risk_df = pd.DataFrame(risk_data)
-                
-            except Exception as e:
-                pass 
+            except: pass
 
-        return display_tab, stats_res, msg, risk_df 
+        return display_tab, stats_res, msg, risk_df
 
     except Exception as e:
         return display_tab, None, str(e), None
 
-# --- ROC Functions ---
+# --- ROC Functions (คงเดิม) ---
 
 def auc_ci_hanley_mcneil(auc, n1, n2):
     q1 = auc / (2 - auc); q2 = 2 * (auc**2) / (1 + auc)
@@ -194,7 +203,9 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
 
 def generate_report(title, elements):
     """
-    สร้าง HTML Report โดยสร้างตารางเอง (Manual Construction) เพื่อป้องกัน Bug
+    (SYNCED WITH correlation.py)
+    สร้าง HTML Report โดย Manual Construction ตาราง Contingency Table 
+    ตาม Layout ที่ User ต้องการ (Header 2 ชั้น, แถวแรกว่างซ้าย)
     """
     css_style = """
     <style>
@@ -203,12 +214,13 @@ def generate_report(title, elements):
         h2 { color: #2c3e50; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
         h4 { color: #34495e; margin-top: 25px; margin-bottom: 10px; }
         table { width: 100%; border-collapse: collapse; font-family: 'Segoe UI', sans-serif; font-size: 0.9em; }
-        th, td { padding: 10px 15px; border: 1px solid #e0e0e0; vertical-align: top; text-align: left; }
+        th, td { padding: 10px 15px; border: 1px solid #e0e0e0; vertical-align: middle; text-align: center; } 
         th { background-color: #f0f2f6; font-weight: 600; }
         tr:nth-child(even) td { background-color: #f9f9f9; }
-        .report-table th, .report-table td { text-align: center; } 
-        .report-table th:first-child, .report-table td:first-child { text-align: left; }
         .report-footer { text-align: right; font-size: 0.75em; color: #666; margin-top: 20px; border-top: 1px dashed #ddd; padding-top: 10px; }
+        .th-exposure { text-align: left; background-color: #e8ecf1; } 
+        .th-outcome { background-color: #e8ecf1; }
+        .td-label { text-align: left; font-weight: bold; background-color: #fcfcfc; }
     </style>
     """
     html = f"<!DOCTYPE html><html><head>{css_style}</head><body>"
@@ -226,36 +238,35 @@ def generate_report(title, elements):
             html += data.to_html(index=idx, classes='report-table')
             
         elif element_type == 'contingency_table':
-            # 🟢 FIX: สร้าง HTML เอง (Manual HTML Construction) แทนการใช้ to_html แล้ว replace
-            # เพื่อแก้ปัญหาโครงสร้างตารางพังหรือ Header หาย
-            col_names = data.columns.tolist()
-            idx_name = data.index.name
+            col_labels = data.columns.tolist() 
+            row_labels = data.index.tolist()   
+            exp_name = data.index.name         
             out_name = element.get('outcome_col', 'Outcome')
             
             # Start Table
-            html_tab = "<table class='report-table'>"
+            html_tab = "<table>"
             
-            # Header Row 1
+            # --- Header Row 1 ---
             html_tab += "<thead><tr>"
-            html_tab += f"<th rowspan='2' class='report-table' style='text-align: left;'>{idx_name}</th>"
-            html_tab += f"<th colspan='{len(col_names)}' class='report-table'>{out_name}</th>"
+            html_tab += "<th style='background-color: white; border: none;'></th>" 
+            html_tab += f"<th colspan='{len(col_labels)}' class='th-outcome'>{out_name}</th>"
             html_tab += "</tr>"
             
-            # Header Row 2
+            # --- Header Row 2 ---
             html_tab += "<tr>"
-            for c in col_names:
-                html_tab += f"<th class='report-table'>{c}</th>"
+            html_tab += f"<th class='th-exposure'>{exp_name}</th>"
+            for label in col_labels:
+                html_tab += f"<th>{label}</th>"
             html_tab += "</tr></thead>"
             
-            # Body
+            # --- Body (Rows 3-5) ---
             html_tab += "<tbody>"
-            for index, row in data.iterrows():
+            for idx_label, row in data.iterrows():
                 html_tab += "<tr>"
-                # Index cell
-                html_tab += f"<td class='report-table' style='text-align: left; font-weight: bold;'>{index}</td>"
-                # Data cells
+                html_tab += f"<td class='td-label'>{idx_label}</td>"
+                
                 for val in row:
-                    html_tab += f"<td class='report-table'>{val}</td>"
+                    html_tab += f"<td>{val}</td>"
                 html_tab += "</tr>"
             html_tab += "</tbody></table>"
             
