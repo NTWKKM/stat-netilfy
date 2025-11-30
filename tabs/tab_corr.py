@@ -39,20 +39,25 @@ def render(df):
         if 'html_output_corr_cat' not in st.session_state: st.session_state.html_output_corr_cat = None
 
         if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run'):
-            # Call correlation.calculate_chi2
-            tab, stats, msg = correlation.calculate_chi2(df, v1, v2, correction=correction_flag)
+            # 🟢 UPDATE 1: รับค่า 4 ตัว (เพิ่ม risk_df)
+            tab, stats, msg, risk_df = correlation.calculate_chi2(df, v1, v2, correction=correction_flag)
             
             if tab is not None:
-                # 🟢 ใช้ 'contingency_table' type และส่ง 'outcome_col'
                 rep = [
                     {'type': 'text', 'data': f"<b>Analysis:</b> Chi-Square & Risk<br><b>Variables:</b> {v1} vs {v2}"},
                     {'type': 'text', 'data': f"<b>Main Result:</b> {msg}"},
                     
-                    # 🟢 ส่วนสำคัญ: ใช้ type 'contingency_table'
+                    # Contingency Table
                     {'type': 'contingency_table', 'header': 'Contingency Table', 'data': tab, 'outcome_col': v2},
                     
+                    # Statistics
                     {'type': 'table', 'header': 'Detailed Statistics', 'data': pd.DataFrame([stats]).T} 
                 ]
+                
+                # 🟢 UPDATE 2: เพิ่ม Risk Table ลงใน Report ถ้ามีข้อมูล
+                if risk_df is not None:
+                    rep.append({'type': 'table', 'header': 'Risk & Effect Measures (2x2 Table)', 'data': risk_df})
+
                 html = correlation.generate_report(f"Chi-square: {v1} vs {v2}", rep)
                 
                 st.session_state.html_output_corr_cat = html
@@ -69,14 +74,14 @@ def render(df):
     # ==================================================
     # SUB-TAB 2: Pearson/Spearman (Continuous)
     # ==================================================
+    # (ส่วนนี้เหมือนเดิม ไม่ต้องแก้)
     with sub_tab2:
         st.markdown("##### Continuous Correlation Analysis")
         st.info("""
             **💡 Guide:** Used to measure the relationship between **two continuous (numeric) variables**.
             * **Pearson (r):** Best for data that follows a normal distribution (Linear Relationship).
             * **Spearman (rho):** Best for non-normal data, ordinal data, or outliers (Monotonic Relationship).
-            **Interpretation of Coefficient:**
-            * **Close to +1:** Strong positive relationship (Both increase together).
+             **Interpretation of Coefficient:**             * **Close to +1:** Strong positive relationship (Both increase together).
             * **Close to -1:** Strong negative relationship (One increases, the other decreases).
             * **Close to 0:** No relationship.
         """)
