@@ -77,7 +77,7 @@ def calculate_correlation(df, col1, col2, method='pearson'):
     return stats_res, None, fig
 
 def generate_report(title, elements):
-    # (ใช้ CSS เดิมเพื่อให้ Theme ตรงกัน)
+    # CSS Styling
     css_style = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; margin: 0; color: #333; }
@@ -91,19 +91,22 @@ def generate_report(title, elements):
         .report-footer {
             text-align: right;
             font-size: 0.75em;
-            color: var(--text-color);
+            color: #666;
             margin-top: 20px;
-            border-top: 1px dashed var(--border-color);
+            border-top: 1px dashed #ddd;
             padding-top: 10px;
-            }
+        }
     </style>
     """
     html = f"<!DOCTYPE html><html><head>{css_style}</head><body>"
     html += f"<div class='report-container'><h2>{title}</h2>"
+    
     for element in elements:
         if element.get('header'): html += f"<h4>{element['header']}</h4>"
-        if element['type'] == 'text': html += f"<p>{element['data']}</p>"
-        elif element['type'] == 'table': html += element['data'].to_html(index=True, classes='report-table')
+        if element['type'] == 'text': 
+            html += f"<p>{element['data']}</p>"
+        elif element['type'] == 'table': 
+            html += element['data'].to_html(index=True, classes='report-table')
         elif element['type'] == 'plot':
             buf = io.BytesIO()
             if isinstance(element['data'], plt.Figure):
@@ -112,8 +115,8 @@ def generate_report(title, elements):
                 data_uri = base64.b64encode(buf.getvalue()).decode('utf-8')
                 html += f'<img src="data:image/png;base64,{data_uri}" style="max-width: 100%;"/>'
             buf.close()
-    
-    # 🟢 NEW: เพิ่ม Footer ของ Report
+            
+    # Footer
     html += """
     <div class="report-footer">
       &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
