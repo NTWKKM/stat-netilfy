@@ -33,7 +33,9 @@ def calculate_descriptive(df, col):
         }).sort_values("Count", ascending=False)
 
 def calculate_chi2(df, col1, col2, correction=True):
-    """(COPY จาก correlation.py) คำนวณ Chi-square พร้อมตาราง 2 ชั้นและ Risk Interpretation"""
+    """
+    (เหมือน correlation.py) คำนวณ Chi-square พร้อมตาราง 2 ชั้น และ Risk Interpretation
+    """
     if col1 not in df.columns or col2 not in df.columns: 
         return None, None, "Columns not found", None
     
@@ -42,7 +44,7 @@ def calculate_chi2(df, col1, col2, correction=True):
     # 1. Contingency Table
     tab_chi2 = pd.crosstab(data[col1], data[col2])
     
-    # 2. Display Table (Count/%)
+    # 2. Display Table
     tab_raw = pd.crosstab(data[col1], data[col2], margins=True, margins_name="Total")
     tab_row_pct = pd.crosstab(data[col1], data[col2], normalize='index', margins=True, margins_name="Total") * 100
     tab_total_pct = pd.crosstab(data[col1], data[col2], normalize='all', margins=True, margins_name="Total") * 100
@@ -79,7 +81,7 @@ def calculate_chi2(df, col1, col2, correction=True):
             "Test": method_name, "Statistic": chi2, "P-value": p, "Degrees of Freedom": dof, "N": len(data)
         }
         
-        # 4. Risk Interpretation
+        # 4. Risk Measures
         risk_df = None
         if tab_chi2.shape == (2, 2):
             try:
@@ -96,7 +98,7 @@ def calculate_chi2(df, col1, col2, correction=True):
                 risk_exp = a / (a + b) if (a + b) > 0 else 0
                 risk_unexp = c / (c + d) if (c + d) > 0 else 0
                 rr = risk_exp / risk_unexp if risk_unexp > 0 else np.nan
-                rd = risk_exp - risk_unexp
+                rd = risk_exp - risk_unexp 
                 nnt = abs(1/rd) if rd != 0 else np.inf
                 odd_ratio, _ = stats.fisher_exact(tab_chi2)
                 
@@ -141,7 +143,6 @@ def auc_ci_delong(y_true, y_scores):
     return auc - 1.96*se_auc, auc + 1.96*se_auc, se_auc
 
 def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
-    # (คงเดิมตาม diag_test.py เก่า แต่เพิ่มการ Return 4 ค่าแบบที่คุณเคยแก้)
     data = df[[truth_col, score_col]].dropna()
     y_true_raw = data[truth_col]
     y_score = pd.to_numeric(data[score_col], errors='coerce').dropna()
@@ -165,7 +166,7 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
         "AUC": auc_val, "SE": se, "95% CI Lower": max(0, ci_lower), "95% CI Upper": min(1, ci_upper),
         "Method": m_name, "P-value": p_val_auc, "Youden J": j_scores[best_idx],
         "Best Cut-off": thresholds[best_idx], "Sensitivity": tpr[best_idx], "Specificity": 1-fpr[best_idx],
-        "N(+)": n1, "N(-)": n0
+        "N(+)": n1, "N(-)": n0, "Positive Label": pos_label_user
     }
     
     fig, ax = plt.subplots(figsize=(6, 5))
@@ -177,7 +178,9 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
     return stats_res, None, fig, coords_df
 
 def generate_report(title, elements):
-    # (COPY จาก correlation.py มาใส่ที่นี่ เพื่อให้ Report สวยเหมือนกัน)
+    """
+    สร้าง HTML Report พร้อมแก้ไข Bug Header
+    """
     css_style = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; margin: 0; color: #333; }
@@ -204,17 +207,25 @@ def generate_report(title, elements):
         
         if element_type == 'text': html += f"<p>{data}</p>"
         elif element_type == 'table': 
-            # ไม่แสดง Index ถ้าเป็น Risk table
             idx = not ('Interpretation' in data.columns)
             html += data.to_html(index=idx, classes='report-table')
+            
         elif element_type == 'contingency_table':
-            df_html = data.to_html(index=True, classes='report-table', header=False)
+            # 🟢 FIX: header=True
+            df_html = data.to_html(index=True, classes='report-table', header=True)
             col_names = data.columns.tolist()
-            idx_name = data.index.name
+            idx_name = data.index.name if data.index.name else "Variable 1"
             out_name = element.get('outcome_col', 'Outcome')
             h1 = f"<tr><th rowspan='2' class='report-table' style='text-align: left;'>{idx_name}</th><th colspan='{len(col_names)}' class='report-table'>{out_name}</th></tr>"
             h2 = "<tr>" + "".join([f"<th class='report-table'>{c}</th>" for c in col_names]) + "</tr>"
-            html += df_html.split('<thead>')[0] + f"<thead>{h1}{h2}</thead>" + df_html.split('</thead>')[1]
+            try:
+                table_start = df_html.split('<thead>')[0]
+                table_end = df_html.split('</thead>')[1]
+                custom_header = f"<thead>{h1}{h2}</thead>"
+                html += table_start + custom_header + table_end
+            except:
+                html += df_html
+
         elif element_type == 'plot':
             buf = io.BytesIO()
             if isinstance(data, plt.Figure):
