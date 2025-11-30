@@ -1,42 +1,11 @@
 import pandas as pd
 import numpy as np
 import scipy.stats as stats
-from sklearn.metrics import roc_curve, roc_auc_score
 import matplotlib.pyplot as plt
 import io, base64
 
-def calculate_descriptive(df, col):
-    """คำนวณสถิติพื้นฐาน"""
-    if col not in df.columns: return "Column not found"
-    data = df[col].dropna()
-    try:
-        num_data = pd.to_numeric(data, errors='raise')
-        is_numeric = True
-    except:
-        is_numeric = False
-        
-    if is_numeric:
-        desc = num_data.describe()
-        return pd.DataFrame({
-            "Statistic": ["Count", "Mean", "SD", "Median", "Min", "Max", "Q1 (25%)", "Q3 (75%)"],
-            "Value": [
-                f"{desc['count']:.0f}", f"{desc['mean']:.4f}", f"{desc['std']:.4f}",
-                f"{desc['50%']:.4f}", f"{desc['min']:.4f}", f"{desc['max']:.4f}",
-                f"{desc['25%']:.4f}", f"{desc['75%']:.4f}"
-            ]
-        })
-    else:
-        counts = data.value_counts()
-        percent = data.value_counts(normalize=True) * 100
-        return pd.DataFrame({
-            "Category": counts.index, "Count": counts.values, "Percentage (%)": percent.values
-        }).sort_values("Count", ascending=False)
-
 def calculate_chi2(df, col1, col2, correction=True):
-    """
-    (SYNCED WITH correlation.py)
-    คำนวณ Chi-square พร้อมตาราง 2 ชั้น, Risk Interpretation และการจัดเรียง Label (1 ก่อน 0)
-    """
+    """คำนวณ Chi-square พร้อมสร้างตาราง 2 ชั้น และบังคับเรียง 1, 0"""
     if col1 not in df.columns or col2 not in df.columns: 
         return None, None, "Columns not found", None
     
@@ -47,32 +16,41 @@ def calculate_chi2(df, col1, col2, correction=True):
     tab_raw = pd.crosstab(data[col1], data[col2], margins=True, margins_name="Total")
     tab_row_pct = pd.crosstab(data[col1], data[col2], normalize='index', margins=True, margins_name="Total") * 100
     
-    # --- 🟢 START SYNC: REORDERING LOGIC (1 ก่อน 0) ---
+    # --- 🟢 FIX: Reorder Columns (Outcome) and Rows (Exposure) to put '1' first ---
+    
+    # 1. แยก Label หลักออกจาก 'Total'
     all_col_labels = tab_raw.columns.tolist() 
     all_row_labels = tab_raw.index.tolist()
     base_col_labels = [col for col in all_col_labels if col != 'Total']
     base_row_labels = [row for row in all_row_labels if row != 'Total']
 
+    # 2. Custom Sort: เรียงตามค่าตัวเลขมากไปน้อย (เพื่อบังคับให้ 1, 0)
     def custom_sort(label):
         try:
+            # พยายามแปลงเป็น float สำหรับการเรียงตัวเลข
             return float(label)
         except (ValueError, TypeError):
+            # สำหรับ string หรือค่าที่ไม่ใช่ตัวเลข (ให้ใช้ค่า string นั้น)
             return str(label)
 
-    base_col_labels.sort(key=custom_sort, reverse=True)
-    base_row_labels.sort(key=custom_sort, reverse=True)
+    base_col_labels.sort(key=custom_sort, reverse=True) # เช่น [1, 0]
+    base_row_labels.sort(key=custom_sort, reverse=True) # เช่น [1, 0]
 
+    # 3. กำหนดลำดับสุดท้าย (รวม 'Total')
     final_col_order = base_col_labels + ['Total'] 
     final_row_order = base_row_labels + ['Total']
 
+    # 4. Reindex ตารางทั้งหมดตามลำดับใหม่
     tab_raw = tab_raw.reindex(index=final_row_order, columns=final_col_order)
     tab_row_pct = tab_row_pct.reindex(index=final_row_order, columns=final_col_order)
-    tab_chi2 = tab_chi2.reindex(index=base_row_labels, columns=base_col_labels)
+    tab_chi2 = tab_chi2.reindex(index=base_row_labels, columns=base_col_labels) # tab_chi2 ไม่มี 'Total'
     
+    # 5. Update iteration lists
     col_names = final_col_order 
     index_names = final_row_order
-    # --- 🟢 END SYNC: REORDERING LOGIC ---
 
+    # --- 🟢 END REORDERING FIX ---
+    
     display_data = []
     
     for row_name in index_names:
@@ -80,13 +58,12 @@ def calculate_chi2(df, col1, col2, correction=True):
         for col_name in col_names:
             count = tab_raw.loc[row_name, col_name]
             
-            # 🟢 FIX: Handle 'Total' column explicitly (KeyError fix)
+            # แก้ KeyError: 'Total'
             if col_name == 'Total':
                 pct = 100.0
             else:
                 pct = tab_row_pct.loc[row_name, col_name]
                 
-            # 🟢 FIX: Format only Count (Row%)
             cell_content = f"{count} ({pct:.1f}%)"
             row_data.append(cell_content)
             
@@ -109,7 +86,7 @@ def calculate_chi2(df, col1, col2, correction=True):
             "Test": method_name, "Statistic": chi2, "P-value": p, "Degrees of Freedom": dof, "N": len(data)
         }
         
-        # 4. Risk Calculation
+        # 4. Risk Calculation (ใช้ tab_chi2 ที่ reindex แล้ว)
         risk_df = None
         if tab_chi2.shape == (2, 2):
             try:
@@ -117,6 +94,7 @@ def calculate_chi2(df, col1, col2, correction=True):
                 a, b = vals[0, 0], vals[0, 1]
                 c, d = vals[1, 0], vals[1, 1]
                 
+                # Label ถูกดึงมาอย่างถูกลำดับแล้ว (1 ก่อน 0)
                 row_labels = tab_chi2.index.tolist(); col_labels = tab_chi2.columns.tolist()
                 label_exp = str(row_labels[0]); label_unexp = str(row_labels[1]); label_event = str(col_labels[0])
                 
@@ -141,72 +119,24 @@ def calculate_chi2(df, col1, col2, correction=True):
     except Exception as e:
         return display_tab, None, str(e), None
 
-# --- ROC Functions (คงเดิม) ---
-
-def auc_ci_hanley_mcneil(auc, n1, n2):
-    q1 = auc / (2 - auc); q2 = 2 * (auc**2) / (1 + auc)
-    se_auc = np.sqrt(((auc * (1 - auc)) + (n1 - 1)*(q1 - auc**2) + (n2 - 1)*(q2 - auc**2)) / (n1 * n2))
-    return auc - 1.96 * se_auc, auc + 1.96 * se_auc, se_auc
-
-def auc_ci_delong(y_true, y_scores):
-    y_true = np.array(y_true); y_scores = np.array(y_scores)
-    desc_score_indices = np.argsort(y_scores, kind="mergesort")[::-1]
-    y_scores = y_scores[desc_score_indices]; y_true = y_true[desc_score_indices]
-    distinct_value_indices = np.where(np.diff(y_scores))[0]
-    threshold_idxs = np.r_[distinct_value_indices, y_true.size - 1]
-    tps = np.cumsum(y_true)[threshold_idxs]; fps = 1 + threshold_idxs - tps
-    n_pos = tps[-1]; n_neg = fps[-1]
-    if n_pos == 0 or n_neg == 0: return np.nan, np.nan, np.nan
-    auc = roc_auc_score(y_true, y_scores)
-    pos_scores = y_scores[y_true == 1]; neg_scores = y_scores[y_true == 0]
-    v10 = []; v01 = []
-    for p in pos_scores: v10.append( (np.sum(p > neg_scores) + 0.5*np.sum(p == neg_scores)) / n_neg )
-    for n in neg_scores: v01.append( (np.sum(pos_scores > n) + 0.5*np.sum(pos_scores == n)) / n_pos )
-    s10 = np.var(v10, ddof=1); s01 = np.var(v01, ddof=1)
-    se_auc = np.sqrt((s10 / n_pos) + (s01 / n_neg))
-    return auc - 1.96*se_auc, auc + 1.96*se_auc, se_auc
-
-def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
-    data = df[[truth_col, score_col]].dropna()
-    y_true_raw = data[truth_col]
-    y_score = pd.to_numeric(data[score_col], errors='coerce').dropna()
-    y_true_raw = y_true_raw.loc[y_score.index]
-    
-    if y_true_raw.nunique() != 2 or pos_label_user is None:
-        return None, "Error: Binary outcome required.", None, None
-
-    y_true = np.where(y_true_raw.astype(str) == pos_label_user, 1, 0)
-    fpr, tpr, thresholds = roc_curve(y_true, y_score)
-    auc_val = roc_auc_score(y_true, y_score)
-    n1 = sum(y_true == 1); n0 = sum(y_true == 0)
-    
-    if method == 'delong': ci_lower, ci_upper, se = auc_ci_delong(y_true, y_score.values); m_name = "DeLong"
-    else: ci_lower, ci_upper, se = auc_ci_hanley_mcneil(auc_val, n1, n0); m_name = "Hanley"
-    
-    p_val_auc = stats.norm.sf(abs((auc_val - 0.5)/se))*2 if se > 0 else 0.0
-    j_scores = tpr - fpr; best_idx = np.argmax(j_scores)
-    
-    stats_res = {
-        "AUC": auc_val, "SE": se, "95% CI Lower": max(0, ci_lower), "95% CI Upper": min(1, ci_upper),
-        "Method": m_name, "P-value": p_val_auc, "Youden J": j_scores[best_idx],
-        "Best Cut-off": thresholds[best_idx], "Sensitivity": tpr[best_idx], "Specificity": 1-fpr[best_idx],
-        "N(+)": n1, "N(-)": n0, "Positive Label": pos_label_user
-    }
-    
-    fig, ax = plt.subplots(figsize=(6, 5))
-    ax.plot(fpr, tpr, color='darkorange', lw=2, label=f'AUC={auc_val:.3f}'); ax.plot([0,1],[0,1],'k--')
-    ax.plot(1-(1-fpr[best_idx]), tpr[best_idx], 'ro')
-    ax.set_xlabel('1-Specificity'); ax.set_ylabel('Sensitivity'); ax.legend()
-    
-    coords_df = pd.DataFrame({'Threshold': thresholds, 'Sens': tpr, 'Spec': 1-fpr}).round(4)
-    return stats_res, None, fig, coords_df
+def calculate_correlation(df, col1, col2, method='pearson'):
+    # (ส่วนนี้คงเดิม)
+    if col1 not in df.columns or col2 not in df.columns: return None, "Columns not found", None
+    data = df[[col1, col2]].dropna()
+    try:
+        v1 = pd.to_numeric(data[col1], errors='raise'); v2 = pd.to_numeric(data[col2], errors='raise')
+    except: return None, f"Error: Numeric required.", None
+    if method == 'pearson': corr, p = stats.pearsonr(v1, v2); name="Pearson"; desc="Linear"
+    else: corr, p = stats.spearmanr(v1, v2); name="Spearman"; desc="Monotonic"
+    fig, ax = plt.subplots(figsize=(6, 4)); ax.scatter(v1, v2, alpha=0.6, edgecolors='w', s=50)
+    if method == 'pearson':
+        try: m, b = np.polyfit(v1, v2, 1); ax.plot(v1, m*v1 + b, 'r--', alpha=0.8)
+        except: pass
+    ax.set_xlabel(col1); ax.set_ylabel(col2); ax.set_title(f"{col1} vs {col2}"); ax.grid(True, alpha=0.3)
+    return {"Method": name, "Coefficient": corr, "P-value": p, "N": len(data)}, None, fig
 
 def generate_report(title, elements):
-    """
-    (SYNCED WITH correlation.py)
-    สร้าง HTML Report โดย Manual Construction ตาราง Contingency Table 
-    ตาม Layout ที่ User ต้องการ (Header 2 ชั้น, แถวแรกว่างซ้าย)
-    """
+    # (ส่วนนี้คงเดิม เพราะ Layout ถูกต้องแล้ว)
     css_style = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; margin: 0; color: #333; }
@@ -243,7 +173,6 @@ def generate_report(title, elements):
             exp_name = data.index.name         
             out_name = element.get('outcome_col', 'Outcome')
             
-            # Start Table
             html_tab = "<table>"
             
             # --- Header Row 1 ---
