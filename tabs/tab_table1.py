@@ -10,7 +10,8 @@ def render(df, var_meta):
     * **Numeric:** Mean ± SD (Normally Distributed Data) or Median (IQR) (**Non**-Normally Distributed Data).
     * **Categorical:** Count (Percentage).
     * **P-value & Test Used:** Tests for statistically significant differences in characteristics across groups. 
-                            ** automatically selects the appropriate test** (e.g., t-test, Chi-square, Kruskal-Wallis) based on the variable type and distribution.
+    
+    **automatically selects the appropriate test** (e.g., t-test, Chi-square, Kruskal-Wallis) based on the variable type and distribution.
 
     **Variable Selection:**
     * **Grouping Variable (Split):** The primary categorical variable used to stratify the **dataset** (e.g., 'Treatment' or 'Outcome').
