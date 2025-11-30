@@ -270,7 +270,7 @@ def generate_table(df, selected_vars, group_col, var_meta):
     
     html += """
     <div class="report-footer">
-      &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
+      &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="color: inherit; text-decoration: none; font-weight: 700; border-bottom: 1px dotted var(--text-muted);">NTWKKM</a>. All Rights Reserved.| Powered by GitHub, Gemini, Streamlit
     </div>
     """
 
