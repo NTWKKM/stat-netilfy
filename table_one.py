@@ -268,10 +268,8 @@ def generate_table(df, selected_vars, group_col, var_meta):
     html += "<div class='footer-note'>Data presented as Mean \u00B1 SD (Numeric, assuming normal) or n (%). P-values calculated using automated selection: t-test/ANOVA (Normal), Mann-Whitney U/Kruskal-Wallis (Non-normal), or Chi-square/Fisher's Exact (Categorical).</div>"
     html += "</div></body></html>"
     
-    html += """
-    <div class="report-footer">
-      &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank");">NTWKKM</a>. All Rights Reserved.| Powered by GitHub, Gemini, Streamlit
-    </div>
-    """
+    html += """<div class='report-footer'>
+    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
+    </div></body></html>"""
 
     return html
