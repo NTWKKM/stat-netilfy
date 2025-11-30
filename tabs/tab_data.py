@@ -16,7 +16,6 @@ def check_data_quality(df, container):
         # 2. Identify text errors (neither number, nor empty/NaN)
         original_vals = df[col].astype(str).str.strip()
         
-        # Check conditions: NaN in numeric but string is NOT empty/nan/none
         is_text_error = numeric_vals.isna() & (original_vals != '') & \
                         (original_vals.str.lower() != 'nan') & (original_vals.str.lower() != 'none')
         
@@ -37,33 +36,34 @@ def check_data_quality(df, container):
                 val_str = ", ".join(map(str, bad_values[:3]))
                 if len(bad_values) > 3: val_str += ", ..."
 
-                # Construct detailed message
-                msg = (f"⚠️ **Column '{col}':** Found {error_count} non-numeric values.<br>"
-                       f"&nbsp;&nbsp;&nbsp;&nbsp;• **Rows:** {row_str}<br>"
-                       f"&nbsp;&nbsp;&nbsp;&nbsp;• **Values:** `{val_str}`<br>"
-                       f"&nbsp;&nbsp;&nbsp;&nbsp;*(These will be treated as Missing Values)*")
+                # 🟢 UPDATE: Use Markdown syntax instead of HTML for better rendering
+                msg = (f"**Column '{col}':** Found {error_count} non-numeric values.\n"
+                       f"- **Rows:** {row_str}\n"
+                       f"- **Values:** `{val_str}`\n"
+                       f"*(These will be treated as Missing Values)*")
                 warnings.append(msg)
 
     # Display Warning in the placeholder container
     if warnings:
-        container.warning("### 🧐 Data Quality Issue Detected\n" + "\n\n".join(warnings), icon="⚠️")
-    else:
-        # Optional: Show green success message
-        pass
+        # Join with double newlines for paragraph separation
+        container.warning("### 🧐 Data Quality Issue Detected\n\n" + "\n\n".join(warnings), icon="⚠️")
 
 def render(df):
     st.subheader("Raw Data Table")
     
-    # 🟢 NEW: ส่วนตั้งค่า Custom Missing Values
-    with st.expander("⚙️ Data Cleaning Settings (Define Missing Values)", expanded=False):
-        st.markdown("Specify values to be treated as **Missing Data (NaN)** (e.g. `-99`, `999`, `?`)")
+    # 🟢 UPDATE: Compact Custom Missing Values Input (1 Line Layout)
+    # ใช้ Columns เพื่อให้ Label กับช่องกรอกอยู่บรรทัดเดียวกัน ประหยัดที่
+    c1, c2 = st.columns([1, 3]) 
+    with c1:
+        st.markdown("##### ⚙️ Custom Missing Values:") # Label Text
+    with c2:
         missing_input = st.text_input(
-            "Custom Missing Values (comma separated):", 
+            "Define Missing Values", # Internal label (hidden)
             value="", 
-            placeholder="-99, 999, ?",
-            key="custom_missing_vals"
+            placeholder="e.g. -99, 999, ?",
+            label_visibility="collapsed" # ซ่อน Label ของ Input เพื่อให้เรียงต่อกับ c1 ได้สวยๆ
         )
-        
+
     st.info("💡 You can view, scroll, and edit your raw data below. (Text inputs allowed)")
     
     # 1. Placeholder for Warnings
@@ -72,8 +72,7 @@ def render(df):
     # 2. Prepare custom missing list
     custom_na_list = [x.strip() for x in missing_input.split(',') if x.strip() != '']
     
-    # 3. Convert to String for Editor (Handle 'nan' string display)
-    # ถ้าค่าเดิมเป็น NaN อยู่แล้ว ให้แสดงเป็นว่างๆ
+    # 3. Convert to String for Editor
     df_display = df.astype(str).replace('nan', '')
     
     # 4. Render Editor
@@ -89,19 +88,18 @@ def render(df):
     df_final = edited_df.copy()
     
     for col in df_final.columns:
-        # 🟢 5.1: Replace Custom Missing Values with actual NaN (Before conversion)
+        # 5.1: Replace Custom Missing Values
         if custom_na_list:
-            # Replace exact matches (e.g. "-99") with NaN
             df_final[col] = df_final[col].replace(custom_na_list, np.nan)
         
         try:
             # Try converting strict numeric
             df_final[col] = pd.to_numeric(df_final[col], errors='raise')
         except:
-            # If failed, convert only valid numbers (keep text as is)
+            # Mixed type fallback
             df_final[col] = pd.to_numeric(df_final[col], errors='ignore')
 
-    # 6. Check Quality and Update Warning Box
+    # 6. Check Quality
     check_data_quality(df_final, warning_container)
 
     return df_final
