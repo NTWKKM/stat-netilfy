@@ -4,8 +4,8 @@ import numpy as np
 
 def check_data_quality(df, container):
     """
-    Data Quality Checker (English Version)
-    Identifies non-numeric values in numeric-like columns and reports specific rows.
+    Data Quality Checker (English Version - Compact Mode)
+    Identifies non-numeric values and reports them concisely in 1-2 lines.
     """
     warnings = []
     
@@ -13,9 +13,8 @@ def check_data_quality(df, container):
         # 1. Try converting to numeric
         numeric_vals = pd.to_numeric(df[col], errors='coerce')
         
-        # 2. Identify text errors (neither number, nor empty/NaN)
+        # 2. Identify text errors
         original_vals = df[col].astype(str).str.strip()
-        
         is_text_error = numeric_vals.isna() & (original_vals != '') & \
                         (original_vals.str.lower() != 'nan') & (original_vals.str.lower() != 'none')
         
@@ -23,50 +22,48 @@ def check_data_quality(df, container):
             total_rows = len(df)
             error_count = is_text_error.sum()
             
-            # Rule: If >80% is numeric but has some text -> Warn
             if error_count < (total_rows * 0.8): 
-                # Get specific rows and values
                 error_rows = df.index[is_text_error].tolist()
                 bad_values = df.loc[is_text_error, col].unique()
                 
-                # Format the row list
-                row_str = ", ".join(map(str, error_rows[:10]))
-                if len(error_rows) > 10: row_str += ", ..."
+                # Format Lists nicely
+                row_str = ",".join(map(str, error_rows[:5])) # Show top 5 rows
+                if len(error_rows) > 5: row_str += "..."
                 
-                val_str = ", ".join(map(str, bad_values[:3]))
-                if len(bad_values) > 3: val_str += ", ..."
+                val_str = ",".join(map(str, bad_values[:3])) # Show top 3 values
+                if len(bad_values) > 3: val_str += "..."
 
-                # Markdown Syntax Message
-                msg = (f"**Column '{col}':** Found {error_count} non-numeric values.\n"
-                       f"- **Rows:** {row_str}\n"
-                       f"- **Values:** `{val_str}`\n"
-                       f"*(These will be treated as Missing Values)*")
+                # 🟢 Compact Message (1-2 Lines)
+                msg = (f"⚠️ **Column '{col}':** Found {error_count} non-numeric values at **Rows:** `{row_str}` "
+                       f"(Values: `{val_str}`). **Action:** Treated as Missing (NaN).")
                 warnings.append(msg)
 
-    # Display Warning in the placeholder container
+    # Display Warnings cleanly
     if warnings:
-        container.warning("### 🧐 Data Quality Issue Detected\n\n" + "\n\n".join(warnings), icon="⚠️")
+        # ใช้ \n ตัวเดียวเพื่อให้บรรทัดชิดกันมากขึ้น
+        container.warning("### 🧐 Data Quality Issue Detected\n" + "\n".join(warnings), icon="⚠️")
 
 def render(df):
     st.subheader("Raw Data Table")
     
-    # 🟢 UPDATE: ปรับขนาดตัวอักษร และเพิ่มคำอธิบาย
-    # ใช้สัดส่วน 1.5 : 2.5 เพื่อให้ข้อความคำอธิบายมีพื้นที่พอไม่บีบเกินไป
-    c1, c2 = st.columns([1.5, 2.5]) 
+    # 🟢 UPDATE: ปรับ Layout ให้ Input สั้นลง (ใช้ 3 columns)
+    # c1 = Label & Caption (กว้างหน่อย)
+    # c2 = Input Box (กว้างพอดีๆ ไม่ยาวเกิน)
+    # c3 = Spacer (พื้นที่ว่างด้านขวา เพื่อบีบ c2 ให้ไม่ยืดจนสุด)
+    c1, c2, c3 = st.columns([3, 2, 5]) 
+    
     with c1:
-        # ปรับเป็นตัวหนาธรรมดา (ขนาดเท่าข้อความปกติ)
         st.markdown("**⚙️ Custom Missing Values:**")
-        # เพิ่มคำอธิบายด้านล่าง
-        st.caption("Specify values to be treated as **Missing Data (NaN)** (e.g. `-99`, `999`, `?`)")
+        st.caption("Values to treat as **NaN** (e.g. `-99`, `?`)")
         
     with c2:
-        # ขยับ Input ลงมานิดหน่อยเพื่อให้ตรงกับ Text ด้านซ้าย (ใช้ container ช่วยจัดได้ แต่ปล่อยธรรมชาติก็พอไหว)
         missing_input = st.text_input(
             "Define Missing Values", 
             value="", 
-            placeholder="e.g. -99, 999, ?",
+            placeholder="e.g. -99, 999",
             label_visibility="collapsed"
         )
+    # c3 ปล่อยว่างไว้
 
     st.info("💡 You can view, scroll, and edit your raw data below. (Text inputs allowed)")
     
@@ -97,10 +94,8 @@ def render(df):
             df_final[col] = df_final[col].replace(custom_na_list, np.nan)
         
         try:
-            # Try converting strict numeric
             df_final[col] = pd.to_numeric(df_final[col], errors='raise')
         except:
-            # Mixed type fallback
             df_final[col] = pd.to_numeric(df_final[col], errors='ignore')
 
     # 6. Check Quality
