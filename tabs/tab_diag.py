@@ -11,10 +11,11 @@ def render(df, var_meta):
     with sub_tab1:
         st.markdown("##### ROC Curve Analysis")
         st.info("""
-            **💡 Guide:** Evaluates the performance of a **continuous diagnostic test** against a binary **Gold Standard**.
-            * **AUC (Area Under Curve):** Measures overall performance (0.5 = random, 1.0 = perfect).
-            * **Youden Index:** Identifies the optimal cut-off point maximizing Sensitivity + Specificity.
-            * **P-value:** Tests if AUC is significantly different from 0.5.
+    **💡 Guide:** Evaluates the performance of a **continuous diagnostic test** (e.g., a lab score or risk index) against a **binary Gold Standard** (e.g., 'cancer' or 'not cancer').
+
+    * **AUC (Area Under Curve):** Measures overall diagnostic performance (0.5 = random, 1.0 = perfect).
+    * **Youden Index:** Identifies the **optimal cut-off point** maximizing (Sensitivity + Specificity - 1).
+    * **P-value:** Tests if the AUC is significantly different from 0.5 (i.e., whether the test is better than chance).
         """)
         
         rc1, rc2, rc3, rc4 = st.columns(4)
