@@ -34,17 +34,17 @@ def calculate_descriptive(df, col):
 
 def calculate_chi2(df, col1, col2, correction=True):
     """
-    (เหมือน correlation.py) คำนวณ Chi-square พร้อมตาราง 2 ชั้น และ Risk Interpretation
+    คำนวณ Chi-square พร้อมตาราง 2 ชั้น และ Risk Interpretation
     """
     if col1 not in df.columns or col2 not in df.columns: 
         return None, None, "Columns not found", None
     
     data = df[[col1, col2]].dropna()
     
-    # 1. Contingency Table
+    # 1. Contingency Table (Frequency Count for Chi2 calculation)
     tab_chi2 = pd.crosstab(data[col1], data[col2])
     
-    # 2. Display Table
+    # 2. สร้างตาราง Display (Format: Count (Row%) / (Total%))
     tab_raw = pd.crosstab(data[col1], data[col2], margins=True, margins_name="Total")
     tab_row_pct = pd.crosstab(data[col1], data[col2], normalize='index', margins=True, margins_name="Total") * 100
     tab_total_pct = pd.crosstab(data[col1], data[col2], normalize='all', margins=True, margins_name="Total") * 100
@@ -58,6 +58,7 @@ def calculate_chi2(df, col1, col2, correction=True):
         for col_name in col_names:
             count = tab_raw.loc[row_name, col_name]
             total_pct = tab_total_pct.loc[row_name, col_name]
+            
             if col_name == 'Total' and row_name == 'Total':
                 cell_content = f"{count} / ({total_pct:.1f}%)"
             elif col_name == 'Total' or row_name == 'Total':
@@ -69,37 +70,48 @@ def calculate_chi2(df, col1, col2, correction=True):
     
     display_tab = pd.DataFrame(display_data, columns=[col1] + col_names).set_index(col1)
 
-    # 3. Stats
+    # 3. คำนวณ Chi-square Stats
     try:
         chi2, p, dof, ex = stats.chi2_contingency(tab_chi2, correction=correction)
+        
         method_name = "Chi-Square"
         if tab_chi2.shape == (2, 2):
             method_name += " (with Yates' Correction)" if correction else " (Pearson Uncorrected)"
+            
         msg = f"{method_name}: Chi2={chi2:.4f}, p={p:.4f}"
         
         stats_res = {
-            "Test": method_name, "Statistic": chi2, "P-value": p, "Degrees of Freedom": dof, "N": len(data)
+            "Test": method_name,
+            "Statistic": chi2,
+            "P-value": p,
+            "Degrees of Freedom": dof,
+            "N": len(data)
         }
         
-        # 4. Risk Measures
+        # 4. สร้างตาราง Risk Measures พร้อม Interpretation
         risk_df = None
         if tab_chi2.shape == (2, 2):
             try:
-                vals = tab_chi2.values
-                a, b = vals[0, 0], vals[0, 1]
-                c, d = vals[1, 0], vals[1, 1]
-                
+                # ดึง Label เพื่อมาทำ Interpretation
                 row_labels = tab_chi2.index.tolist()
                 col_labels = tab_chi2.columns.tolist()
+                
                 label_exp = str(row_labels[0])
                 label_unexp = str(row_labels[1])
                 label_event = str(col_labels[0])
                 
+                vals = tab_chi2.values
+                a, b = vals[0, 0], vals[0, 1]
+                c, d = vals[1, 0], vals[1, 1]
+                
+                # Calculations
                 risk_exp = a / (a + b) if (a + b) > 0 else 0
                 risk_unexp = c / (c + d) if (c + d) > 0 else 0
+                
                 rr = risk_exp / risk_unexp if risk_unexp > 0 else np.nan
                 rd = risk_exp - risk_unexp 
                 nnt = abs(1/rd) if rd != 0 else np.inf
+                
                 odd_ratio, _ = stats.fisher_exact(tab_chi2)
                 
                 risk_data = [
@@ -111,14 +123,17 @@ def calculate_chi2(df, col1, col2, correction=True):
                     {"Statistic": "Odds Ratio (OR)", "Value": f"{odd_ratio:.4f}", "Interpretation": "Odds of Event (Exp vs Unexp)"}
                 ]
                 risk_df = pd.DataFrame(risk_data)
-            except: pass
+                
+            except Exception as e:
+                pass 
 
         return display_tab, stats_res, msg, risk_df 
 
     except Exception as e:
         return display_tab, None, str(e), None
 
-# --- ROC Functions (คงเดิม) ---
+# --- ROC Functions ---
+
 def auc_ci_hanley_mcneil(auc, n1, n2):
     q1 = auc / (2 - auc); q2 = 2 * (auc**2) / (1 + auc)
     se_auc = np.sqrt(((auc * (1 - auc)) + (n1 - 1)*(q1 - auc**2) + (n2 - 1)*(q2 - auc**2)) / (n1 * n2))
@@ -179,7 +194,7 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
 
 def generate_report(title, elements):
     """
-    สร้าง HTML Report พร้อมแก้ไข Bug Header
+    สร้าง HTML Report โดยสร้างตารางเอง (Manual Construction) เพื่อป้องกัน Bug
     """
     css_style = """
     <style>
@@ -211,21 +226,41 @@ def generate_report(title, elements):
             html += data.to_html(index=idx, classes='report-table')
             
         elif element_type == 'contingency_table':
-            # 🟢 FIX: header=True
-            df_html = data.to_html(index=True, classes='report-table', header=True)
+            # 🟢 FIX: สร้าง HTML เอง (Manual HTML Construction) แทนการใช้ to_html แล้ว replace
+            # เพื่อแก้ปัญหาโครงสร้างตารางพังหรือ Header หาย
             col_names = data.columns.tolist()
-            idx_name = data.index.name if data.index.name else "Variable 1"
+            idx_name = data.index.name
             out_name = element.get('outcome_col', 'Outcome')
-            h1 = f"<tr><th rowspan='2' class='report-table' style='text-align: left;'>{idx_name}</th><th colspan='{len(col_names)}' class='report-table'>{out_name}</th></tr>"
-            h2 = "<tr>" + "".join([f"<th class='report-table'>{c}</th>" for c in col_names]) + "</tr>"
-            try:
-                table_start = df_html.split('<thead>')[0]
-                table_end = df_html.split('</thead>')[1]
-                custom_header = f"<thead>{h1}{h2}</thead>"
-                html += table_start + custom_header + table_end
-            except:
-                html += df_html
-
+            
+            # Start Table
+            html_tab = "<table class='report-table'>"
+            
+            # Header Row 1
+            html_tab += "<thead><tr>"
+            html_tab += f"<th rowspan='2' class='report-table' style='text-align: left;'>{idx_name}</th>"
+            html_tab += f"<th colspan='{len(col_names)}' class='report-table'>{out_name}</th>"
+            html_tab += "</tr>"
+            
+            # Header Row 2
+            html_tab += "<tr>"
+            for c in col_names:
+                html_tab += f"<th class='report-table'>{c}</th>"
+            html_tab += "</tr></thead>"
+            
+            # Body
+            html_tab += "<tbody>"
+            for index, row in data.iterrows():
+                html_tab += "<tr>"
+                # Index cell
+                html_tab += f"<td class='report-table' style='text-align: left; font-weight: bold;'>{index}</td>"
+                # Data cells
+                for val in row:
+                    html_tab += f"<td class='report-table'>{val}</td>"
+                html_tab += "</tr>"
+            html_tab += "</tbody></table>"
+            
+            html += html_tab
+            
         elif element_type == 'plot':
             buf = io.BytesIO()
             if isinstance(data, plt.Figure):
