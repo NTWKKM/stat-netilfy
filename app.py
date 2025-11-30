@@ -156,8 +156,8 @@ footer:after {
 """, unsafe_allow_html=True)
 
 st.markdown("""
-<hr style="margin-top: 20px; margin-bottom: 10px; border-color: var(--border-color);">
-<div style='text-align: center; font-size: 0.7em; color: var(--text-color);'>
-   &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank");">NTWKKM</a>. All Rights Reserved.| Powered by GitHub, Gemini, Streamlit
+<hr style="margin-top: 20px; margin-bottom: 10px; border-color: var(--border-color); opacity: 0.5;">
+<div style='text-align: center; font-size: 0.8em; color: var(--text-color); opacity: 0.8;'>
+    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit; font-weight:bold;">NTWKKM</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
 </div>
 """, unsafe_allow_html=True)
