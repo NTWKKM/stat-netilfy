@@ -3,11 +3,18 @@ import table_one # Import จาก root directory
 
 def render(df, var_meta):
     st.subheader("1. Baseline Characteristics (Table 1)")
-    st.markdown("""
-        <div style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 20px;">
-            <p>Generates a summary table of the study population (Mean ± SD, Counts %).</p>
-        </div>
-    """, unsafe_allow_html=True)
+    ##### Baseline Characteristics (Table 1)
+    st.info("""
+    **💡 Guide:** Used to summarize key patient demographics and characteristics, often stratified by a primary **Grouping Variable** (e.g., Treatment Arm or Outcome Status). This table is essential for checking group comparability.
+
+    * **Numeric Variables:** Displayed as **Mean ± Standard Deviation (SD)** for normally distributed data, or **Median (Interquartile Range - IQR)** for non-normally distributed data.
+    * **Categorical Variables:** Displayed as **Count (Percentage)**.
+    * **P-value (Comparison):** Shows if there is a statistically significant difference between the **Grouping Variable's** levels for each characteristic (e.g., Is the average age significantly different between Treatment Group A and Group B?).
+
+    **Variable Selection:**
+    * **Grouping Variable (Split):** The **primary categorical variable** used to divide the cohort (e.g., 'Treatment' or 'Outcome').
+    * **Characteristic Variables:** All other variables (numeric and categorical) to be summarized and compared across the groups.
+    """)
     
     all_cols = df.columns.tolist()
     grp_idx = 0
