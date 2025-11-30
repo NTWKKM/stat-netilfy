@@ -48,18 +48,8 @@ def render(df):
             tab, stats, msg = correlation.calculate_chi2(df, v1, v2, correction=correction_flag)
             
             if tab is not None:
-                # Display Result
-                st.success(f"Result: {msg}")
-                st.table(tab)
-                
-                # Show Risk Estimates if available
-                if "Risk Ratio (RR)" in stats:
-                    st.markdown("---")
-                    st.markdown("**📊 Risk Estimates (2x2 Only):**")
-                    col_res1, col_res2, col_res3 = st.columns(3)
-                    col_res1.metric("Risk Ratio (RR)", f"{stats['Risk Ratio (RR)']:.2f}")
-                    col_res2.metric("Odds Ratio (OR)", f"{stats['Odds Ratio (OR)']:.2f}")
-                    col_res3.metric("NNT", f"{stats['NNT']:.1f}")
+                # 🟢 REMOVED: Immediate display (st.success, st.table, st.metric)
+                # Now only generating report...
                 
                 # Prepare Report
                 display_tab = tab.reset_index()
@@ -117,8 +107,8 @@ def render(df):
                 if err: 
                     st.error(err)
                 else:
-                    st.success(f"**{res['Method']}:** {res['Coefficient']:.4f} (p-value={res['P-value']:.4f})")
-                    st.pyplot(fig)
+                    # 🟢 REMOVED: Immediate display (st.success, st.pyplot)
+                    # Now only generating report...
                     
                     rep = [
                         {'type':'text', 'data':f"Method: {res['Method']}<br>Variables: {cv1} vs {cv2}"},
