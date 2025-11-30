@@ -112,7 +112,7 @@ if st.session_state.df is not None:
     with t4:
         tab_logit.render(df, st.session_state.var_meta)
 
-    st.sidebar.markdown("""
+    st.session_state.markdown("""
     <hr style="margin-top: 20px; margin-bottom: 10px; border-color: var(--border-color);">
     <div style='text-align: center; font-size: 0.7em; color: var(--text-color);'>
       &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
@@ -144,12 +144,13 @@ else:
     * Calculates **Odds Ratio (OR)** and **Adjusted Odds Ratio (AOR)**, controlling for confounding variables.
     """)
     
-st.sidebar.markdown("""
+st.session_state.markdown("""
 <hr style="margin-top: 20px; margin-bottom: 10px; border-color: var(--border-color);">
 <div style='text-align: center; font-size: 0.7em; color: var(--text-color);'>
   &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
 </div>
 """, unsafe_allow_html=True)
+
 # ==========================================
 # 3. GLOBAL CSS (Cleanup)
 # ==========================================
