@@ -6,7 +6,7 @@ def render(df):
     st.subheader("3. Correlation Analysis")
     
     sub_tab1, sub_tab2 = st.tabs([
-        "🎲 Chi-Square & Risk(RR,OR,NNT) (Categorical)", 
+        "🎲 Chi-Square & Risk-RR,OR,NNT (Categorical)", 
         "📈 Pearson/Spearman (Continuous)"
     ])
     
