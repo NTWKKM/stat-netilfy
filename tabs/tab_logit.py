@@ -36,6 +36,7 @@ def render(df, var_meta):
     **Variable Selection:**
     * **Target (Y):** Must be **Binary** (e.g.,Die/Survide, 0/1, Yes/No).
     * **Features (X):** Can be **Numeric** or **Categorical** (e.g., Age, Gender).
+    * **Features (X) Inclusion:** All available features are **automatically included** by default; users can **manually exclude** any unwanted variables.
 """)
     
     all_cols = df.columns.tolist()
