@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import io, base64
 
 def calculate_chi2(df, col1, col2, correction=True):
-    """คำนวณ Chi-square พร้อมสร้างตาราง Display (Count/%) และตาราง Risk Interpretation"""
+    """คำนวณ Chi-square พร้อมสร้างตาราง 2 ชั้น และ Risk Interpretation"""
     if col1 not in df.columns or col2 not in df.columns: 
         return None, None, "Columns not found", None
     
@@ -38,6 +38,7 @@ def calculate_chi2(df, col1, col2, correction=True):
                 cell_content = f"{count} ({row_pct:.1f}%) / ({total_pct:.1f}%)"
             row_data.append(cell_content)
     
+    # สร้าง DataFrame และกำหนด Index name ให้ชัดเจน
     display_tab = pd.DataFrame(display_data, columns=[col1] + col_names).set_index(col1)
 
     # 3. คำนวณ Chi-square Stats
@@ -51,88 +52,48 @@ def calculate_chi2(df, col1, col2, correction=True):
         msg = f"{method_name}: Chi2={chi2:.4f}, p={p:.4f}"
         
         stats_res = {
-            "Test": method_name,
-            "Statistic": chi2,
-            "P-value": p,
-            "Degrees of Freedom": dof,
-            "N": len(data)
+            "Test": method_name, "Statistic": chi2, "P-value": p, "Degrees of Freedom": dof, "N": len(data)
         }
         
-        # 🟢 4. สร้างตาราง Risk Measures พร้อม Interpretation (เลียนแบบ old_diag_test.py)
+        # 4. สร้างตาราง Risk Measures พร้อม Interpretation
         risk_df = None
         if tab_chi2.shape == (2, 2):
             try:
-                # ดึง Label เพื่อมาทำ Interpretation
-                # Assumption: Row 0=Exposed, Row 1=Unexposed | Col 0=Event, Col 1=No Event
-                # หมายเหตุ: การเรียงลำดับขึ้นอยู่กับข้อมูล (เช่น 0, 1 หรือ Yes, No) 
-                # ควรตรวจสอบลำดับข้อมูลจริง แต่ในที่นี้จะยึดตาม Index 0/1
-                
                 vals = tab_chi2.values
                 a, b = vals[0, 0], vals[0, 1]
                 c, d = vals[1, 0], vals[1, 1]
                 
+                # ดึง Label เพื่อมาทำ Interpretation
                 row_labels = tab_chi2.index.tolist()
                 col_labels = tab_chi2.columns.tolist()
-                
                 label_exp = str(row_labels[0])   # R1 Group
                 label_unexp = str(row_labels[1]) # R0 Group
                 label_event = str(col_labels[0]) # Event outcome
                 
-                # Calculations
                 risk_exp = a / (a + b) if (a + b) > 0 else 0
                 risk_unexp = c / (c + d) if (c + d) > 0 else 0
-                
                 rr = risk_exp / risk_unexp if risk_unexp > 0 else np.nan
-                rd = risk_exp - risk_unexp # Absolute Risk Reduction (ARR) if negative
+                rd = risk_exp - risk_unexp 
                 nnt = abs(1/rd) if rd != 0 else np.inf
-                
                 odd_ratio, _ = stats.fisher_exact(tab_chi2)
                 
-                # สร้างตาราง DataFrame
                 risk_data = [
-                    {
-                        "Statistic": f"Risk in {label_exp} (R1)",
-                        "Value": f"{risk_exp:.4f}",
-                        "Interpretation": f"Risk of '{label_event}' in group {label_exp}"
-                    },
-                    {
-                        "Statistic": f"Risk in {label_unexp} (R0)",
-                        "Value": f"{risk_unexp:.4f}",
-                        "Interpretation": f"Baseline Risk of '{label_event}' in group {label_unexp}"
-                    },
-                    {
-                        "Statistic": "Risk Ratio (RR)",
-                        "Value": f"{rr:.4f}",
-                        "Interpretation": f"Risk in {label_exp} is {rr:.2f} times that of {label_unexp}"
-                    },
-                    {
-                        "Statistic": "Risk Difference (RD)",
-                        "Value": f"{rd:.4f}",
-                        "Interpretation": f"Absolute difference (R1 - R0)"
-                    },
-                    {
-                        "Statistic": "Number Needed to Treat (NNT)",
-                        "Value": f"{nnt:.1f}",
-                        "Interpretation": "Patients to treat to prevent/cause 1 outcome"
-                    },
-                    {
-                        "Statistic": "Odds Ratio (OR)",
-                        "Value": f"{odd_ratio:.4f}",
-                        "Interpretation": "Odds of Event (Exp vs Unexp)"
-                    }
+                    {"Statistic": f"Risk in {label_exp} (R1)", "Value": f"{risk_exp:.4f}", "Interpretation": f"Risk of '{label_event}' in group {label_exp}"},
+                    {"Statistic": f"Risk in {label_unexp} (R0)", "Value": f"{risk_unexp:.4f}", "Interpretation": f"Baseline Risk of '{label_event}' in group {label_unexp}"},
+                    {"Statistic": "Risk Ratio (RR)", "Value": f"{rr:.4f}", "Interpretation": f"Risk in {label_exp} is {rr:.2f} times that of {label_unexp}"},
+                    {"Statistic": "Risk Difference (RD)", "Value": f"{rd:.4f}", "Interpretation": f"Absolute difference (R1 - R0)"},
+                    {"Statistic": "Number Needed to Treat (NNT)", "Value": f"{nnt:.1f}", "Interpretation": "Patients to treat to prevent/cause 1 outcome"},
+                    {"Statistic": "Odds Ratio (OR)", "Value": f"{odd_ratio:.4f}", "Interpretation": "Odds of Event (Exp vs Unexp)"}
                 ]
                 risk_df = pd.DataFrame(risk_data)
-                
-            except Exception as e:
-                pass # ถ้าคำนวณไม่ได้ (เช่น หารศูนย์) ก็ปล่อย risk_df เป็น None
+            except: pass
 
-        return display_tab, stats_res, msg, risk_df # Return 4 ค่า
+        return display_tab, stats_res, msg, risk_df
 
     except Exception as e:
         return display_tab, None, str(e), None
 
 def calculate_correlation(df, col1, col2, method='pearson'):
-    # ... (ส่วนนี้คงเดิม) ...
     if col1 not in df.columns or col2 not in df.columns:
         return None, "Columns not found", None
 
@@ -168,16 +129,14 @@ def calculate_correlation(df, col1, col2, method='pearson'):
     ax.grid(True, alpha=0.3)
     
     stats_res = {
-        "Method": name,
-        "Type": desc,
-        "Coefficient": corr,
-        "P-value": p,
-        "N": len(data)
+        "Method": name, "Type": desc, "Coefficient": corr, "P-value": p, "N": len(data)
     }
     return stats_res, None, fig
 
 def generate_report(title, elements):
-    # ... (ส่วนนี้เหมือนเดิม รองรับ contingency_table) ...
+    """
+    สร้าง HTML Report พร้อมแก้ไข Bug Header
+    """
     css_style = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; margin: 0; color: #333; }
@@ -190,14 +149,7 @@ def generate_report(title, elements):
         tr:nth-child(even) td { background-color: #f9f9f9; }
         .report-table th, .report-table td { text-align: center; } 
         .report-table th:first-child, .report-table td:first-child { text-align: left; }
-        .report-footer {
-            text-align: right;
-            font-size: 0.75em;
-            color: #666;
-            margin-top: 20px;
-            border-top: 1px dashed #ddd;
-            padding-top: 10px;
-        }
+        .report-footer { text-align: right; font-size: 0.75em; color: #666; margin-top: 20px; border-top: 1px dashed #ddd; padding-top: 10px; }
     </style>
     """
     html = f"<!DOCTYPE html><html><head>{css_style}</head><body>"
@@ -207,55 +159,42 @@ def generate_report(title, elements):
         element_type = element['type']
         data = element['data']
         header = element.get('header', '')
-        
         if header: html += f"<h4>{header}</h4>"
+        
+        if element_type == 'text': html += f"<p>{data}</p>"
+        elif element_type == 'table': 
+            # ไม่แสดง Index ถ้าเป็น Risk table
+            idx = not ('Interpretation' in data.columns)
+            html += data.to_html(index=idx, classes='report-table')
             
-        if element_type == 'text':
-            html += f"<p>{data}</p>"
-        elif element_type == 'table':
-            # ใช้ to_html ปกติสำหรับตารางทั่วไป (เช่น stats, risk_df)
-            # ไม่เอา index ถ้าเป็น risk_df (ดูสะอาดกว่า)
-            idx_flag = True
-            if 'Statistic' in data.columns and 'Interpretation' in data.columns: idx_flag = False
-            html += data.to_html(index=idx_flag, classes='report-table')
-            
-        # 🟢 รองรับ Contingency Table Header แบบ 2 ชั้น
         elif element_type == 'contingency_table':
-            df_html = data.to_html(index=True, classes='report-table', header=False)
-            col_names_raw = data.columns.tolist()
-            index_name = data.index.name
-            outcome_col_name = element.get('outcome_col', 'Outcome')
+            # 🟢 FIX: ใช้ header=True เพื่อให้มี <thead> สำหรับการ Replace (ถ้า False จะหาไม่เจอ)
+            df_html = data.to_html(index=True, classes='report-table', header=True)
             
-            # Row 1
-            header_row1 = "<tr>"
-            header_row1 += f"<th rowspan='2' class='report-table' style='text-align: left;'>{index_name}</th>"
-            header_row1 += f"<th colspan='{len(col_names_raw)}' class='report-table'>{outcome_col_name}</th>" 
-            header_row1 += "</tr>"
+            col_names = data.columns.tolist()
+            idx_name = data.index.name if data.index.name else "Variable 1"
+            out_name = element.get('outcome_col', 'Outcome')
             
-            # Row 2
-            header_row2 = "<tr>"
-            for col_name in col_names_raw:
-                 header_row2 += f"<th class='report-table'>{col_name}</th>"
-            header_row2 += "</tr>"
+            # สร้าง Header 2 ชั้น
+            h1 = f"<tr><th rowspan='2' class='report-table' style='text-align: left;'>{idx_name}</th><th colspan='{len(col_names)}' class='report-table'>{out_name}</th></tr>"
+            h2 = "<tr>" + "".join([f"<th class='report-table'>{c}</th>" for c in col_names]) + "</tr>"
             
-            table_start_tag = df_html.split('<thead>')[0]
-            table_end_tag = df_html.split('</thead>')[1]
-            custom_header = f"<thead>{header_row1}{header_row2}</thead>"
-            html += table_start_tag + custom_header + table_end_tag
+            # แทนที่ Header เดิม
+            try:
+                table_start = df_html.split('<thead>')[0]
+                table_end = df_html.split('</thead>')[1]
+                custom_header = f"<thead>{h1}{h2}</thead>"
+                html += table_start + custom_header + table_end
+            except:
+                html += df_html # Fallback
 
         elif element_type == 'plot':
             buf = io.BytesIO()
             if isinstance(data, plt.Figure):
-                data.savefig(buf, format='png', bbox_inches='tight')
-                plt.close(data)
-                data_uri = base64.b64encode(buf.getvalue()).decode('utf-8')
-                html += f'<img src="data:image/png;base64,{data_uri}" style="max-width: 100%;"/>'
+                data.savefig(buf, format='png', bbox_inches='tight'); plt.close(data)
+                uri = base64.b64encode(buf.getvalue()).decode('utf-8')
+                html += f'<img src="data:image/png;base64,{uri}" style="max-width: 100%;"/>'
             buf.close()
             
-    html += """
-    <div class="report-footer">
-      &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
-    </div>
-    """
-    html += "</div></body></html>"
+    html += "<div class='report-footer'>&copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit</div></div></body></html>"
     return html
