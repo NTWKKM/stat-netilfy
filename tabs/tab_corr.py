@@ -85,7 +85,7 @@ def render(df):
              **Interpretation of Coefficient:**             
             * **Close to +1:** Strong positive relationship (Both increase together).
             * **Close to -1:** Strong negative relationship (One increases, the other decreases).
-            * **Close to 0:** No relationship.
+            * **Close to  0:** No relationship.
         """)
         
         c1, c2, c3 = st.columns(3)
