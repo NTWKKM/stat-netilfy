@@ -5,11 +5,12 @@ import matplotlib.pyplot as plt
 import io, base64
 
 def calculate_chi2(df, col1, col2, correction=True):
-    """คำนวณ Chi-square พร้อมตัวเลือก Yates' correction"""
+    """คำนวณ Chi-square พร้อม Risk Ratio สำหรับตาราง 2x2"""
     if col1 not in df.columns or col2 not in df.columns: 
         return None, None, "Columns not found"
     
     data = df[[col1, col2]].dropna()
+    # สร้างตารางไขว้ (Crosstab)
     tab = pd.crosstab(data[col1], data[col2])
     
     try:
@@ -18,9 +19,10 @@ def calculate_chi2(df, col1, col2, correction=True):
         method_name = "Chi-Square"
         if tab.shape == (2, 2):
             method_name += " (with Yates' Correction)" if correction else " (Pearson Uncorrected)"
-            
+        
         msg = f"{method_name}: Chi2={chi2:.4f}, p={p:.4f}"
         
+        # เก็บค่าพื้นฐาน
         stats_res = {
             "Test": method_name,
             "Statistic": chi2,
@@ -28,11 +30,46 @@ def calculate_chi2(df, col1, col2, correction=True):
             "Degrees of Freedom": dof,
             "N": len(data)
         }
+
+        # 🟢 เพิ่มการคำนวณ Risk Ratio (RR) / Odds Ratio (OR) สำหรับ 2x2
+        if tab.shape == (2, 2):
+            try:
+                # แปลงเป็น numpy array เพื่อเข้าถึง index ง่ายๆ [[a, b], [c, d]]
+                # a=Exposed+,Event+ | b=Exposed+,Event-
+                # c=Exposed-,Event+ | d=Exposed-,Event-
+                # หมายเหตุ: การเรียงลำดับขึ้นอยู่กับค่าของข้อมูล (เช่น 0,1 หรือ No,Yes)
+                vals = tab.values
+                a, b = vals[0, 0], vals[0, 1]
+                c, d = vals[1, 0], vals[1, 1]
+                
+                # Odds Ratio
+                odd_ratio, p_or = stats.fisher_exact(tab)
+                stats_res["Odds Ratio (OR)"] = odd_ratio
+                
+                # Risk Ratio (RR) = [a/(a+b)] / [c/(c+d)]
+                risk_exposed = a / (a + b) if (a + b) > 0 else 0
+                risk_unexposed = c / (c + d) if (c + d) > 0 else 0
+                
+                if risk_unexposed > 0:
+                    rr = risk_exposed / risk_unexposed
+                    stats_res["Risk Ratio (RR)"] = rr
+                    
+                    # Absolute Risk Reduction (ARR) & NNT
+                    arr = risk_exposed - risk_unexposed # หรือ risk_unexposed - risk_exposed ขึ้นอยู่กับบริบท
+                    stats_res["Risk Difference (RD)"] = arr
+                    if arr != 0:
+                        stats_res["NNT"] = abs(1 / arr)
+                    else:
+                        stats_res["NNT"] = np.inf
+            except Exception as e:
+                stats_res["Risk Calc Error"] = str(e)
+
         return tab, stats_res, msg
     except Exception as e:
         return tab, None, str(e)
 
 def calculate_correlation(df, col1, col2, method='pearson'):
+    # ... (ส่วนนี้เหมือนเดิม ใช้โค้ดเดิมได้เลยครับ) ...
     if col1 not in df.columns or col2 not in df.columns:
         return None, "Columns not found", None
 
@@ -77,7 +114,7 @@ def calculate_correlation(df, col1, col2, method='pearson'):
     return stats_res, None, fig
 
 def generate_report(title, elements):
-    # CSS Styling
+    # ... (ส่วนนี้เหมือนเดิม ใช้โค้ดเดิมได้เลยครับ) ...
     css_style = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; margin: 0; color: #333; }
@@ -116,7 +153,6 @@ def generate_report(title, elements):
                 html += f'<img src="data:image/png;base64,{data_uri}" style="max-width: 100%;"/>'
             buf.close()
             
-    # Footer
     html += """
     <div class="report-footer">
       &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
