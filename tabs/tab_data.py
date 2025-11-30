@@ -36,7 +36,7 @@ def check_data_quality(df, container):
                 val_str = ", ".join(map(str, bad_values[:3]))
                 if len(bad_values) > 3: val_str += ", ..."
 
-                # 🟢 UPDATE: Use Markdown syntax instead of HTML for better rendering
+                # Markdown Syntax Message
                 msg = (f"**Column '{col}':** Found {error_count} non-numeric values.\n"
                        f"- **Rows:** {row_str}\n"
                        f"- **Values:** `{val_str}`\n"
@@ -45,23 +45,27 @@ def check_data_quality(df, container):
 
     # Display Warning in the placeholder container
     if warnings:
-        # Join with double newlines for paragraph separation
         container.warning("### 🧐 Data Quality Issue Detected\n\n" + "\n\n".join(warnings), icon="⚠️")
 
 def render(df):
     st.subheader("Raw Data Table")
     
-    # 🟢 UPDATE: Compact Custom Missing Values Input (1 Line Layout)
-    # ใช้ Columns เพื่อให้ Label กับช่องกรอกอยู่บรรทัดเดียวกัน ประหยัดที่
-    c1, c2 = st.columns([1, 3]) 
+    # 🟢 UPDATE: ปรับขนาดตัวอักษร และเพิ่มคำอธิบาย
+    # ใช้สัดส่วน 1.5 : 2.5 เพื่อให้ข้อความคำอธิบายมีพื้นที่พอไม่บีบเกินไป
+    c1, c2 = st.columns([1.5, 2.5]) 
     with c1:
-        st.markdown("##### ⚙️ Custom Missing Values:") # Label Text
+        # ปรับเป็นตัวหนาธรรมดา (ขนาดเท่าข้อความปกติ)
+        st.markdown("**⚙️ Custom Missing Values:**")
+        # เพิ่มคำอธิบายด้านล่าง
+        st.caption("Specify values to be treated as **Missing Data (NaN)** (e.g. `-99`, `999`, `?`)")
+        
     with c2:
+        # ขยับ Input ลงมานิดหน่อยเพื่อให้ตรงกับ Text ด้านซ้าย (ใช้ container ช่วยจัดได้ แต่ปล่อยธรรมชาติก็พอไหว)
         missing_input = st.text_input(
-            "Define Missing Values", # Internal label (hidden)
+            "Define Missing Values", 
             value="", 
             placeholder="e.g. -99, 999, ?",
-            label_visibility="collapsed" # ซ่อน Label ของ Input เพื่อให้เรียงต่อกับ c1 ได้สวยๆ
+            label_visibility="collapsed"
         )
 
     st.info("💡 You can view, scroll, and edit your raw data below. (Text inputs allowed)")
