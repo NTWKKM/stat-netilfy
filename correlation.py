@@ -5,25 +5,52 @@ import matplotlib.pyplot as plt
 import io, base64
 
 def calculate_chi2(df, col1, col2, correction=True):
-    """คำนวณ Chi-square พร้อมสร้างตาราง 2 ชั้น ตาม Layout ที่กำหนด"""
+    """คำนวณ Chi-square พร้อมสร้างตาราง 2 ชั้น และบังคับเรียง 1, 0"""
     if col1 not in df.columns or col2 not in df.columns: 
         return None, None, "Columns not found", None
     
     data = df[[col1, col2]].dropna()
     
-    # 1. ข้อมูลดิบสำหรับคำนวณสถิติ
+    # 1. สร้างตาราง Crosstab ทั้ง 3 แบบ
     tab_chi2 = pd.crosstab(data[col1], data[col2])
-    
-    # 2. เตรียมข้อมูลสำหรับ Display (Count & Percent)
-    # tab_raw: จำนวนนับ (a, b, c, d)
     tab_raw = pd.crosstab(data[col1], data[col2], margins=True, margins_name="Total")
-    # tab_row_pct: เปอร์เซ็นต์แนวแถว (Row %)
     tab_row_pct = pd.crosstab(data[col1], data[col2], normalize='index', margins=True, margins_name="Total") * 100
     
-    col_names = tab_raw.columns.tolist() # Label ของ Outcome (เช่น 1, 0, Total)
-    index_names = tab_raw.index.tolist() # Label ของ Exposure (เช่น 1, 0, Total)
+    # --- 🟢 FIX: Reorder Columns (Outcome) and Rows (Exposure) to put '1' first ---
     
-    # สร้าง List ของข้อมูลเพื่อนำไปสร้าง DataFrame (และ HTML ในภายหลัง)
+    # 1. แยก Label หลักออกจาก 'Total'
+    all_col_labels = tab_raw.columns.tolist() 
+    all_row_labels = tab_raw.index.tolist()
+    base_col_labels = [col for col in all_col_labels if col != 'Total']
+    base_row_labels = [row for row in all_row_labels if row != 'Total']
+
+    # 2. Custom Sort: เรียงตามค่าตัวเลขมากไปน้อย (เพื่อบังคับให้ 1, 0)
+    def custom_sort(label):
+        try:
+            # พยายามแปลงเป็น float สำหรับการเรียงตัวเลข
+            return float(label)
+        except (ValueError, TypeError):
+            # สำหรับ string หรือค่าที่ไม่ใช่ตัวเลข (ให้ใช้ค่า string นั้น)
+            return str(label)
+
+    base_col_labels.sort(key=custom_sort, reverse=True) # เช่น [1, 0]
+    base_row_labels.sort(key=custom_sort, reverse=True) # เช่น [1, 0]
+
+    # 3. กำหนดลำดับสุดท้าย (รวม 'Total')
+    final_col_order = base_col_labels + ['Total'] 
+    final_row_order = base_row_labels + ['Total']
+
+    # 4. Reindex ตารางทั้งหมดตามลำดับใหม่
+    tab_raw = tab_raw.reindex(index=final_row_order, columns=final_col_order)
+    tab_row_pct = tab_row_pct.reindex(index=final_row_order, columns=final_col_order)
+    tab_chi2 = tab_chi2.reindex(index=base_row_labels, columns=base_col_labels) # tab_chi2 ไม่มี 'Total'
+    
+    # 5. Update iteration lists
+    col_names = final_col_order 
+    index_names = final_row_order
+
+    # --- 🟢 END REORDERING FIX ---
+    
     display_data = []
     
     for row_name in index_names:
@@ -31,19 +58,17 @@ def calculate_chi2(df, col1, col2, correction=True):
         for col_name in col_names:
             count = tab_raw.loc[row_name, col_name]
             
-            # 🟢 FIX: ตรวจสอบ col_name ก่อนเข้าถึง tab_row_pct เพื่อแก้ KeyError: 'Total'
+            # แก้ KeyError: 'Total'
             if col_name == 'Total':
-                pct = 100.0 # คอลัมน์ Total ของ Row Percentage ต้องเป็น 100%
+                pct = 100.0
             else:
                 pct = tab_row_pct.loc[row_name, col_name]
                 
-            # Format: "จำนวน (เปอร์เซ็นต์%)"
             cell_content = f"{count} ({pct:.1f}%)"
             row_data.append(cell_content)
             
         display_data.append(row_data)
     
-    # สร้าง DataFrame สำหรับส่งต่อ
     display_tab = pd.DataFrame(display_data, columns=col_names, index=index_names)
     display_tab.index.name = col1
     
@@ -61,13 +86,15 @@ def calculate_chi2(df, col1, col2, correction=True):
             "Test": method_name, "Statistic": chi2, "P-value": p, "Degrees of Freedom": dof, "N": len(data)
         }
         
-        # 4. Risk Calculation
+        # 4. Risk Calculation (ใช้ tab_chi2 ที่ reindex แล้ว)
         risk_df = None
         if tab_chi2.shape == (2, 2):
             try:
                 vals = tab_chi2.values
                 a, b = vals[0, 0], vals[0, 1]
                 c, d = vals[1, 0], vals[1, 1]
+                
+                # Label ถูกดึงมาอย่างถูกลำดับแล้ว (1 ก่อน 0)
                 row_labels = tab_chi2.index.tolist(); col_labels = tab_chi2.columns.tolist()
                 label_exp = str(row_labels[0]); label_unexp = str(row_labels[1]); label_event = str(col_labels[0])
                 
@@ -79,7 +106,7 @@ def calculate_chi2(df, col1, col2, correction=True):
                 risk_data = [
                     {"Statistic": f"Risk in {label_exp} (R1)", "Value": f"{risk_exp:.4f}", "Interpretation": f"Risk of '{label_event}' in group {label_exp}"},
                     {"Statistic": f"Risk in {label_unexp} (R0)", "Value": f"{risk_unexp:.4f}", "Interpretation": f"Baseline Risk of '{label_event}' in group {label_unexp}"},
-                    {"Statistic": "Risk Ratio (RR)", "Value": f"{rr:.4f}", "Interpretation": f"Risk in {label_exp} is {rr:.2f} times that of {label_exp}"},
+                    {"Statistic": "Risk Ratio (RR)", "Value": f"{rr:.4f}", "Interpretation": f"Risk in {label_exp} is {rr:.2f} times that of {label_unexp}"},
                     {"Statistic": "Risk Difference (RD)", "Value": f"{rd:.4f}", "Interpretation": f"Absolute difference (R1 - R0)"},
                     {"Statistic": "Number Needed to Treat (NNT)", "Value": f"{nnt:.1f}", "Interpretation": "Patients to treat to prevent/cause 1 outcome"},
                     {"Statistic": "Odds Ratio (OR)", "Value": f"{odd_ratio:.4f}", "Interpretation": "Odds of Event (Exp vs Unexp)"}
@@ -93,6 +120,7 @@ def calculate_chi2(df, col1, col2, correction=True):
         return display_tab, None, str(e), None
 
 def calculate_correlation(df, col1, col2, method='pearson'):
+    # (ส่วนนี้คงเดิม)
     if col1 not in df.columns or col2 not in df.columns: return None, "Columns not found", None
     data = df[[col1, col2]].dropna()
     try:
@@ -108,10 +136,7 @@ def calculate_correlation(df, col1, col2, method='pearson'):
     return {"Method": name, "Coefficient": corr, "P-value": p, "N": len(data)}, None, fig
 
 def generate_report(title, elements):
-    """
-    สร้าง HTML Report โดย Manual Construction ตาราง Contingency Table 
-    ตาม Layout ที่ User ต้องการ (Header 2 ชั้น, แถวแรกว่างซ้าย)
-    """
+    # (ส่วนนี้คงเดิม เพราะ Layout ถูกต้องแล้ว)
     css_style = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; margin: 0; color: #333; }
@@ -148,7 +173,6 @@ def generate_report(title, elements):
             exp_name = data.index.name         
             out_name = element.get('outcome_col', 'Outcome')
             
-            # Start Table
             html_tab = "<table>"
             
             # --- Header Row 1 ---
