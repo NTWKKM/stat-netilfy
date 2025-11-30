@@ -81,7 +81,9 @@ def render(df):
             **💡 Guide:** Used to measure the relationship between **two continuous (numeric) variables**.
             * **Pearson (r):** Best for data that follows a normal distribution (Linear Relationship).
             * **Spearman (rho):** Best for non-normal data, ordinal data, or outliers (Monotonic Relationship).
-             **Interpretation of Coefficient:**             * **Close to +1:** Strong positive relationship (Both increase together).
+            
+             **Interpretation of Coefficient:**             
+            * **Close to +1:** Strong positive relationship (Both increase together).
             * **Close to -1:** Strong negative relationship (One increases, the other decreases).
             * **Close to 0:** No relationship.
         """)
