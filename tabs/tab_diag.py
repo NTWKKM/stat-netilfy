@@ -75,7 +75,7 @@ def render(df, var_meta):
         st.info("""
             **💡 Guide:** Used to analyze the association between **two categorical variables**.
             * **Chi-Square Test:** Determines if there is a significant association between the variables (P-value).
-            * **Risk/Odds Ratio: calculates **Risk Ratio (RR)**, **Odds Ratio (OR)**, and **Number Needed to Treat (NNT)** automatically ** For **2x2 tables.**
+            * **Risk/Odds Ratio: calculates **Risk Ratio (RR)**, **Odds Ratio (OR)**, and **Number Needed to Treat (NNT)** automatically For **2x2 tables.**
             
             **Variable Selection:**
             * **Variable 1 (Row):** Typically the **Exposure**, **Risk Factor**, or **Intervention**.
