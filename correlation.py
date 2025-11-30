@@ -30,20 +30,24 @@ def calculate_chi2(df, col1, col2, correction=True):
         row_data = []
         for col_name in col_names:
             count = tab_raw.loc[row_name, col_name]
-            pct = tab_row_pct.loc[row_name, col_name]
             
+            # 🟢 FIX: ตรวจสอบ col_name ก่อนเข้าถึง tab_row_pct เพื่อแก้ KeyError: 'Total'
+            if col_name == 'Total':
+                pct = 100.0 # คอลัมน์ Total ของ Row Percentage ต้องเป็น 100%
+            else:
+                pct = tab_row_pct.loc[row_name, col_name]
+                
             # Format: "จำนวน (เปอร์เซ็นต์%)"
-            # ตัวอย่าง: "15 (20.5%)"
             cell_content = f"{count} ({pct:.1f}%)"
             row_data.append(cell_content)
             
         display_data.append(row_data)
     
-    # สร้าง DataFrame สำหรับส่งต่อ (Columns เป็น Label outcome, Index เป็น Label exposure)
+    # สร้าง DataFrame สำหรับส่งต่อ
     display_tab = pd.DataFrame(display_data, columns=col_names, index=index_names)
-    display_tab.index.name = col1 # เก็บชื่อ Exposure ไว้ใน Index Name
+    display_tab.index.name = col1
     
-    # ... (ส่วนคำนวณ Stats คงเดิม) ...
+    # 3. คำนวณ Chi-square Stats
     try:
         chi2, p, dof, ex = stats.chi2_contingency(tab_chi2, correction=correction)
         
@@ -57,7 +61,7 @@ def calculate_chi2(df, col1, col2, correction=True):
             "Test": method_name, "Statistic": chi2, "P-value": p, "Degrees of Freedom": dof, "N": len(data)
         }
         
-        # ... (ส่วน Risk Calculation คงเดิม) ...
+        # 4. Risk Calculation
         risk_df = None
         if tab_chi2.shape == (2, 2):
             try:
@@ -75,7 +79,7 @@ def calculate_chi2(df, col1, col2, correction=True):
                 risk_data = [
                     {"Statistic": f"Risk in {label_exp} (R1)", "Value": f"{risk_exp:.4f}", "Interpretation": f"Risk of '{label_event}' in group {label_exp}"},
                     {"Statistic": f"Risk in {label_unexp} (R0)", "Value": f"{risk_unexp:.4f}", "Interpretation": f"Baseline Risk of '{label_event}' in group {label_unexp}"},
-                    {"Statistic": "Risk Ratio (RR)", "Value": f"{rr:.4f}", "Interpretation": f"Risk in {label_exp} is {rr:.2f} times that of {label_unexp}"},
+                    {"Statistic": "Risk Ratio (RR)", "Value": f"{rr:.4f}", "Interpretation": f"Risk in {label_exp} is {rr:.2f} times that of {label_exp}"},
                     {"Statistic": "Risk Difference (RD)", "Value": f"{rd:.4f}", "Interpretation": f"Absolute difference (R1 - R0)"},
                     {"Statistic": "Number Needed to Treat (NNT)", "Value": f"{nnt:.1f}", "Interpretation": "Patients to treat to prevent/cause 1 outcome"},
                     {"Statistic": "Odds Ratio (OR)", "Value": f"{odd_ratio:.4f}", "Interpretation": "Odds of Event (Exp vs Unexp)"}
@@ -89,7 +93,6 @@ def calculate_chi2(df, col1, col2, correction=True):
         return display_tab, None, str(e), None
 
 def calculate_correlation(df, col1, col2, method='pearson'):
-    # ... (ส่วนนี้คงเดิม ไม่มีการเปลี่ยนแปลง) ...
     if col1 not in df.columns or col2 not in df.columns: return None, "Columns not found", None
     data = df[[col1, col2]].dropna()
     try:
@@ -116,11 +119,10 @@ def generate_report(title, elements):
         h2 { color: #2c3e50; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
         h4 { color: #34495e; margin-top: 25px; margin-bottom: 10px; }
         table { width: 100%; border-collapse: collapse; font-family: 'Segoe UI', sans-serif; font-size: 0.9em; }
-        th, td { padding: 10px 15px; border: 1px solid #e0e0e0; vertical-align: middle; text-align: center; } /* จัดกลาง */
+        th, td { padding: 10px 15px; border: 1px solid #e0e0e0; vertical-align: middle; text-align: center; } 
         th { background-color: #f0f2f6; font-weight: 600; }
         tr:nth-child(even) td { background-color: #f9f9f9; }
         .report-footer { text-align: right; font-size: 0.75em; color: #666; margin-top: 20px; border-top: 1px dashed #ddd; padding-top: 10px; }
-        /* Style เฉพาะสำหรับ Header ตาราง */
         .th-exposure { text-align: left; background-color: #e8ecf1; } 
         .th-outcome { background-color: #e8ecf1; }
         .td-label { text-align: left; font-weight: bold; background-color: #fcfcfc; }
@@ -141,25 +143,21 @@ def generate_report(title, elements):
             html += data.to_html(index=idx, classes='report-table')
             
         elif element_type == 'contingency_table':
-            # 🟢 FIX: Manual Construction ตาม Layout เป๊ะๆ
-            col_labels = data.columns.tolist() # Label ของ Outcome (1, 0, Total)
-            row_labels = data.index.tolist()   # Label ของ Exposure (1, 0, Total)
-            
-            exp_name = data.index.name         # ชื่อ Variable 1 (Exposure)
-            out_name = element.get('outcome_col', 'Outcome') # ชื่อ Variable 2 (Outcome)
+            col_labels = data.columns.tolist() 
+            row_labels = data.index.tolist()   
+            exp_name = data.index.name         
+            out_name = element.get('outcome_col', 'Outcome')
             
             # Start Table
             html_tab = "<table>"
             
             # --- Header Row 1 ---
-            # ช่องซ้าย: ว่างไว้ | ช่องขวา: ชื่อ Outcome (Colspan = จำนวน label ของ outcome)
             html_tab += "<thead><tr>"
-            html_tab += "<th style='background-color: white; border: none;'></th>" # ช่องว่าง
+            html_tab += "<th style='background-color: white; border: none;'></th>" 
             html_tab += f"<th colspan='{len(col_labels)}' class='th-outcome'>{out_name}</th>"
             html_tab += "</tr>"
             
             # --- Header Row 2 ---
-            # ช่องซ้าย: ชื่อ Exposure | ช่องขวา: ค่า Label ของ Outcome (1, 0, Total)
             html_tab += "<tr>"
             html_tab += f"<th class='th-exposure'>{exp_name}</th>"
             for label in col_labels:
@@ -170,10 +168,8 @@ def generate_report(title, elements):
             html_tab += "<tbody>"
             for idx_label, row in data.iterrows():
                 html_tab += "<tr>"
-                # ช่องซ้าย: Label ของ Exposure (เช่น 1, 0, Total)
                 html_tab += f"<td class='td-label'>{idx_label}</td>"
                 
-                # ช่องขวา: ข้อมูล (Count + %)
                 for val in row:
                     html_tab += f"<td>{val}</td>"
                 html_tab += "</tr>"
