@@ -7,7 +7,7 @@ def render(df, var_meta):
     sub_tab1, sub_tab2, sub_tab3 = st.tabs(["📈 ROC Curve & AUC", "🎲 Chi-Square", "📊 Descriptive"])
     all_cols = df.columns.tolist()
 
-    # --- ROC ---
+    # --- ROC --- (ส่วนนี้เหมือนเดิม)
     with sub_tab1:
         st.markdown("##### ROC Curve Analysis")
         st.info("""
@@ -91,39 +91,34 @@ def render(df, var_meta):
         if 'html_output_chi' not in st.session_state: st.session_state.html_output_chi = None
 
         if run_col.button("Run Chi-Square", key='btn_chi_diag'):
-            # diag_test.calculate_chi2 returns (display_tab, results)
-            tab, results = diag_test.calculate_chi2(df, v1, v2, correction=correction_flag)
+            # 🟢 UPDATE 1: รับค่า 4 ตัว (ปรับให้เหมือน correlation.py)
+            tab, stats, msg, risk_df = diag_test.calculate_chi2(df, v1, v2, correction=correction_flag)
             
-            if tab is not None and 'error' not in results:
-                # Prepare elements for generate_report
-                # Note: 'results' dict contains 'chi2_msg', 'RR', etc.
-                
-                # Check formatting of display table
-                # The returned tab is already formatted with counts/% from diag_test.py
-                
-                # Create stats dataframe for report
-                # We need to extract relevant scalar stats from 'results' dict
-                stats_data = {k: v for k, v in results.items() if k not in ['chi2_msg', 'R_exp_label', 'R_unexp_label', 'Event_label', 'Is_2x2', 'R_exp', 'R_unexp']}
-                
+            if tab is not None:
+                # 🟢 UPDATE 2: สร้าง Report โดยใช้ตัวแปรใหม่
                 rep_elements = [
-                    {'type': 'text', 'data': f"<b>Result:</b> {results.get('chi2_msg', '')}"},
-                    # Use the new contingency_table type provided in diag_test.generate_report
+                    {'type': 'text', 'data': f"<b>Result:</b> {msg}"},
                     {'type': 'contingency_table', 'header': 'Contingency Table', 'data': tab, 'outcome_col': v2},
-                    {'type': 'table', 'header': 'Statistics', 'data': pd.DataFrame([stats_data]).T}
+                    {'type': 'table', 'header': 'Statistics', 'data': pd.DataFrame([stats]).T}
                 ]
+                
+                # 🟢 UPDATE 3: เพิ่ม Risk Table ถ้ามี
+                if risk_df is not None:
+                    rep_elements.append({'type': 'table', 'header': 'Risk & Effect Measures (2x2 Table)', 'data': risk_df})
                 
                 html = diag_test.generate_report(f"Chi2: {v1} vs {v2}", rep_elements)
                 st.session_state.html_output_chi = html
                 st.components.v1.html(html, height=600, scrolling=True)
             else: 
-                st.error(results.get('error', 'An error occurred'))
+                # ถ้ามี error msg จะถูกส่งกลับมาใน msg ตัวแปรที่ 3
+                st.error(msg)
         
         with dl_col:
             if st.session_state.html_output_chi:
                 st.download_button("📥 Download Report", st.session_state.html_output_chi, "chi2_diag.html", "text/html", key='dl_chi_diag')
             else: st.button("📥 Download Report", disabled=True, key='ph_chi_diag')
 
-    # --- Descriptive ---
+    # --- Descriptive --- (ส่วนนี้เหมือนเดิม)
     with sub_tab3:
         st.markdown("##### Descriptive Statistics")
         st.info("""
