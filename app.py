@@ -158,6 +158,6 @@ footer:after {
 st.markdown("""
 <hr style="margin-top: 20px; margin-bottom: 10px; border-color: var(--border-color);">
 <div style='text-align: center; font-size: 0.7em; color: var(--text-color);'>
-  &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
+   &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="color: inherit; text-decoration: none; font-weight: 700; border-bottom: 1px dotted var(--text-muted);">NTWKKM</a>. All Rights Reserved.| Powered by GitHub, Gemini, Streamlit
 </div>
 """, unsafe_allow_html=True)
