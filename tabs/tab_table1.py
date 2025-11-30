@@ -7,9 +7,9 @@ def render(df, var_meta):
     **💡 Guide:** Summarizes key demographics and patient characteristics, stratified by a **Grouping Variable**, to assess **group comparability**.
 
     **Presentation:**
-    * **Numeric:** Mean ± Standard Deviation (SD) for normal data, or Median (Interquartile Range - IQR) for non-normal data.
+    * **Numeric:** Mean ± Standard Deviation (SD) for **Normally Distributed Data**, or Median (Interquartile Range - IQR) for **Normally Distributed Data**.
     * **Categorical:** Count (Percentage).
-    * **P-value:** Tests for statistically significant differences in characteristics across the Grouping Variable's levels.
+    * **P-value & Test Used:** Tests for statistically significant differences in characteristics across groups. The tool **automatically selects the appropriate test** (e.g., t-test, Chi-square, Kruskal-Wallis) based on the variable type and distribution.
 
     **Variable Selection:**
     * **Grouping Variable (Split):** The primary categorical variable used to stratify the **dataset** (e.g., 'Treatment' or 'Outcome').
