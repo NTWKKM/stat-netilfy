@@ -22,12 +22,21 @@ def check_perfect_separation(df, target_col):
     return risky_vars
 
 def render(df, var_meta):
-    st.subheader("4. Logistic Regression Analysis")
-    st.markdown("""
-        <div style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; margin-bottom: 20px;">
-            <p><b>Binary Logistic Regression:</b> Univariate & Multivariate Analysis.</p>
-        </div>
-    """, unsafe_allow_html=True)
+    st.subheader("4. Logistic Regression Analysis(Binary)")
+    ##### Logistic Regression Analysis
+    st.info("""
+    **💡 Guide:** Used to model the relationship between one or more predictor variables (features) and a **binary outcome** (dependent variable). This model estimates the **probability** of an event occurring (e.g., probability of disease).
+
+    * **Model Output:** The primary result is the **Odds Ratio (OR)**, typically presented with a 95% Confidence Interval (CI).
+    * **Odds Ratio (OR):** Represents the change in the **odds** of the outcome for every one-unit increase in the predictor variable.
+        * **OR > 1:** The predictor is associated with increased odds of the outcome.
+        * **OR < 1:** The predictor is associated with decreased odds of the outcome.
+    * **P-value:** Determines if the predictor variable has a statistically significant association with the outcome.
+
+    **Variable Selection:**
+    * **Target Variable (Y):** Must be **Binary** (e.g., 0/1, Yes/No, Die/Survive).
+    * **Feature Variables (X):** Can be **Numeric** (e.g., Age) or **Categorical** (e.g., Gender).
+    """)
     
     all_cols = df.columns.tolist()
     c1, c2 = st.columns([1, 2])
