@@ -15,6 +15,8 @@ def check_data_quality(df, container):
         
         # 2. Identify text errors (neither number, nor empty/NaN)
         original_vals = df[col].astype(str).str.strip()
+        
+        # Check conditions: NaN in numeric but string is NOT empty/nan/none
         is_text_error = numeric_vals.isna() & (original_vals != '') & \
                         (original_vals.str.lower() != 'nan') & (original_vals.str.lower() != 'none')
         
@@ -28,7 +30,7 @@ def check_data_quality(df, container):
                 error_rows = df.index[is_text_error].tolist()
                 bad_values = df.loc[is_text_error, col].unique()
                 
-                # Format the row list (show first 10 rows to save space)
+                # Format the row list
                 row_str = ", ".join(map(str, error_rows[:10]))
                 if len(error_rows) > 10: row_str += ", ..."
                 
@@ -47,20 +49,34 @@ def check_data_quality(df, container):
         container.warning("### 🧐 Data Quality Issue Detected\n" + "\n\n".join(warnings), icon="⚠️")
     else:
         # Optional: Show green success message
-        # container.success("✅ Data Clean! (All numeric columns are valid)")
         pass
 
 def render(df):
     st.subheader("Raw Data Table")
-    st.info("💡 You can view, scroll, and edit your raw data below. (Text inputs allowed in numeric columns)")
     
-    # 1. Placeholder for Warnings (appears above the table)
+    # 🟢 NEW: ส่วนตั้งค่า Custom Missing Values
+    with st.expander("⚙️ Data Cleaning Settings (Define Missing Values)", expanded=False):
+        st.markdown("Specify values to be treated as **Missing Data (NaN)** (e.g. `-99`, `999`, `?`)")
+        missing_input = st.text_input(
+            "Custom Missing Values (comma separated):", 
+            value="", 
+            placeholder="-99, 999, ?",
+            key="custom_missing_vals"
+        )
+        
+    st.info("💡 You can view, scroll, and edit your raw data below. (Text inputs allowed)")
+    
+    # 1. Placeholder for Warnings
     warning_container = st.empty()
     
-    # 2. Convert to String to allow free editing
+    # 2. Prepare custom missing list
+    custom_na_list = [x.strip() for x in missing_input.split(',') if x.strip() != '']
+    
+    # 3. Convert to String for Editor (Handle 'nan' string display)
+    # ถ้าค่าเดิมเป็น NaN อยู่แล้ว ให้แสดงเป็นว่างๆ
     df_display = df.astype(str).replace('nan', '')
     
-    # 3. Render Editor
+    # 4. Render Editor
     edited_df = st.data_editor(
         df_display, 
         num_rows="dynamic", 
@@ -69,17 +85,23 @@ def render(df):
         key='editor_raw'
     )
 
-    # 4. Process & Convert back to Numeric
+    # 5. Process & Convert back to Numeric
     df_final = edited_df.copy()
+    
     for col in df_final.columns:
+        # 🟢 5.1: Replace Custom Missing Values with actual NaN (Before conversion)
+        if custom_na_list:
+            # Replace exact matches (e.g. "-99") with NaN
+            df_final[col] = df_final[col].replace(custom_na_list, np.nan)
+        
         try:
-            # Try converting strict numeric first
+            # Try converting strict numeric
             df_final[col] = pd.to_numeric(df_final[col], errors='raise')
         except:
-            # If failed, convert only valid numbers, keep text as is (Mixed Type)
+            # If failed, convert only valid numbers (keep text as is)
             df_final[col] = pd.to_numeric(df_final[col], errors='ignore')
 
-    # 5. Check Quality and Update Warning Box
+    # 6. Check Quality and Update Warning Box
     check_data_quality(df_final, warning_container)
 
     return df_final
