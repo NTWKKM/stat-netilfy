@@ -25,18 +25,18 @@ def render(df, var_meta):
     st.subheader("4.Binary Logistic Regression Analysis")
     ##### Logistic Regression Analysis
     st.info("""
-    **💡 Guide:** Used to model the relationship between one or more predictor variables (features) and a **binary outcome** (dependent variable). This model estimates the **probability** of an event occurring (e.g., probability of disease).
+    **💡 Guide:** Models the relationship between predictors and the **probability** of a **binary outcome** (e.g., disease/no disease).
 
-    * **Model Output:** The primary result is the **Odds Ratio (OR)**, typically presented with a 95% Confidence Interval (CI).
-    * **Odds Ratio (OR):** Represents the change in the **odds** of the outcome for every one-unit increase in the predictor variable.
-        * **OR > 1:** The predictor is associated with increased odds of the outcome.
-        * **OR < 1:** The predictor is associated with decreased odds of the outcome.
-    * **P-value:** Determines if the predictor variable has a statistically significant association with the outcome.
-
+    * **Odds Ratio (OR/aOR):** The main result, reported with a 95% CI. Measures the change in the odds of the outcome for every one-unit increase in the predictor.
+        * **Adjusted OR (aOR):** This is the output when **multiple features** are used, meaning the effect is **controlled/adjusted** for other variables in the model.
+        * **OR/AOR > 1:** Increased odds (Risk factor).
+        * **OR/AOR < 1:** Decreased odds (Protective factor).
+    * **P-value:** Tests if the predictor's association with the outcome is statistically significant.
+    
     **Variable Selection:**
-    * **Target Variable (Y):** Must be **Binary** (e.g., 0/1, Yes/No, Die/Survive).
-    * **Feature Variables (X):** Can be **Numeric** (e.g., Age) or **Categorical** (e.g., Gender).
-    """)
+    * **Target (Y):** Must be **Binary** (e.g.,Die/Survide, 0/1, Yes/No).
+    * **Features (X):** Can be **Numeric** or **Categorical** (e.g., Age, Gender).
+""")
     
     all_cols = df.columns.tolist()
     c1, c2 = st.columns([1, 2])
