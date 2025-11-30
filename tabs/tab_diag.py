@@ -72,13 +72,13 @@ def render(df, var_meta):
     with sub_tab2:
         st.markdown("##### Chi-Square Test & Risk Analysis")
         st.info("""
-            **💡 Guide:** Analyzes the association between **two categorical variables**.
-            * **Chi-Square Test:** P-value for association.
-            * **Risk Estimates (2x2):** Calculates **RR**, **OR**, **NNT** automatically for 2x2 tables.
+            **💡 Guide:** Used to analyze the association between **two categorical variables**.
+            * **Chi-Square Test:** Determines if there is a significant association between the variables (P-value).
+            * **Risk/Odds Ratio: calculates **Risk Ratio (RR)**, **Odds Ratio (OR)**, and **Number Needed to Treat (NNT)** automatically ** For **2x2 tables.**
             
-            **Selection:**
-            * **Variable 1:** Exposure / Treatment / Group.
-            * **Variable 2:** Outcome / Event.
+            **Variable Selection:**
+            * **Variable 1 (Row):** Typically the **Exposure**, **Risk Factor**, or **Intervention**.
+            * **Variable 2 (Column):** Typically the **Outcome** or **Event** of interest.
         """)
 
         c1, c2, c3 = st.columns(3)
