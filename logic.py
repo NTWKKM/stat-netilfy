@@ -321,7 +321,7 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None):
     # 🟢 NEW: เพิ่ม Footer ของ Report
     html += """
     <div class="report-footer">
-      &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="color: inherit; text-decoration: none; font-weight: 700; border-bottom: 1px dotted var(--text-muted);">NTWKKM</a>. All Rights Reserved.| Powered by GitHub, Gemini, Streamlit
+      &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank");">NTWKKM</a>. All Rights Reserved.| Powered by GitHub, Gemini, Streamlit
     </div>
     """
     # <---- สิ้นสุดการเพิ่มโค้ด Footer ใหม่ ---->
