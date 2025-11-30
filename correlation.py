@@ -88,6 +88,14 @@ def generate_report(title, elements):
         th, td { padding: 10px 15px; border: 1px solid #e0e0e0; vertical-align: top; text-align: left; }
         th { background-color: #f0f2f6; font-weight: 600; }
         tr:nth-child(even) td { background-color: #f9f9f9; }
+        .report-footer {
+            text-align: right;
+            font-size: 0.75em;
+            color: var(--text-color);
+            margin-top: 20px;
+            border-top: 1px dashed var(--border-color);
+            padding-top: 10px;
+            }
     </style>
     """
     html = f"<!DOCTYPE html><html><head>{css_style}</head><body>"
