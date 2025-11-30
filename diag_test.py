@@ -466,7 +466,6 @@ def generate_report(title, elements):
                 data.savefig(buf, format='png')
                 plt.close(data) # Close the figure to free memory
                 data_uri = base64.b64encode(buf.getvalue()).decode('utf-8')
-                buf.close()
                 html += f'<img src="data:image/png;base64,{data_uri}" style="max-width: 100%; height: auto; display: block; margin: 15px auto;"/>'
             else:
                  html += '<p class="alert">⚠️ Plot data is not a valid Matplotlib Figure object.</p>'
@@ -479,4 +478,4 @@ def generate_report(title, elements):
     """
     
     html += "</div></body></html>"
-    return html # <-- ลบ '}' ที่เกินมาออกไป
+    return html
