@@ -280,5 +280,5 @@ def generate_report(title, elements):
                 html += f'<img src="data:image/png;base64,{uri}" style="max-width: 100%;"/>'
             buf.close()
             
-    html += "<div class='report-footer'>&copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit</div></div></body></html>"
+    html += "<div class='report-footer'>&copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="color: inherit; text-decoration: none; font-weight: 700; border-bottom: 1px dotted var(--text-muted);">NTWKKM</a>. All Rights Reserved.| Powered by GitHub, Gemini, Streamlit</div></div></body></html>"
     return html
