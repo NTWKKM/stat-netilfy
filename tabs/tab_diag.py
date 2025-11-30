@@ -4,7 +4,7 @@ import diag_test # Import from root
 
 def render(df, var_meta):
     st.subheader("2. Diagnostic Test & Statistics")
-    sub_tab1, sub_tab2, sub_tab3 = st.tabs(["📈 ROC Curve & AUC", "🎲 Chi-Square", "📊 Descriptive"])
+    sub_tab1, sub_tab2, sub_tab3 = st.tabs(["📈 ROC Curve & AUC", "🎲 Chi-Square & Risk-RR,OR,NNT (Categorical)", "📊 Descriptive"])
     all_cols = df.columns.tolist()
 
     # --- ROC --- (ส่วนนี้เหมือนเดิม)
