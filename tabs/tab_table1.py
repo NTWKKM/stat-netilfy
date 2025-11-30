@@ -12,7 +12,7 @@ def render(df, var_meta):
     * **P-value (Comparison):** Shows if there is a statistically significant difference between the **Grouping Variable's** levels for each characteristic (e.g., Is the average age significantly different between Treatment Group A and Group B?).
 
     **Variable Selection:**
-    * **Grouping Variable (Split):** The **primary categorical variable** used to divide the cohort (e.g., 'Treatment' or 'Outcome').
+    * **Grouping Variable (Split):** The **primary categorical variable** used to divide the **dataset** (e.g., 'Treatment' or 'Outcome').
     * **Characteristic Variables:** All other variables (numeric and categorical) to be summarized and compared across the groups.
     """)
     
