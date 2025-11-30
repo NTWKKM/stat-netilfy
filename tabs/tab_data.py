@@ -4,46 +4,63 @@ import numpy as np
 
 def check_data_quality(df, container):
     """
-    รับ container มาเพิ่ม เพื่อระบุว่าจะให้ไปแสดงข้อความเตือนที่ไหน
+    Data Quality Checker (English Version)
+    Identifies non-numeric values in numeric-like columns and reports specific rows.
     """
     warnings = []
     
     for col in df.columns:
-        # 1. ลองแปลงค่าเป็นตัวเลข
+        # 1. Try converting to numeric
         numeric_vals = pd.to_numeric(df[col], errors='coerce')
         
-        # 2. เช็คว่าเป็น Text ที่ไม่ใช่ค่าว่าง
+        # 2. Identify text errors (neither number, nor empty/NaN)
         original_vals = df[col].astype(str).str.strip()
-        is_text_error = numeric_vals.isna() & (original_vals != '') & (original_vals.str.lower() != 'nan') & (original_vals.str.lower() != 'none')
+        is_text_error = numeric_vals.isna() & (original_vals != '') & \
+                        (original_vals.str.lower() != 'nan') & (original_vals.str.lower() != 'none')
         
         if is_text_error.any():
             total_rows = len(df)
-            text_count = is_text_error.sum()
+            error_count = is_text_error.sum()
             
-            # กฎ: ถ้าส่วนใหญ่เป็นตัวเลข (>80%) แต่มี text ปน -> เตือน
-            if text_count < (total_rows * 0.8): 
+            # Rule: If >80% is numeric but has some text -> Warn
+            if error_count < (total_rows * 0.8): 
+                # Get specific rows and values
+                error_rows = df.index[is_text_error].tolist()
                 bad_values = df.loc[is_text_error, col].unique()
-                example_vals = ", ".join(map(str, bad_values[:3]))
-                warnings.append(f"⚠️ **Column '{col}':** พบข้อความ {text_count} จุด (เช่น `{example_vals}` ...) -> ค่าเหล่านี้จะถูกนับเป็น **Missing Value**")
+                
+                # Format the row list (show first 10 rows to save space)
+                row_str = ", ".join(map(str, error_rows[:10]))
+                if len(error_rows) > 10: row_str += ", ..."
+                
+                val_str = ", ".join(map(str, bad_values[:3]))
+                if len(bad_values) > 3: val_str += ", ..."
 
-    # แสดงผลลงใน Container ที่จองไว้ (แทนที่จะใช้ st.warning โดยตรง)
+                # Construct detailed message
+                msg = (f"⚠️ **Column '{col}':** Found {error_count} non-numeric values.<br>"
+                       f"&nbsp;&nbsp;&nbsp;&nbsp;• **Rows:** {row_str}<br>"
+                       f"&nbsp;&nbsp;&nbsp;&nbsp;• **Values:** `{val_str}`<br>"
+                       f"&nbsp;&nbsp;&nbsp;&nbsp;*(These will be treated as Missing Values)*")
+                warnings.append(msg)
+
+    # Display Warning in the placeholder container
     if warnings:
-        container.warning("### 🧐 Data Quality Check\n" + "\n\n".join(warnings))
+        container.warning("### 🧐 Data Quality Issue Detected\n" + "\n\n".join(warnings), icon="⚠️")
     else:
-        # แสดงสีเขียวถ้าข้อมูลเรียบร้อย (ถ้าไม่อยากให้รกพื้นที่ด้านบน ลบบรรทัดนี้ออกได้ครับ)
-        container.success("✅ Data Clean! (ข้อมูลตัวเลขถูกต้อง หรือถูกเว้นว่างไว้อย่างเหมาะสม)")
+        # Optional: Show green success message
+        # container.success("✅ Data Clean! (All numeric columns are valid)")
+        pass
 
 def render(df):
     st.subheader("Raw Data Table")
-    st.info("💡 You can view, scroll, and edit your raw data directly in this table. (พิมพ์ตัวอักษรผสมตัวเลขได้)")
+    st.info("💡 You can view, scroll, and edit your raw data below. (Text inputs allowed in numeric columns)")
     
-    # 🟢 1. สร้าง Placeholder จองพื้นที่ไว้ตรงนี้ (ต่อจาก Info)
+    # 1. Placeholder for Warnings (appears above the table)
     warning_container = st.empty()
     
-    # 2. เตรียมข้อมูล (String conversion)
+    # 2. Convert to String to allow free editing
     df_display = df.astype(str).replace('nan', '')
     
-    # 3. แสดงตาราง Editor (Code จะรันส่วนนี้และรอ user แก้ไข)
+    # 3. Render Editor
     edited_df = st.data_editor(
         df_display, 
         num_rows="dynamic", 
@@ -52,15 +69,17 @@ def render(df):
         key='editor_raw'
     )
 
-    # 4. แปลงข้อมูลกลับเป็นตัวเลข
+    # 4. Process & Convert back to Numeric
     df_final = edited_df.copy()
     for col in df_final.columns:
         try:
+            # Try converting strict numeric first
             df_final[col] = pd.to_numeric(df_final[col], errors='raise')
         except:
+            # If failed, convert only valid numbers, keep text as is (Mixed Type)
             df_final[col] = pd.to_numeric(df_final[col], errors='ignore')
 
-    # 🟢 5. ส่ง container ไปให้ฟังก์ชันเขียนผลลัพธ์ใส่ (มันจะเด้งไปแสดงข้างบน)
+    # 5. Check Quality and Update Warning Box
     check_data_quality(df_final, warning_container)
 
     return df_final
