@@ -11,7 +11,7 @@ def render(df, var_meta):
     with sub_tab1:
         st.markdown("##### ROC Curve Analysis")
         st.info("""
-    **💡 Guide:** Evaluates the performance of a **continuous diagnostic test** (e.g., 'lab value' or 'risk index') in classifying patients against a **binary Gold Standard** (e.g., 'cancer' or 'not cancer').
+    **💡 Guide:** Evaluates the performance of a **continuous diagnostic test** (e.g., 'lab value' or 'risk index') against a **binary Gold Standard** (e.g., 'cancer' or 'not cancer').
 
     * **AUC (Area Under Curve):** Measures overall test discrimination ability (0.5 = random guess, 1.0 = perfect test).
     * **Youden Index (J):** Identifies the **optimal cut-off point** by maximizing the difference between Sensitivity and (1 - Specificity).
