@@ -11,7 +11,7 @@ def render(df, var_meta):
     with sub_tab1:
         st.markdown("##### ROC Curve Analysis")
         st.info("""
-    **💡 Guide:** Evaluates the performance of a **continuous diagnostic test** (e.g., a lab score or risk index) against a **binary Gold Standard** (e.g., 'cancer' or 'not cancer').
+    **💡 Guide:** Evaluates the performance of a **continuous diagnostic test**(lab value or risk index) against a **binary Gold Standard**('cancer' or 'not cancer').
 
     * **AUC (Area Under Curve):** Measures overall diagnostic performance (0.5 = random, 1.0 = perfect).
     * **Youden Index:** Identifies the **optimal cut-off point** maximizing (Sensitivity + Specificity - 1).
@@ -75,7 +75,7 @@ def render(df, var_meta):
         st.info("""
             **💡 Guide:** Used to analyze the association between **two categorical variables**.
             * **Chi-Square Test:** Determines if there is a significant association between the variables (P-value).
-            * **Risk/Odds Ratio: calculates **Risk Ratio (RR)**, **Odds Ratio (OR)**, and **Number Needed to Treat (NNT)** automatically For **2x2 tables.**
+            * **Risk/Odds Ratio:** For **2x2 tables**, the tool provides **automatically calculated** metrics: **Risk Ratio (RR)**, **Odds Ratio (OR)**, and **Number Needed to Treat (NNT)**.
             
             **Variable Selection:**
             * **Variable 1 (Row):** Typically the **Exposure**, **Risk Factor**, or **Intervention**.
