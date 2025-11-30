@@ -22,7 +22,7 @@ def check_perfect_separation(df, target_col):
     return risky_vars
 
 def render(df, var_meta):
-    st.subheader("4. Logistic Regression Analysis(Binary)")
+    st.subheader("4.Binary Logistic Regression Analysis")
     ##### Logistic Regression Analysis
     st.info("""
     **💡 Guide:** Used to model the relationship between one or more predictor variables (features) and a **binary outcome** (dependent variable). This model estimates the **probability** of an event occurring (e.g., probability of disease).
