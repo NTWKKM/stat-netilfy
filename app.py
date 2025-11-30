@@ -155,7 +155,7 @@ footer:after {
 </style>
 """, unsafe_allow_html=True)
 
-st..markdown("""
+st.markdown("""
 <hr style="margin-top: 20px; margin-bottom: 10px; border-color: var(--border-color);">
 <div style='text-align: center; font-size: 0.7em; color: var(--text-color);'>
   &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
