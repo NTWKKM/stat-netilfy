@@ -8,6 +8,20 @@ def clean_numeric(val):
     try: return float(s)
     except: return np.nan
 
+# --- 🟢 NEW HELPER: Check for Normality (Shapiro-Wilk Test) ---
+def check_normality(series):
+    """Checks if the data is normally distributed (p-value > 0.05)."""
+    clean = series.dropna()
+    # Shapiro-Wilk needs at least 3 unique values
+    if len(clean) < 3 or len(clean) > 5000 or clean.nunique() < 3: 
+        return False # Assume non-normal or too few samples for reliable test
+    
+    try:
+        stat, p_sw = stats.shapiro(clean)
+        return p_sw > 0.05 # Returns True if Normal (p > 0.05)
+    except Exception:
+        return False
+
 def format_p(p):
     if pd.isna(p): return "-"
     if p < 0.001: return "<0.001"
@@ -16,7 +30,8 @@ def format_p(p):
 def get_stats_continuous(series):
     clean = series.apply(clean_numeric).dropna()
     if len(clean) == 0: return "-"
-    return f"{clean.mean():.1f} ± {clean.std():.1f}"
+    # Simplification: only display Mean +/- SD
+    return f"{clean.mean():.1f} \u00B1 {clean.std():.1f}"
 
 def get_stats_categorical(series, var_meta=None, col_name=None):
     mapper = {}
@@ -27,8 +42,9 @@ def get_stats_categorical(series, var_meta=None, col_name=None):
             
     mapped_series = series.copy()
     if mapper:
-        mapped_series = mapped_series.map(lambda x: mapper.get(x, mapper.get(float(x), x)) if pd.notna(x) and (x in mapper or float(x) in mapper if str(x).replace('.','',1).isdigit() else False) else x)
-    
+        # Improved mapping robustness
+        mapped_series = mapped_series.map(lambda x: mapper.get(x, mapper.get(float(x), x)) if pd.notna(x) and (x in mapper or (str(x).replace('.','',1).isdigit() and float(x) in mapper)) else x)
+        
     counts = mapped_series.value_counts().sort_index()
     total = len(mapped_series.dropna())
     res = []
@@ -37,22 +53,74 @@ def get_stats_categorical(series, var_meta=None, col_name=None):
         res.append(f"{cat}: {count} ({pct:.1f}%)")
     return "<br>".join(res)
 
+# --- 🟢 NEW/UPDATED: Calculate P-value for Continuous (with Normality check) ---
 def calculate_p_continuous(data_groups):
-    clean_groups = [g.dropna() for g in data_groups if len(g.dropna()) > 0]
-    if len(clean_groups) < 2: return np.nan
-    try:
-        if len(clean_groups) == 2: s, p = stats.ttest_ind(clean_groups[0], clean_groups[1], nan_policy='omit')
-        else: s, p = stats.f_oneway(*clean_groups)
-        return p
-    except: return np.nan
+    # data_groups is a list of series (one for each group)
+    clean_groups = [g.apply(clean_numeric).dropna() for g in data_groups if len(g.apply(clean_numeric).dropna()) > 1]
+    num_groups = len(clean_groups)
+    
+    if num_groups < 2: return np.nan, "-"
 
+    # Check for overall normality across all available groups
+    all_normal = all(check_normality(g) for g in clean_groups)
+
+    try:
+        if all_normal:
+            # Parametric Tests (t-test / ANOVA)
+            if num_groups == 2:
+                # Independent Samples t-test
+                s, p = stats.ttest_ind(clean_groups[0], clean_groups[1], nan_policy='omit')
+                test_name = "t-test"
+            else:
+                # ANOVA (F-test)
+                s, p = stats.f_oneway(*clean_groups)
+                test_name = "ANOVA"
+        else:
+            # Non-Parametric Tests (Mann-Whitney U / Kruskal-Wallis)
+            if num_groups == 2:
+                # Mann-Whitney U test (Non-parametric for 2 groups)
+                s, p = stats.mannwhitneyu(clean_groups[0], clean_groups[1], alternative='two-sided')
+                test_name = "Mann-Whitney U"
+            else:
+                # Kruskal-Wallis H-test (Non-parametric for >2 groups)
+                s, p = stats.kruskal(*clean_groups)
+                test_name = "Kruskal-Wallis"
+        
+        return p, test_name
+
+    except Exception: 
+        return np.nan, "Error"
+
+# --- 🟢 NEW/UPDATED: Calculate P-value for Categorical (with Fisher's check) ---
 def calculate_p_categorical(df, col, group_col):
     try:
         tab = pd.crosstab(df[col], df[group_col])
-        if tab.size == 0: return np.nan
-        chi2, p, dof, ex = stats.chi2_contingency(tab)
-        return p
-    except: return np.nan
+        if tab.size == 0: return np.nan, "-"
+        
+        is_2x2 = tab.shape == (2, 2)
+        
+        # Calculate Chi2 and Expected Counts for the check
+        chi2, p_chi2, dof, ex = stats.chi2_contingency(tab)
+
+        # Rule: Use Fisher's Exact if 2x2 AND Expected Count is low (min expected < 5)
+        if is_2x2 and ex.min() < 5:
+            # Fisher's Exact Test
+            oddsr, p = stats.fisher_exact(tab)
+            test_name = "Fisher's Exact"
+            return p, test_name
+        
+        # Otherwise (larger than 2x2 or 2x2 with adequate N), use Chi-square
+        p = p_chi2
+        test_name = "Chi-square"
+
+        # Add warning for low cell count in Chi2 (> 2x2)
+        if (ex < 5).any():
+             test_name = "Chi-square (Low N)" 
+
+        return p, test_name
+
+    except Exception: 
+        return np.nan, "Error"
 
 def generate_table(df, selected_vars, group_col, var_meta):
     has_group = group_col is not None and group_col != "None"
@@ -67,8 +135,8 @@ def generate_table(df, selected_vars, group_col, var_meta):
         for g in raw_groups:
             label = mapper.get(g, mapper.get(float(g), str(g)) if str(g).replace('.','',1).isdigit() else str(g))
             groups.append({'val': g, 'label': str(label)})
-    
-    # --- 🟢 CSS Styling (เหมือน logic.py) ---
+        
+    # --- CSS Styling (unchanged) ---
     css_style = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; margin: 0; color: #333; }
@@ -101,7 +169,7 @@ def generate_table(df, selected_vars, group_col, var_meta):
             padding: 10px 15px; 
             border: 1px solid #e0e0e0;
             vertical-align: top;
-            color: #333; /* บังคับสีดำเสมอ */
+            color: #333; 
         }
         tr:nth-child(even) td { background-color: #f9f9f9; }
         tr:hover td { background-color: #f1f7ff; }
@@ -121,6 +189,7 @@ def generate_table(df, selected_vars, group_col, var_meta):
     html += "<div class='table-container'>"
     html += "<h2>Baseline Characteristics</h2>"
     
+    # --- 🟢 HEADER GENERATION (Added 'Test Used') ---
     html += "<table><thead><tr>"
     html += "<th>Characteristic</th>"
     html += f"<th>Total (N={len(df)})</th>"
@@ -130,8 +199,10 @@ def generate_table(df, selected_vars, group_col, var_meta):
             n_g = len(df[df[group_col] == g['val']])
             html += f"<th>{g['label']} (n={n_g})</th>"
         html += "<th>P-value</th>"
+        html += "<th>Test Used</th>" # <--- NEW COLUMN HEADER
     html += "</tr></thead><tbody>"
     
+    # --- 🟢 BODY GENERATION (Updated Logic) ---
     for col in selected_vars:
         if col == group_col: continue
         meta = {}
@@ -143,9 +214,12 @@ def generate_table(df, selected_vars, group_col, var_meta):
         is_cat = meta.get('type') == 'Categorical'
         if not is_cat:
             n_unique = df[col].nunique()
-            if n_unique < 10 or df[col].dtype == object: is_cat = True
+            # Heuristic check for categorization (if metadata missing)
+            if n_unique < 10 or df[col].dtype == object: is_cat = True 
         
         row_html = f"<tr><td><b>{label}</b></td>"
+        
+        # Total Column
         if is_cat:
             val_total = get_stats_categorical(df[col], var_meta, col)
             row_html += f"<td style='text-align: center;'>{val_total}</td>"
@@ -154,8 +228,12 @@ def generate_table(df, selected_vars, group_col, var_meta):
             row_html += f"<td style='text-align: center;'>{val_total}</td>"
             
         p_val = np.nan
+        test_name = "-"
+
         if has_group:
             group_vals_list = []
+            
+            # Group Columns & Collect Data for P-value Calculation
             for g in groups:
                 sub_df = df[df[group_col] == g['val']]
                 if is_cat:
@@ -164,24 +242,32 @@ def generate_table(df, selected_vars, group_col, var_meta):
                 else:
                     val_g = get_stats_continuous(sub_df[col])
                     row_html += f"<td style='text-align: center;'>{val_g}</td>"
-                    group_vals_list.append(sub_df[col].apply(clean_numeric))
-            if is_cat: p_val = calculate_p_categorical(df, col, group_col)
-            else: p_val = calculate_p_continuous(group_vals_list)
+                    group_vals_list.append(sub_df[col])
+
+            # Calculate P-value and Test Name
+            if is_cat: 
+                p_val, test_name = calculate_p_categorical(df, col, group_col)
+            else: 
+                p_val, test_name = calculate_p_continuous(group_vals_list)
             
+            # Format P-value
             p_str = format_p(p_val)
+            
             # Highlight P < 0.05
             if isinstance(p_val, float) and p_val < 0.05:
                 p_str = f"<span style='color:#d32f2f; font-weight:bold;'>{p_str}*</span>"
                 
+            # Add P-value and Test Used columns
             row_html += f"<td style='text-align: center;'>{p_str}</td>"
+            row_html += f"<td style='text-align: center; font-size: 0.8em; color: #666;'>{test_name}</td>" # <--- NEW CELL
+        
         row_html += "</tr>"
         html += row_html
         
     html += "</tbody></table>"
-    html += "<div class='footer-note'>Data presented as Mean ± SD for continuous variables, and n (%) for categorical variables. P-values calculated using T-test/ANOVA or Chi-square/Fisher's exact test.</div>"
+    html += "<div class='footer-note'>Data presented as Mean \u00B1 SD (Numeric, assuming normal) or n (%). P-values calculated using automated selection: t-test/ANOVA (Normal), Mann-Whitney U/Kruskal-Wallis (Non-normal), or Chi-square/Fisher's Exact (Categorical).</div>"
     html += "</div></body></html>"
     
-# 🟢 NEW: เพิ่ม Footer ของ Report
     html += """
     <div class="report-footer">
       &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
