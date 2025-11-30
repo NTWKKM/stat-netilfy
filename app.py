@@ -148,6 +148,8 @@ else:
 # ==========================================
 
 # 🟢 NEW: Inject CSS to hide the default Streamlit footer (Keep this part)
+st.markdown("""
+<style>
 /* โค้ดสำหรับซ่อน Streamlit footer เดิม (ยังจำเป็นต้องมี) */
 footer {
     visibility: hidden;
