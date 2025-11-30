@@ -79,6 +79,14 @@ if st.session_state.df is not None:
             st.sidebar.success("Saved!")
             st.experimental_rerun()
 
+# 🟢 NEW: เพิ่มเครดิตที่ส่วนท้ายของ Sidebar (เฉพาะเมื่อมีการโหลดข้อมูลแล้ว)
+st.sidebar.markdown("""
+<hr style="margin-top: 20px; margin-bottom: 10px; border-color: var(--border-color);">
+<div style='text-align: center; font-size: 0.7em; color: var(--text-color);'>
+  &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
+</div>
+""", unsafe_allow_html=True)
+
 # ==========================================
 # 2. MAIN AREA
 # ==========================================
@@ -112,3 +120,41 @@ if st.session_state.df is not None:
 
 else:
     st.info("👈 Please load example data or upload a file to start.")
+    st.markdown("""
+### ✨ All Statistical Features:
+
+1.  **Raw Data Management:**
+    * Load/Import data files (CSV, Excel, etc.).
+    * Performs **automatic data type detection** and preliminary structure checking.
+
+2.  **Baseline Characteristics (Table 1):**
+    * Auto-generated summary table (Mean ± SD / Median IQR, Count %).
+    * **Automated P-value Selection:** Automatically selects the correct statistical test (**t-test, Mann-Whitney U, Chi-square, Fisher's Exact, etc.**) based on variable type and distribution.
+
+3.  **Diagnostic Test & Statistics:**
+    * **ROC Curve Analysis:** Evaluates test performance using AUC and identifies the Optimal Cut-off Point.
+    * **Chi-square & Risk Analysis:** Generates a structured Contingency Table and calculates Risk Ratios and Odds Ratios (OR).
+
+4.  **Continuous Correlation (Pearson/Spearman):**
+    * Measures **Linear** (Pearson) or **Monotonic** (Spearman) association between two continuous variables.
+
+5.  **Binary Logistic Regression:**
+    * Univariate & Multivariate Analysis.
+    * Calculates **Odds Ratio (OR)** and **Adjusted Odds Ratio (AOR)**, controlling for confounding variables.
+    """)
+
+# ==========================================
+# 3. GLOBAL CSS (Cleanup)
+# ==========================================
+
+# 🟢 NEW: Inject CSS to hide the default Streamlit footer (Keep this part)
+/* โค้ดสำหรับซ่อน Streamlit footer เดิม (ยังจำเป็นต้องมี) */
+footer {
+    visibility: hidden;
+    height: 0px;
+}
+footer:after {
+    content: none;
+}
+</style>
+""", unsafe_allow_html=True)
