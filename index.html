@@ -7,6 +7,16 @@
     <title>Medical Stat Tool</title>
     <script src="https://cdn.jsdelivr.net/npm/@stlite/mountable@0.39.0/build/stlite.js"></script>
     </head>
+    <style>
+  /* โค้ดสำหรับซ่อน Streamlit footer เดิม (ยังจำเป็นต้องมี) */
+  footer {
+    visibility: hidden;
+    height: 0px;
+  }
+  footer:after {
+    content: none;
+  }
+      </style>
   <body>
     <div id="root"></div>
   <script>
