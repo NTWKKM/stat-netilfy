@@ -2,19 +2,19 @@ import streamlit as st
 import table_one # Import จาก root directory
 
 def render(df, var_meta):
-    st.subheader("1. Baseline Characteristics (Table 1)")
-    ##### Baseline Characteristics (Table 1)
-    st.info("""
-    **💡 Guide:** Used to summarize key patient demographics and characteristics, often stratified by a primary **Grouping Variable** (e.g., Treatment Arm or Outcome Status). This table is essential for checking group comparability.
+        st.subheader("1. Baseline Characteristics (Table 1)")
+        st.info("""
+    **💡 Guide:** Summarizes key demographics and patient characteristics, stratified by a **Grouping Variable**, to assess **group comparability**.
 
-    * **Numeric Variables:** Displayed as **Mean ± Standard Deviation (SD)** for normally distributed data, or **Median (Interquartile Range - IQR)** for non-normally distributed data.
-    * **Categorical Variables:** Displayed as **Count (Percentage)**.
-    * **P-value (Comparison):** Shows if there is a statistically significant difference between the **Grouping Variable's** levels for each characteristic (e.g., Is the average age significantly different between Treatment Group A and Group B?).
+    **Presentation:**
+    * **Numeric:** Mean ± Standard Deviation (SD) for normal data, or Median (Interquartile Range - IQR) for non-normal data.
+    * **Categorical:** Count (Percentage).
+    * **P-value:** Tests for statistically significant differences in characteristics across the Grouping Variable's levels.
 
     **Variable Selection:**
-    * **Grouping Variable (Split):** The **primary categorical variable** used to divide the **dataset** (e.g., 'Treatment' or 'Outcome').
-    * **Characteristic Variables:** All other variables (numeric and categorical) to be summarized and compared across the groups.
-    """)
+    * **Grouping Variable (Split):** The primary categorical variable used to stratify the **dataset** (e.g., 'Treatment' or 'Outcome').
+    * **Characteristics:** All other variables (numeric/categorical) to be summarized and compared.
+        """)
     
     all_cols = df.columns.tolist()
     grp_idx = 0
