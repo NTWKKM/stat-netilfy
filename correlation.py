@@ -5,24 +5,55 @@ import matplotlib.pyplot as plt
 import io, base64
 
 def calculate_chi2(df, col1, col2, correction=True):
-    """คำนวณ Chi-square พร้อม Risk Ratio สำหรับตาราง 2x2"""
+    """คำนวณ Chi-square พร้อมตัวเลือก Yates' correction"""
     if col1 not in df.columns or col2 not in df.columns: 
         return None, None, "Columns not found"
     
     data = df[[col1, col2]].dropna()
-    # สร้างตารางไขว้ (Crosstab)
-    tab = pd.crosstab(data[col1], data[col2])
     
+    # Contingency Table (Frequency Count for Chi2 calculation)
+    tab_chi2 = pd.crosstab(data[col1], data[col2])
+    
+    # 🟢 NEW: สร้างตาราง Display แบบ Count (Percent) เหมือน diag_test.py
+    # 1. Row Percentages
+    tab_row_pct = pd.crosstab(data[col1], data[col2], normalize='index', margins=True, margins_name="Total") * 100
+    # 2. Total Percentages
+    tab_total_pct = pd.crosstab(data[col1], data[col2], normalize='all', margins=True, margins_name="Total") * 100
+    # 3. Raw Counts
+    tab_raw = pd.crosstab(data[col1], data[col2], margins=True, margins_name="Total")
+    
+    # Combine into display format: Count (Row%) / (Total%)
+    col_names = tab_raw.columns.tolist() 
+    index_names = tab_raw.index.tolist()
+    display_data = []
+    
+    for row in index_names:
+        row_dat = []
+        for col in col_names:
+            count = tab_raw.loc[row, col]
+            tot_pct = tab_total_pct.loc[row, col]
+            
+            if row == 'Total' and col == 'Total':
+                txt = f"{count} / ({tot_pct:.1f}%)"
+            elif col == 'Total' or row == 'Total':
+                txt = f"{count} / ({tot_pct:.1f}%)"
+            else:
+                r_pct = tab_row_pct.loc[row, col]
+                txt = f"{count} ({r_pct:.1f}%) / ({tot_pct:.1f}%)"
+            row_dat.append(txt)
+        display_data.append([row] + row_dat)
+        
+    display_tab = pd.DataFrame(display_data, columns=[col1] + col_names).set_index(col1)
+
     try:
-        chi2, p, dof, ex = stats.chi2_contingency(tab, correction=correction)
+        chi2, p, dof, ex = stats.chi2_contingency(tab_chi2, correction=correction)
         
         method_name = "Chi-Square"
-        if tab.shape == (2, 2):
+        if tab_chi2.shape == (2, 2):
             method_name += " (with Yates' Correction)" if correction else " (Pearson Uncorrected)"
-        
+            
         msg = f"{method_name}: Chi2={chi2:.4f}, p={p:.4f}"
         
-        # เก็บค่าพื้นฐาน
         stats_res = {
             "Test": method_name,
             "Statistic": chi2,
@@ -30,46 +61,36 @@ def calculate_chi2(df, col1, col2, correction=True):
             "Degrees of Freedom": dof,
             "N": len(data)
         }
-
-        # 🟢 เพิ่มการคำนวณ Risk Ratio (RR) / Odds Ratio (OR) สำหรับ 2x2
-        if tab.shape == (2, 2):
+        
+        # Add Risk Estimates (RR/OR) if 2x2
+        if tab_chi2.shape == (2, 2):
             try:
-                # แปลงเป็น numpy array เพื่อเข้าถึง index ง่ายๆ [[a, b], [c, d]]
-                # a=Exposed+,Event+ | b=Exposed+,Event-
-                # c=Exposed-,Event+ | d=Exposed-,Event-
-                # หมายเหตุ: การเรียงลำดับขึ้นอยู่กับค่าของข้อมูล (เช่น 0,1 หรือ No,Yes)
-                vals = tab.values
+                # Use tab_chi2 values for calculation
+                vals = tab_chi2.values
                 a, b = vals[0, 0], vals[0, 1]
                 c, d = vals[1, 0], vals[1, 1]
                 
-                # Odds Ratio
-                odd_ratio, p_or = stats.fisher_exact(tab)
+                # OR
+                odd_ratio, _ = stats.fisher_exact(tab_chi2)
                 stats_res["Odds Ratio (OR)"] = odd_ratio
                 
-                # Risk Ratio (RR) = [a/(a+b)] / [c/(c+d)]
-                risk_exposed = a / (a + b) if (a + b) > 0 else 0
-                risk_unexposed = c / (c + d) if (c + d) > 0 else 0
+                # RR
+                risk_exp = a / (a + b) if (a + b) > 0 else 0
+                risk_unexp = c / (c + d) if (c + d) > 0 else 0
                 
-                if risk_unexposed > 0:
-                    rr = risk_exposed / risk_unexposed
+                if risk_unexp > 0:
+                    rr = risk_exp / risk_unexp
                     stats_res["Risk Ratio (RR)"] = rr
-                    
-                    # Absolute Risk Reduction (ARR) & NNT
-                    arr = risk_exposed - risk_unexposed # หรือ risk_unexposed - risk_exposed ขึ้นอยู่กับบริบท
+                    arr = risk_exp - risk_unexp
                     stats_res["Risk Difference (RD)"] = arr
-                    if arr != 0:
-                        stats_res["NNT"] = abs(1 / arr)
-                    else:
-                        stats_res["NNT"] = np.inf
-            except Exception as e:
-                stats_res["Risk Calc Error"] = str(e)
+                    stats_res["NNT"] = abs(1/arr) if arr != 0 else np.inf
+            except: pass
 
-        return tab, stats_res, msg
+        return display_tab, stats_res, msg # Return display_tab instead of raw tab
     except Exception as e:
-        return tab, None, str(e)
+        return display_tab, None, str(e)
 
 def calculate_correlation(df, col1, col2, method='pearson'):
-    # ... (ส่วนนี้เหมือนเดิม ใช้โค้ดเดิมได้เลยครับ) ...
     if col1 not in df.columns or col2 not in df.columns:
         return None, "Columns not found", None
 
@@ -114,7 +135,7 @@ def calculate_correlation(df, col1, col2, method='pearson'):
     return stats_res, None, fig
 
 def generate_report(title, elements):
-    # ... (ส่วนนี้เหมือนเดิม ใช้โค้ดเดิมได้เลยครับ) ...
+    # CSS Styling
     css_style = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; margin: 0; color: #333; }
@@ -125,6 +146,8 @@ def generate_report(title, elements):
         th, td { padding: 10px 15px; border: 1px solid #e0e0e0; vertical-align: top; text-align: left; }
         th { background-color: #f0f2f6; font-weight: 600; }
         tr:nth-child(even) td { background-color: #f9f9f9; }
+        .report-table th, .report-table td { text-align: center; } 
+        .report-table th:first-child, .report-table td:first-child { text-align: left; }
         .report-footer {
             text-align: right;
             font-size: 0.75em;
@@ -139,16 +162,47 @@ def generate_report(title, elements):
     html += f"<div class='report-container'><h2>{title}</h2>"
     
     for element in elements:
-        if element.get('header'): html += f"<h4>{element['header']}</h4>"
-        if element['type'] == 'text': 
-            html += f"<p>{element['data']}</p>"
-        elif element['type'] == 'table': 
-            html += element['data'].to_html(index=True, classes='report-table')
-        elif element['type'] == 'plot':
+        element_type = element['type']
+        data = element['data']
+        header = element.get('header', '')
+        
+        if header: html += f"<h4>{header}</h4>"
+            
+        if element_type == 'text':
+            html += f"<p>{data}</p>"
+        elif element_type == 'table':
+            html += data.to_html(index=True, classes='report-table')
+            
+        # 🟢 1. Handle Contingency Table (Two-Level Header)
+        elif element_type == 'contingency_table':
+            df_html = data.to_html(index=True, classes='report-table', header=False)
+            col_names_raw = data.columns.tolist()
+            index_name = data.index.name
+            outcome_col_name = element.get('outcome_col', 'Outcome')
+            
+            # Row 1: Exposure & Outcome Header
+            header_row1 = "<tr>"
+            header_row1 += f"<th rowspan='2' class='report-table' style='text-align: left;'>{index_name}</th>"
+            header_row1 += f"<th colspan='{len(col_names_raw)}' class='report-table'>{outcome_col_name}</th>" 
+            header_row1 += "</tr>"
+            
+            # Row 2: Outcome Levels
+            header_row2 = "<tr>"
+            for col_name in col_names_raw:
+                 header_row2 += f"<th class='report-table'>{col_name}</th>"
+            header_row2 += "</tr>"
+            
+            # Insert Header
+            table_start_tag = df_html.split('<thead>')[0]
+            table_end_tag = df_html.split('</thead>')[1]
+            custom_header = f"<thead>{header_row1}{header_row2}</thead>"
+            html += table_start_tag + custom_header + table_end_tag
+
+        elif element_type == 'plot':
             buf = io.BytesIO()
-            if isinstance(element['data'], plt.Figure):
-                element['data'].savefig(buf, format='png', bbox_inches='tight')
-                plt.close(element['data'])
+            if isinstance(data, plt.Figure):
+                data.savefig(buf, format='png', bbox_inches='tight')
+                plt.close(data)
                 data_uri = base64.b64encode(buf.getvalue()).decode('utf-8')
                 html += f'<img src="data:image/png;base64,{data_uri}" style="max-width: 100%;"/>'
             buf.close()
