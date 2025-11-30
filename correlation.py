@@ -105,4 +105,11 @@ def generate_report(title, elements):
                 html += f'<img src="data:image/png;base64,{data_uri}" style="max-width: 100%;"/>'
             buf.close()
     html += "</div></body></html>"
+       # 🟢 NEW: เพิ่ม Footer ของ Report
+    html += """
+    <div class="report-footer">
+      &copy; 2025 NTWKKM | Powered by GitHub, Gemini, Streamlit
+    </div>
+    """
+    html += "</div></body></html>"
     return html
