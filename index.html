@@ -20,26 +20,26 @@
   <body>
     <div id="root"></div>
   <script>
-      stlite.mount({
-        requirements: ["pandas", "scipy", "statsmodels", "openpyxl", "scikit-learn", "matplotlib"],
-        entrypoint: "app.py",
-        files: {
-          /* 1. ไฟล์หลักที่ Root */
-          "app.py": { url: "./app.py" },
-          "logic.py": { url: "./logic.py" },
-          "diag_test.py": { url: "./diag_test.py" },
-          "table_one.py": { url: "./table_one.py" },
-          "correlation.py": { url: "./correlation.py" },  /* 🟢 อย่าลืมไฟล์นี้ */
-
-          /* 2. ไฟล์ในโฟลเดอร์ tabs (ต้องระบุ path ให้ตรง) */
-          "tabs/__init__.py": { url: "./tabs/__init__.py" },
-          "tabs/tab_data.py": { url: "./tabs/tab_data.py" },
-          "tabs/tab_table1.py": { url: "./tabs/tab_table1.py" },
-          "tabs/tab_diag.py": { url: "./tabs/tab_diag.py" },
-          "tabs/tab_corr.py": { url: "./tabs/tab_corr.py" },
-          "tabs/tab_logit.py": { url: "./tabs/tab_logit.py" }
-        },
-      }, document.getElementById("root"));
-    </script>
+  stlite.mount({
+    requirements: ["pandas", "scipy", "statsmodels", "openpyxl", "scikit-learn", "matplotlib", "lifelines==0.27.8"], /* 🟢 เพิ่ม lifelines */
+    entrypoint: "app.py",
+    files: {
+      "app.py": { url: "./app.py" },
+      "logic.py": { url: "./logic.py" },
+      "survival_lib.py": { url: "./survival_lib.py" }, /* 🟢 เพิ่มไฟล์ Logic ใหม่ */
+      "diag_test.py": { url: "./diag_test.py" },
+      "table_one.py": { url: "./table_one.py" },
+      "correlation.py": { url: "./correlation.py" },
+      
+      "tabs/__init__.py": { url: "./tabs/__init__.py" },
+      "tabs/tab_data.py": { url: "./tabs/tab_data.py" },
+      "tabs/tab_table1.py": { url: "./tabs/tab_table1.py" },
+      "tabs/tab_diag.py": { url: "./tabs/tab_diag.py" },
+      "tabs/tab_corr.py": { url: "./tabs/tab_corr.py" },
+      "tabs/tab_logit.py": { url: "./tabs/tab_logit.py" },
+      "tabs/tab_survival.py": { url: "./tabs/tab_survival.py" } /* 🟢 เพิ่มไฟล์ Tab ใหม่ */
+    },
+  }, document.getElementById("root"));
+</script>
   </body>
 </html>

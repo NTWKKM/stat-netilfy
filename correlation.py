@@ -4,8 +4,11 @@ import scipy.stats as stats
 import matplotlib.pyplot as plt
 import io, base64
 
-def calculate_chi2(df, col1, col2, correction=True):
-    """คำนวณ Chi-square พร้อมสร้างตาราง 2 ชั้น และบังคับเรียง 1, 0"""
+def calculate_chi2(df, col1, col2, correction=True, v1_pos=None, v2_pos=None): # <--- MODIFIED
+    """
+    (SYNCED WITH diag_test.py)
+    คำนวณ Chi-square พร้อมสร้างตาราง 2 ชั้น และเรียงตามที่ User กำหนด (v1_pos, v2_pos) หรือตามค่าเริ่มต้น (1 ก่อน 0)
+    """
     if col1 not in df.columns or col2 not in df.columns: 
         return None, None, "Columns not found", None
     
@@ -16,34 +19,62 @@ def calculate_chi2(df, col1, col2, correction=True):
     tab_raw = pd.crosstab(data[col1], data[col2], margins=True, margins_name="Total")
     tab_row_pct = pd.crosstab(data[col1], data[col2], normalize='index', margins=True, margins_name="Total") * 100
     
-    # --- 🟢 FIX: Reorder Columns (Outcome) and Rows (Exposure) to put '1' first ---
+    # --- 🟢 FIX: Reorder Columns (Outcome) and Rows (Exposure) using user labels ---
     
-    # 1. แยก Label หลักออกจาก 'Total'
     all_col_labels = tab_raw.columns.tolist() 
     all_row_labels = tab_raw.index.tolist()
     base_col_labels = [col for col in all_col_labels if col != 'Total']
     base_row_labels = [row for row in all_row_labels if row != 'Total']
 
-    # 2. Custom Sort: เรียงตามค่าตัวเลขมากไปน้อย (เพื่อบังคับให้ 1, 0)
-    def custom_sort(label):
-        try:
-            # พยายามแปลงเป็น float สำหรับการเรียงตัวเลข
-            return float(label)
-        except (ValueError, TypeError):
-            # สำหรับ string หรือค่าที่ไม่ใช่ตัวเลข (ให้ใช้ค่า string นั้น)
-            return str(label)
+    # Function to get the correct original label object (e.g., int 1) from its string representation ('1')
+    def get_original_label(label_str, df_labels):
+        for lbl in df_labels:
+            if str(lbl) == label_str:
+                return lbl
+        return label_str 
+    
+   # --- 1. Reorder Column Labels (Outcome) ---
+    final_col_order_base = base_col_labels[:]
+    # 🟢 FIX: Check only if v2_pos is provided (prioritize user choice)
+    if v2_pos is not None: 
+        v2_pos_original = get_original_label(v2_pos, base_col_labels)
+        
+        if v2_pos_original in final_col_order_base:
+            final_col_order_base.remove(v2_pos_original)
+            final_col_order_base.insert(0, v2_pos_original)
+            
+    # ถ้าผู้ใช้ไม่ได้กำหนดค่า หรือค่านั้นไม่ตรงกับข้อมูลในตาราง ให้เรียงอัตโนมัติ
+    else:
+        def custom_sort(label):
+            try: return float(label)
+            except (ValueError, TypeError): return str(label)
+        final_col_order_base.sort(key=custom_sort, reverse=True)
 
-    base_col_labels.sort(key=custom_sort, reverse=True) # เช่น [1, 0]
-    base_row_labels.sort(key=custom_sort, reverse=True) # เช่น [1, 0]
+    final_col_order = final_col_order_base + ['Total'] 
 
-    # 3. กำหนดลำดับสุดท้าย (รวม 'Total')
-    final_col_order = base_col_labels + ['Total'] 
-    final_row_order = base_row_labels + ['Total']
+    # --- 2. Reorder Row Labels (Exposure) ---
+    final_row_order_base = base_row_labels[:]
+    # 🟢 FIX: Check only if v1_pos is provided (prioritize user choice)
+    if v1_pos is not None: 
+        v1_pos_original = get_original_label(v1_pos, base_row_labels)
+        
+        if v1_pos_original in final_row_order_base:
+            final_row_order_base.remove(v1_pos_original)
+            final_row_order_base.insert(0, v1_pos_original)
+    
+    # ถ้าผู้ใช้ไม่ได้กำหนดค่า หรือค่านั้นไม่ตรงกับข้อมูลในตาราง ให้เรียงอัตโนมัติ
+    else:
+        def custom_sort(label):
+            try: return float(label)
+            except (ValueError, TypeError): return str(label)
+        final_row_order_base.sort(key=custom_sort, reverse=True)
+    
+    final_row_order = final_row_order_base + ['Total']
 
-    # 4. Reindex ตารางทั้งหมดตามลำดับใหม่
+    # 3. Reindex tables
     tab_raw = tab_raw.reindex(index=final_row_order, columns=final_col_order)
     tab_row_pct = tab_row_pct.reindex(index=final_row_order, columns=final_col_order)
-    tab_chi2 = tab_chi2.reindex(index=base_row_labels, columns=base_col_labels) # tab_chi2 ไม่มี 'Total'
+    tab_chi2 = tab_chi2.reindex(index=final_row_order_base, columns=final_col_order_base)
     
     # 5. Update iteration lists
     col_names = final_col_order 
@@ -94,7 +125,7 @@ def calculate_chi2(df, col1, col2, correction=True):
                 a, b = vals[0, 0], vals[0, 1]
                 c, d = vals[1, 0], vals[1, 1]
                 
-                # Label ถูกดึงมาอย่างถูกลำดับแล้ว (1 ก่อน 0)
+                # Label ถูกดึงมาอย่างถูกลำดับแล้ว (ตาม user pos label)
                 row_labels = tab_chi2.index.tolist(); col_labels = tab_chi2.columns.tolist()
                 label_exp = str(row_labels[0]); label_unexp = str(row_labels[1]); label_event = str(col_labels[0])
                 
@@ -190,11 +221,13 @@ def generate_report(title, elements):
             
             # --- Body (Rows 3-5) ---
             html_tab += "<tbody>"
-            for idx_label, row in data.iterrows():
+            # 🟢 FIX: Iterate over row_labels and col_labels explicitly to ensure ordering
+            for idx_label in row_labels:
                 html_tab += "<tr>"
                 html_tab += f"<td class='td-label'>{idx_label}</td>"
                 
-                for val in row:
+                for col_label in col_labels:
+                    val = data.loc[idx_label, col_label] # Fetch value using explicit index/column
                     html_tab += f"<td>{val}</td>"
                 html_tab += "</tr>"
             html_tab += "</tbody></table>"

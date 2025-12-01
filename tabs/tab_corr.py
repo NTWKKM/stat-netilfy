@@ -28,19 +28,56 @@ def render(df):
         """)
 
         cc1, cc2, cc3 = st.columns(3)
-        v1 = cc1.selectbox("Variable 1 (Exposure/Row):", all_cols, key='chi1_corr_tab') 
-        v2 = cc2.selectbox("Variable 2 (Outcome/Col):", all_cols, index=min(1, len(all_cols)-1), key='chi2_corr_tab')
+        
+        # 🟢 UPDATE 1: Auto-select V1 and V2
+        v1_default_name = 'Hypertension'
+        v2_default_name = 'Outcome_Disease'
+        
+        v1_idx = next((i for i, c in enumerate(all_cols) if c == v1_default_name), 0)
+        v2_idx = next((i for i, c in enumerate(all_cols) if c == v2_default_name), min(1, len(all_cols)-1))
+        
+        v1 = cc1.selectbox("Variable 1 (Exposure/Row):", all_cols, index=v1_idx, key='chi1_corr_tab') 
+        v2 = cc2.selectbox("Variable 2 (Outcome/Col):", all_cols, index=v2_idx, key='chi2_corr_tab')
         
         correction_flag = cc3.radio("Correction Method (for 2x2):", 
                                     ['Pearson (Standard)', "Yates' correction"], 
                                     index=0, key='chi_corr_method_tab') == "Yates' correction"
 
+        # 🟢 NEW: Positive Label Selectors
+
+        # Helper function to get unique values and set default index (Duplicated for tab_corr)
+        def get_pos_label_settings(df, col_name):
+            unique_vals = [str(x) for x in df[col_name].dropna().unique()]
+            unique_vals.sort()
+            default_idx = 0
+            if '1' in unique_vals:
+                default_idx = unique_vals.index('1')
+            return unique_vals, default_idx
+
+        # Selector for V1 Positive Label
+        cc4, cc5, cc6 = st.columns(3)
+        v1_uv, v1_default_idx = get_pos_label_settings(df, v1)
+        v1_pos_label = cc4.selectbox(f"Positive Label (Row: {v1}):", v1_uv, index=v1_default_idx, key='chi_v1_pos_corr')
+
+        # Selector for V2 Positive Label (Outcome)
+        v2_uv, v2_default_idx = get_pos_label_settings(df, v2)
+        v2_pos_label = cc5.selectbox(f"Positive Label (Col: {v2}):", v2_uv, index=v2_default_idx, key='chi_v2_pos_corr')
+        
+        # Add a placeholder column to maintain alignment
+        cc6.empty()
+        st.caption("Select Positive Label for Risk/Odds Ratio calculation (default is '1'):")
+
         run_col, dl_col = st.columns([1, 1])
         if 'html_output_corr_cat' not in st.session_state: st.session_state.html_output_corr_cat = None
 
         if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run'):
-            # 🟢 UPDATE 1: รับค่า 4 ตัว (เพิ่ม risk_df)
-            tab, stats, msg, risk_df = correlation.calculate_chi2(df, v1, v2, correction=correction_flag)
+            # 🟢 UPDATE 4: Pass new parameters to calculate_chi2
+            tab, stats, msg, risk_df = correlation.calculate_chi2(
+                df, v1, v2, 
+                correction=correction_flag,
+                v1_pos=v1_pos_label, # <--- NEW PARAMETER
+                v2_pos=v2_pos_label  # <--- NEW PARAMETER
+            )
             
             if tab is not None:
                 rep = [
@@ -74,7 +111,6 @@ def render(df):
     # ==================================================
     # SUB-TAB 2: Pearson/Spearman (Continuous)
     # ==================================================
-    # (ส่วนนี้เหมือนเดิม ไม่ต้องแก้)
     with sub_tab2:
         st.markdown("##### Continuous Correlation Analysis")
         st.info("""
@@ -95,8 +131,16 @@ def render(df):
         
         c1, c2, c3 = st.columns(3)
         cm = c1.selectbox("Correlation Coefficient:", ["Pearson", "Spearman"], key='coeff_type_tab')
-        cv1 = c2.selectbox("Variable 1 (X-axis):", all_cols, key='cv1_corr_tab')
-        cv2 = c3.selectbox("Variable 2 (Y-axis):", all_cols, index=min(1,len(all_cols)-1), key='cv2_corr_tab')
+        
+        # 🟢 UPDATE: Auto-select BMI and Inflammation_Marker
+        cv1_default_name = 'BMI'
+        cv2_default_name = 'Inflammation_Marker'
+        
+        cv1_idx = next((i for i, c in enumerate(all_cols) if c == cv1_default_name), 0)
+        cv2_idx = next((i for i, c in enumerate(all_cols) if c == cv2_default_name), min(1, len(all_cols)-1))
+        
+        cv1 = c2.selectbox("Variable 1 (X-axis):", all_cols, index=cv1_idx, key='cv1_corr_tab')
+        cv2 = c3.selectbox("Variable 2 (Y-axis):", all_cols, index=cv2_idx, key='cv2_corr_tab')
         
         run_col_cont, dl_col_cont = st.columns([1, 1])
         if 'html_output_corr_cont' not in st.session_state: st.session_state.html_output_corr_cont = None

@@ -38,7 +38,13 @@ def render(df, var_meta):
         unique_vals = df[truth].dropna().unique()
         if len(unique_vals) == 2:
             sorted_vals = sorted([str(x) for x in unique_vals])
-            pos_label = rc4.selectbox("Positive Label (1):", sorted_vals, key='roc_pos_diag')
+            
+            # 🟢 NEW LOGIC: Set default index to '1' if it exists
+            default_pos_idx = 0
+            if '1' in sorted_vals:
+                default_pos_idx = sorted_vals.index('1')
+                
+            pos_label = rc4.selectbox("Positive Label (1):", sorted_vals, index=default_pos_idx, key='roc_pos_diag')
         elif len(unique_vals) != 2:
             rc4.warning("Requires 2 unique values.")
 
@@ -83,17 +89,55 @@ def render(df, var_meta):
         """)
 
         c1, c2, c3 = st.columns(3)
-        v1 = c1.selectbox("Variable 1 (Exposure/Row):", all_cols, key='chi_v1_diag')
-        v2 = c2.selectbox("Variable 2 (Outcome/Col):", all_cols, index=min(1,len(all_cols)-1), key='chi_v2_diag')
+        
+        # 🟢 UPDATE 1: Auto-select V1 and V2
+        v1_default_name = 'Hypertension'
+        v2_default_name = 'Outcome_Disease'
+        
+        # Locate index. Use 0 and min(1, len-1) as fallbacks.
+        v1_idx = next((i for i, c in enumerate(all_cols) if c == v1_default_name), 0)
+        v2_idx = next((i for i, c in enumerate(all_cols) if c == v2_default_name), min(1, len(all_cols)-1))
+        
+        v1 = c1.selectbox("Variable 1 (Exposure/Row):", all_cols, index=v1_idx, key='chi_v1_diag')
+        v2 = c2.selectbox("Variable 2 (Outcome/Col):", all_cols, index=v2_idx, key='chi_v2_diag')
         
         correction_flag = c3.radio("Correction (2x2):", ['Pearson', "Yates'"], index=0, key='chi_corr_diag') == "Yates'"
+        
+        # 🟢 NEW: Positive Label Selectors
+        
+        # Helper function to get unique values and set default index
+        def get_pos_label_settings(df, col_name):
+            unique_vals = [str(x) for x in df[col_name].dropna().unique()]
+            unique_vals.sort()
+            default_idx = 0
+            if '1' in unique_vals:
+                default_idx = unique_vals.index('1')
+            return unique_vals, default_idx
 
+        # Selector for V1 Positive Label
+        c4, c5, c6 = st.columns(3)
+        v1_uv, v1_default_idx = get_pos_label_settings(df, v1)
+        v1_pos_label = c4.selectbox(f"Positive Label (Row: {v1}):", v1_uv, index=v1_default_idx, key='chi_v1_pos_diag')
+
+        # Selector for V2 Positive Label (Outcome)
+        v2_uv, v2_default_idx = get_pos_label_settings(df, v2)
+        v2_pos_label = c5.selectbox(f"Positive Label (Col: {v2}):", v2_uv, index=v2_default_idx, key='chi_v2_pos_diag')
+
+        # Add a placeholder column to maintain alignment
+        c6.empty()
+        st.caption("Select Positive Label for Risk/Odds Ratio calculation (default is '1'):")
+        
         run_col, dl_col = st.columns([1, 1])
         if 'html_output_chi' not in st.session_state: st.session_state.html_output_chi = None
 
         if run_col.button("Run Chi-Square", key='btn_chi_diag'):
-            # 🟢 UPDATE 1: รับค่า 4 ตัว (ปรับให้เหมือน correlation.py)
-            tab, stats, msg, risk_df = diag_test.calculate_chi2(df, v1, v2, correction=correction_flag)
+           # 🟢 UPDATE 4: Pass new parameters to calculate_chi2
+            tab, stats, msg, risk_df = diag_test.calculate_chi2(
+                df, v1, v2, 
+                correction=correction_flag,
+                v1_pos=v1_pos_label, # <--- NEW PARAMETER
+                v2_pos=v2_pos_label  # <--- NEW PARAMETER
+            )
             
             if tab is not None:
                 # 🟢 UPDATE 2: สร้าง Report โดยใช้ตัวแปรใหม่
@@ -127,7 +171,6 @@ def render(df, var_meta):
             * **Numeric:** Mean, SD, Median, Min, Max, Quartiles.
             * **Categorical:** Frequency Counts and Percentages.
         """)
-        
         dv = st.selectbox("Select Variable:", all_cols, key='desc_v_diag')
         run_col, dl_col = st.columns([1, 1])
         if 'html_output_desc' not in st.session_state: st.session_state.html_output_desc = None
