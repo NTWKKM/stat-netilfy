@@ -104,7 +104,6 @@ def render(df, var_meta):
         correction_flag = c3.radio("Correction (2x2):", ['Pearson', "Yates'"], index=0, key='chi_corr_diag') == "Yates'"
         
         # 🟢 NEW: Positive Label Selectors
-        st.markdown("---")
         st.caption("Select Positive Label for Risk/Odds Ratio calculation (default is '1'):")
         
         # Helper function to get unique values and set default index
