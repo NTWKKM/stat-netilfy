@@ -93,11 +93,19 @@ def render(df):
         if custom_na_list:
             df_final[col] = df_final[col].replace(custom_na_list, np.nan)
         
+        # 🟢 เพิ่ม: ลบช่องว่างหัวท้าย (Trim) สำหรับคอลัมน์ที่เป็นข้อความก่อนแปลง
+        # ช่วยแก้เคส "12.5 " (มี space) ให้กลายเป็น "12.5" ปกติ
+        if df_final[col].dtype == 'object':
+             df_final[col] = df_final[col].astype(str).str.strip()
+
         try:
             df_final[col] = pd.to_numeric(df_final[col], errors='raise')
         except:
-            df_final[col] = pd.to_numeric(df_final[col], errors='ignore')
-
+            # 🟢 แก้ไข: เปลี่ยนจาก 'ignore' เป็น 'coerce'
+            # เพื่อบังคับแปลงเป็นตัวเลข ค่าไหนแปลงไม่ได้ (เช่น 'abc') จะกลายเป็น NaN
+            # ทำให้ค่าที่เป็นตัวเลขอยู่แล้ว (เช่น '12.5') ไม่โดนดึงให้เป็น String ไปด้วย
+            df_final[col] = pd.to_numeric(df_final[col], errors='coerce')
+            
     # 6. Check Quality
     check_data_quality(df_final, warning_container)
 
