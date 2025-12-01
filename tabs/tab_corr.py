@@ -44,7 +44,6 @@ def render(df):
                                     index=0, key='chi_corr_method_tab') == "Yates' correction"
 
         # 🟢 NEW: Positive Label Selectors
-        st.markdown("---")
         st.caption("Select Positive Label for Risk/Odds Ratio calculation (default is '1'):")
 
         # Helper function to get unique values and set default index (Duplicated for tab_corr)
