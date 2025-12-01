@@ -44,7 +44,6 @@ def render(df):
                                     index=0, key='chi_corr_method_tab') == "Yates' correction"
 
         # 🟢 NEW: Positive Label Selectors
-        st.caption("Select Positive Label for Risk/Odds Ratio calculation (default is '1'):")
 
         # Helper function to get unique values and set default index (Duplicated for tab_corr)
         def get_pos_label_settings(df, col_name):
@@ -66,7 +65,7 @@ def render(df):
         
         # Add a placeholder column to maintain alignment
         cc6.empty()
-        st.markdown("---")
+        st.caption("Select Positive Label for Risk/Odds Ratio calculation (default is '1'):")
 
         run_col, dl_col = st.columns([1, 1])
         if 'html_output_corr_cat' not in st.session_state: st.session_state.html_output_corr_cat = None
