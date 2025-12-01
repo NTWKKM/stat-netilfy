@@ -81,8 +81,30 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
     ax.grid(True, alpha=0.3)
     
     return fig, pd.DataFrame(stats_res, index=["Value"]).T
-
-# --- 2. Cox Proportional Hazards Model ---
+# --- 🟢 2. Nelson-Aalen (Cumulative Hazard) ---
+def fit_nelson_aalen(df, time_col, event_col, group_col=None):
+    data = clean_survival_data(df, time_col, event_col, [group_col] if group_col else [])
+    naf = NelsonAalenFitter()
+    fig, ax = plt.subplots(figsize=(8, 5))
+    
+    if group_col:
+        groups = data[group_col].unique()
+        for g in groups:
+            mask = data[group_col] == g
+            naf.fit(data.loc[mask, time_col], event_observed=data.loc[mask, event_col], label=str(g))
+            naf.plot_cumulative_hazard(ax=ax)
+        ax.set_title(f"Nelson-Aalen Cumulative Hazard: {group_col}")
+    else:
+        naf.fit(data[time_col], event_observed=data[event_col], label="All")
+        naf.plot_cumulative_hazard(ax=ax)
+        ax.set_title("Nelson-Aalen Cumulative Hazard Curve")
+        
+    ax.set_xlabel(f"Time ({time_col})")
+    ax.set_ylabel("Cumulative Hazard")
+    ax.grid(True, alpha=0.3)
+    return fig
+    
+# --- 3. Cox Proportional Hazards Model ---
 def fit_cox_ph(df, time_col, event_col, covariates):
     """
     วิเคราะห์ Cox Regression และตรวจสอบ Assumption
@@ -102,7 +124,7 @@ def fit_cox_ph(df, time_col, event_col, covariates):
     except Exception as e:
         return None, None, str(e)
 
-# --- 3. Generate Report (Format เดิมของ Project) ---
+# --- 4. Generate Report (Format เดิมของ Project) ---
 def generate_report_survival(title, elements):
     css_style = """
     <style>
