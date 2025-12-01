@@ -80,8 +80,6 @@ def render(df):
                 v1_pos=v1_pos_label, # <--- NEW PARAMETER
                 v2_pos=v2_pos_label  # <--- NEW PARAMETER
             )
-
-            tab, stats, msg, risk_df = correlation.calculate_chi2(df, v1, v2, correction=correction_flag)
             
             if tab is not None:
                 rep = [
