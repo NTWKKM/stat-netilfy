@@ -83,8 +83,17 @@ def render(df, var_meta):
         """)
 
         c1, c2, c3 = st.columns(3)
-        v1 = c1.selectbox("Variable 1 (Exposure/Row):", all_cols, key='chi_v1_diag')
-        v2 = c2.selectbox("Variable 2 (Outcome/Col):", all_cols, index=min(1,len(all_cols)-1), key='chi_v2_diag')
+        
+        # 🟢 UPDATE: Auto-select Hypertension and Outcome_Disease
+        v1_default_name = 'Hypertension'
+        v2_default_name = 'Outcome_Disease'
+        
+        # Locate index. Use 0 and min(1, len-1) as fallbacks.
+        v1_idx = next((i for i, c in enumerate(all_cols) if c == v1_default_name), 0)
+        v2_idx = next((i for i, c in enumerate(all_cols) if c == v2_default_name), min(1, len(all_cols)-1))
+        
+        v1 = c1.selectbox("Variable 1 (Exposure/Row):", all_cols, index=v1_idx, key='chi_v1_diag')
+        v2 = c2.selectbox("Variable 2 (Outcome/Col):", all_cols, index=v2_idx, key='chi_v2_diag')
         
         correction_flag = c3.radio("Correction (2x2):", ['Pearson', "Yates'"], index=0, key='chi_corr_diag') == "Yates'"
 
@@ -127,7 +136,6 @@ def render(df, var_meta):
             * **Numeric:** Mean, SD, Median, Min, Max, Quartiles.
             * **Categorical:** Frequency Counts and Percentages.
         """)
-        
         dv = st.selectbox("Select Variable:", all_cols, key='desc_v_diag')
         run_col, dl_col = st.columns([1, 1])
         if 'html_output_desc' not in st.session_state: st.session_state.html_output_desc = None
