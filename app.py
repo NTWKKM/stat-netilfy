@@ -2,8 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-# Import หน้า Tab ที่แยกไว้ (ต้องสร้างโฟลเดอร์ tabs และไฟล์ __init__.py ก่อนนะ)
-from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit
+# Import หน้า Tab ที่แยกไว้ (เพิ่ม tab_survival)
+from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Medical Stat Tool", layout="wide")
@@ -79,21 +79,20 @@ if st.session_state.df is not None:
             st.sidebar.success("Saved!")
             st.experimental_rerun()
 
-# 🟢 NEW: เพิ่มเครดิตที่ส่วนท้ายของ Sidebar (เฉพาะเมื่อมีการโหลดข้อมูลแล้ว)
-
 # ==========================================
 # 2. MAIN AREA
 # ==========================================
 if st.session_state.df is not None:
     df = st.session_state.df
 
-    # Create Tabs
-    t0, t1, t2, t3, t4 = st.tabs([
+    # Create Tabs (เพิ่ม Survival Analysis)
+    t0, t1, t2, t3, t4, t5 = st.tabs([
         "📄 Raw Data", 
         "📋 Baseline Table 1", 
         "🔬 Diagnostic Test",
         "🔗 Correlation",
-        "📊 Logistic Regression" 
+        "📊 Logistic Regression",
+        "⏳ Survival Analysis" # <--- NEW TAB
     ])
 
     # Call Modules
@@ -111,6 +110,9 @@ if st.session_state.df is not None:
 
     with t4:
         tab_logit.render(df, st.session_state.var_meta)
+
+    with t5: # <--- NEW RENDER CALL
+        tab_survival.render(df, st.session_state.var_meta)
         
 else:
     st.info("👈 Please load example data or upload a file to start.")
