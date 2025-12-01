@@ -96,7 +96,16 @@ if upl:
         else: st.session_state.df = pd.read_excel(upl)
         st.sidebar.success("File Uploaded!")
     except Exception as e: st.sidebar.error(f"Error: {e}")
+        
+# 🟢 ส่วนที่เพิ่ม: ปุ่ม Reset Data
+if st.sidebar.button("🗑️ Reset All Data", type="primary"):
+    # ล้างค่าทุกอย่างใน Session State (เหมือนกด Refresh หน้าเว็บใหม่)
+    st.session_state.clear()
+    st.rerun() 
+    # หมายเหตุ: ถ้าใช้ Streamlit เวอร์ชันใหม่ แนะนำให้เปลี่ยนเป็น st.rerun()
 
+# Example Data Generator (โค้ดเดิมต่อจากนี้)
+if st.sidebar.button("📄 Load Example Data"):
 # Variable Settings (Metadata)
 if st.session_state.df is not None:
     st.sidebar.header("2. Settings")
@@ -123,7 +132,7 @@ if st.session_state.df is not None:
             st.session_state.var_meta[s_var]['type'] = n_type
             st.session_state.var_meta[s_var]['map'] = new_map
             st.sidebar.success("Saved!")
-            st.experimental_rerun()
+            st.rerun()
 
 # ==========================================
 # 2. MAIN AREA
