@@ -217,11 +217,13 @@ def generate_report(title, elements):
             
             # --- Body (Rows 3-5) ---
             html_tab += "<tbody>"
-            for idx_label, row in data.iterrows():
+            # 🟢 FIX: Iterate over row_labels and col_labels explicitly to ensure ordering
+            for idx_label in row_labels:
                 html_tab += "<tr>"
                 html_tab += f"<td class='td-label'>{idx_label}</td>"
                 
-                for val in row:
+                for col_label in col_labels:
+                    val = data.loc[idx_label, col_label] # Fetch value using explicit index/column
                     html_tab += f"<td>{val}</td>"
                 html_tab += "</tr>"
             html_tab += "</tbody></table>"
