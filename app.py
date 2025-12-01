@@ -19,7 +19,8 @@ st.sidebar.header("1. Data Management")
 
 # Example Data Generator
 if st.sidebar.button("📄 Load Example Data"):
-    np.random.seed(42); n = 200 # Increased n for better significance
+    np.random.seed(42)
+    n = 200 # Increased n for better significance
     
     # 1. Group Variable (0=Standard Care, 1=New Drug) - Use 0/1 for computation
     group = np.random.choice([0, 1], n, p=[0.5, 0.5]) 
