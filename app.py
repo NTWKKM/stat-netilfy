@@ -19,27 +19,72 @@ st.sidebar.header("1. Data Management")
 
 # Example Data Generator
 if st.sidebar.button("📄 Load Example Data"):
-    np.random.seed(42); n = 150
+    np.random.seed(42); n = 200 # Increased n for better significance
+    
+    # 1. Group Variable (0=Standard Care, 1=New Drug) - Use 0/1 for computation
+    group = np.random.choice([0, 1], n, p=[0.5, 0.5]) 
+
+    # 2. Predictors (Age, BMI, Sex)
+    age = np.random.normal(60, 10, n).astype(int)
+    sex = np.random.choice([0, 1], n)
+    bmi = np.random.normal(27, 4, n).round(1)
+    
+    # 3. Hypertension (Categorical, significantly different between groups for Table 1)
+    p_hyper = np.where(group == 0, 0.65, 0.3) # Higher prevalence in Standard Care (Group 0)
+    hypertension = np.random.binomial(1, p_hyper)
+    
+    # 4. Risk_Score (Continuous, significantly different between groups, good for Diagnostic/Table 1)
+    # Group 0 (Standard) has higher score, and correlates with age
+    risk_score_base = np.where(group == 0, 6 + np.random.normal(0, 1.5), 4 + np.random.normal(0, 1.5))
+    risk_score = risk_score_base + 0.05 * age # Introduce slight age effect
+    risk_score = risk_score.round(2)
+    
+    # 5. Outcome_Disease (Binary, significant prediction from Risk_Score and Group - Logistic Regression)
+    # Logit: -4 + 0.8 * Risk_Score - 1.2 * Group (Group 1 lowers the risk)
+    log_p = 1 / (1 + np.exp(-(-4 + 0.8 * risk_score - 1.2 * group))) 
+    outcome_disease = np.random.binomial(1, log_p)
+    
+    # 6. Correlation Variable: Inflammation_Marker (correlated with BMI - Correlation Tab)
+    inflammation_marker = 5 + 0.8 * bmi + np.random.normal(0, 1.0, n)
+    inflammation_marker = inflammation_marker.round(1)
+
+    # 7. Survival Variables (Time and Event) - Significant difference between groups (Survival Analysis)
+    # Standard Care (0) has shorter survival (scale 150), New Drug (1) has longer survival (scale 400)
+    scale_param = np.where(group == 0, 150, 400)
+    time_days = np.random.exponential(scale=scale_param, size=n)
+    time_days = time_days.clip(min=1, max=1000).astype(int) # Max follow-up 1000 days
+    
+    # Event: Probability of event (death) is higher for Group 0 and shorter times
+    event_prob_base = np.where(group == 0, 0.8, 0.4)
+    event_prob = event_prob_base - 0.0003 * time_days
+    event_prob = event_prob.clip(min=0.1, max=0.9) 
+    event_death = np.random.binomial(1, event_prob)
+    
+    # Create DataFrame and Metadata
     data = {
         'ID': range(1, n+1),
-        'Group_Treatment': np.random.choice(['Standard Care', 'New Drug'], n),
-        'Age': np.random.normal(60, 12, n).astype(int),
-        'Sex': np.random.choice([0, 1], n),
-        'BMI': np.random.normal(25, 4, n).round(1),
-        'Hypertension': np.random.binomial(1, 0.4, n),
-        'Risk_Score': np.random.normal(5, 2, n).round(2)
+        # Convert group to string for the DataFrame as in original code
+        'Group_Treatment': np.where(group == 0, 'Standard Care', 'New Drug'), 
+        'Age': age,
+        'Sex': sex,
+        'BMI': bmi,
+        'Hypertension': hypertension, # 0/1
+        'Risk_Score': risk_score, # Continuous
+        'Inflammation_Marker': inflammation_marker, # Continuous
+        'Outcome_Disease': outcome_disease, # 0/1
+        'Time_Days': time_days, # Continuous
+        'Event_Death': event_death # 0/1 (Status)
     }
-    # Logistic Prob
-    p = 1 / (1 + np.exp(-(data['Risk_Score'] - 6)*0.8))
-    data['Outcome_Disease'] = np.random.binomial(1, p)
     
     st.session_state.df = pd.DataFrame(data)
     st.session_state.var_meta = {
         'Sex': {'type':'Categorical', 'map':{0:'Female', 1:'Male'}},
         'Hypertension': {'type':'Categorical', 'map':{0:'No', 1:'Yes'}},
-        'Outcome_Disease': {'type':'Categorical', 'map':{0:'Healthy', 1:'Disease'}}
+        'Outcome_Disease': {'type':'Categorical', 'map':{0:'Healthy', 1:'Disease'}},
+        'Event_Death': {'type':'Categorical', 'map':{0:'Censored', 1:'Event (Death)'}} # NEW: สำหรับ Survival Analysis
     }
-    st.sidebar.success("Loaded!")
+    
+    st.sidebar.success(f"Loaded {n} Example Patients!")
     st.experimental_rerun()
 
 # File Uploader
