@@ -2,7 +2,6 @@ import streamlit as st
 import table_one # Import จาก root directory
 
 def render(df, var_meta):
-    with st.expander("1. Baseline Characteristics (Table 1)", expanded=False):
     st.subheader("1. Baseline Characteristics (Table 1)")
     st.info("""
     **💡 Guide:** Summarizes key demographics and patient characteristics, stratified by a **Grouping Variable**, to assess **group comparability**.
