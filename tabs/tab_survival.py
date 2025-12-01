@@ -20,8 +20,6 @@ def render(df, var_meta):
     col_time = c1.selectbox("⏳ Time Variable:", all_cols, index=time_idx, key='surv_time')
     col_event = c2.selectbox("💀 Event Variable (1=Event):", all_cols, index=event_idx, key='surv_event')
     
-    st.markdown("---")
-    
     # Tabs
     tab_curves, tab_cox = st.tabs(["📉 Survival Curves (KM/NA)", "📊 Cox Regression"])
     
