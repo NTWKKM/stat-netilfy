@@ -29,7 +29,7 @@ def render(df):
 
         cc1, cc2, cc3 = st.columns(3)
         
-        # 🟢 UPDATE: Auto-select Hypertension and Outcome_Disease
+        # 🟢 UPDATE 1: Auto-select V1 and V2
         v1_default_name = 'Hypertension'
         v2_default_name = 'Outcome_Disease'
         
@@ -43,11 +43,40 @@ def render(df):
                                     ['Pearson (Standard)', "Yates' correction"], 
                                     index=0, key='chi_corr_method_tab') == "Yates' correction"
 
+        # 🟢 NEW: Positive Label Selectors
+        st.markdown("---")
+        st.caption("Select Positive Label for Risk/Odds Ratio calculation (default is '1'):")
+
+        # Helper function to get unique values and set default index (Duplicated for tab_corr)
+        def get_pos_label_settings(df, col_name):
+            unique_vals = [str(x) for x in df[col_name].dropna().unique()]
+            unique_vals.sort()
+            default_idx = 0
+            if '1' in unique_vals:
+                default_idx = unique_vals.index('1')
+            return unique_vals, default_idx
+
+        # Selector for V1 Positive Label
+        cc4, cc5, cc6 = st.columns(3)
+        v1_uv, v1_default_idx = get_pos_label_settings(df, v1)
+        v1_pos_label = cc4.selectbox(f"Positive Label (Row: {v1}):", v1_uv, index=v1_default_idx, key='chi_v1_pos_corr')
+
+        # Selector for V2 Positive Label (Outcome)
+        v2_uv, v2_default_idx = get_pos_label_settings(df, v2)
+        v2_pos_label = cc5.selectbox(f"Positive Label (Col: {v2}):", v2_uv, index=v2_default_idx, key='chi_v2_pos_corr')
+        
+        # Add a placeholder column to maintain alignment
+        cc6.empty()
+        st.markdown("---")
+
         run_col, dl_col = st.columns([1, 1])
         if 'html_output_corr_cat' not in st.session_state: st.session_state.html_output_corr_cat = None
 
         if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run'):
-            # 🟢 UPDATE 1: รับค่า 4 ตัว (เพิ่ม risk_df)
+            # 🟢 NOTE: Need to pass positive labels to calculate_chi2 (requires change in diag_test.py/correlation.py)
+            # Assuming calculate_chi2 is updated to accept v1_pos_label, v2_pos_label
+            # tab, stats, msg, risk_df = correlation.calculate_chi2(df, v1, v2, correction=correction_flag, v1_pos=v1_pos_label, v2_pos=v2_pos_label)
+
             tab, stats, msg, risk_df = correlation.calculate_chi2(df, v1, v2, correction=correction_flag)
             
             if tab is not None:
