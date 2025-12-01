@@ -5,10 +5,20 @@ import survival_lib
 def render(df, var_meta):
     st.subheader("5. Survival Analysis")
     st.info("""
-    **💡 Analysis Modules:**
-    1.  **Survival Curves:** Kaplan-Meier (Survival Prob.) & Nelson-Aalen (Cumulative Hazard).
-    2.  **Cox Regression:** Identify risk factors (Hazard Ratios) & Check Assumptions.
-    """)
+**💡 Guide:**
+* **Survival Analysis** models the relationship between predictors and the **Time-to-Event**. It includes non-parametric curves (Kaplan-Meier/Nelson-Aalen) and semi-parametric regression (Cox Regression).
+* **Hazard Ratio (HR/aHR):** The primary result, reported with a 95% CI. It measures the change in the **Hazard Rate** (risk of event) for every one-unit increase in the predictor.
+* **Adjusted HR (aHR):** The output when **multiple covariates** are used, meaning the effect is **controlled/adjusted** for other variables in the model.
+* **HR/aHR > 1:** Increased Hazard (Risk factor).
+* **HR/aHR < 1:** Decreased Hazard (Protective factor).
+* **P-value:** Tests if the predictor's association with the event is statistically significant.
+* **Survival Curves:** Plots Kaplan-Meier (Survival Probability) and Nelson-Aalen (Cumulative Hazard Rate).
+
+**Variable Selection:**
+* **Time Variable:** A **continuous** variable representing the duration until the event or censoring.
+* **Event Variable (Y):** A **binary** variable indicating the event status (e.g., 1=Event occurred, 0=No event/Censored).
+* **Covariates (X):** Can be **Numeric** or **Categorical**, used as predictors in Cox Regression.
+""")
     
     all_cols = df.columns.tolist()
     
