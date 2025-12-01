@@ -133,13 +133,13 @@ def render(df, var_meta):
         if 'html_output_chi' not in st.session_state: st.session_state.html_output_chi = None
 
         if run_col.button("Run Chi-Square", key='btn_chi_diag'):
-            # 🟢 NOTE: Need to pass positive labels to calculate_chi2 (requires change in diag_test.py/correlation.py)
-            # Assuming calculate_chi2 is updated to accept v1_pos_label, v2_pos_label
-            # tab, stats, msg, risk_df = diag_test.calculate_chi2(df, v1, v2, correction=correction_flag, v1_pos=v1_pos_label, v2_pos=v2_pos_label)
-            
-            # Since the underlying function is not available for modification, 
-            # I will pass only the original arguments for now, but include the selectors in the UI.
-            # You will need to update the `diag_test.calculate_chi2` function later to use these new parameters.
+           # 🟢 UPDATE 4: Pass new parameters to calculate_chi2
+            tab, stats, msg, risk_df = diag_test.calculate_chi2(
+                df, v1, v2, 
+                correction=correction_flag,
+                v1_pos=v1_pos_label, # <--- NEW PARAMETER
+                v2_pos=v2_pos_label  # <--- NEW PARAMETER
+            )
 
             tab, stats, msg, risk_df = diag_test.calculate_chi2(df, v1, v2, correction=correction_flag)
             
