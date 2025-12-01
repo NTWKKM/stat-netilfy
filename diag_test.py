@@ -32,10 +32,11 @@ def calculate_descriptive(df, col):
             "Category": counts.index, "Count": counts.values, "Percentage (%)": percent.values
         }).sort_values("Count", ascending=False)
 
-def calculate_chi2(df, col1, col2, correction=True):
+def calculate_chi2(df, col1, col2, correction=True, v1_pos=None, v2_pos=None):
     """
     (SYNCED WITH correlation.py)
-    คำนวณ Chi-square พร้อมตาราง 2 ชั้น, Risk Interpretation และการจัดเรียง Label (1 ก่อน 0)
+    คำนวณ Chi-square พร้อมตาราง 2 ชั้น, Risk Interpretation และการจัดเรียง Label 
+    ตามที่ User กำหนด (v1_pos, v2_pos) หรือตามค่าเริ่มต้น (1 ก่อน 0)
     """
     if col1 not in df.columns or col2 not in df.columns: 
         return None, None, "Columns not found", None
@@ -47,27 +48,60 @@ def calculate_chi2(df, col1, col2, correction=True):
     tab_raw = pd.crosstab(data[col1], data[col2], margins=True, margins_name="Total")
     tab_row_pct = pd.crosstab(data[col1], data[col2], normalize='index', margins=True, margins_name="Total") * 100
     
-    # --- 🟢 START SYNC: REORDERING LOGIC (1 ก่อน 0) ---
+    # --- 🟢 START SYNC: REORDERING LOGIC (Using User Positive Labels) ---
     all_col_labels = tab_raw.columns.tolist() 
     all_row_labels = tab_raw.index.tolist()
     base_col_labels = [col for col in all_col_labels if col != 'Total']
     base_row_labels = [row for row in all_row_labels if row != 'Total']
 
-    def custom_sort(label):
-        try:
-            return float(label)
-        except (ValueError, TypeError):
-            return str(label)
+    # Function to get the correct original label object (e.g., int 1) from its string representation ('1')
+    def get_original_label(label_str, df_labels):
+        # The labels in df_labels can be int, float, or str. Match by string representation.
+        for lbl in df_labels:
+            if str(lbl) == label_str:
+                return lbl
+        # Fallback: should not happen if selected from UI
+        return label_str 
 
-    base_col_labels.sort(key=custom_sort, reverse=True)
-    base_row_labels.sort(key=custom_sort, reverse=True)
+    # --- 1. Reorder Column Labels (Outcome) ---
+    final_col_order_base = base_col_labels[:]
+    if v2_pos is not None and len(base_col_labels) == 2:
+        # Find the original label objects corresponding to the user's string selection
+        v2_pos_original = get_original_label(v2_pos, base_col_labels)
+        
+        if v2_pos_original in final_col_order_base:
+            final_col_order_base.remove(v2_pos_original)
+            final_col_order_base.insert(0, v2_pos_original)
+    else:
+        # Fallback to existing custom sort logic (1 before 0)
+        def custom_sort(label):
+            try: return float(label)
+            except (ValueError, TypeError): return str(label)
+        final_col_order_base.sort(key=custom_sort, reverse=True)
+    
+    final_col_order = final_col_order_base + ['Total'] 
 
-    final_col_order = base_col_labels + ['Total'] 
-    final_row_order = base_row_labels + ['Total']
+    # --- 2. Reorder Row Labels (Exposure) ---
+    final_row_order_base = base_row_labels[:]
+    if v1_pos is not None and len(base_row_labels) == 2:
+        v1_pos_original = get_original_label(v1_pos, base_row_labels)
+        
+        if v1_pos_original in final_row_order_base:
+            final_row_order_base.remove(v1_pos_original)
+            final_row_order_base.insert(0, v1_pos_original)
+    else:
+        # Fallback to existing custom sort logic (1 before 0)
+        def custom_sort(label):
+            try: return float(label)
+            except (ValueError, TypeError): return str(label)
+        final_row_order_base.sort(key=custom_sort, reverse=True)
+    
+    final_row_order = final_row_order_base + ['Total']
 
+    # 3. Reindex tables
     tab_raw = tab_raw.reindex(index=final_row_order, columns=final_col_order)
     tab_row_pct = tab_row_pct.reindex(index=final_row_order, columns=final_col_order)
-    tab_chi2 = tab_chi2.reindex(index=base_row_labels, columns=base_col_labels)
+    tab_chi2 = tab_chi2.reindex(index=final_row_order_base, columns=final_col_order_base)
     
     col_names = final_col_order 
     index_names = final_row_order
