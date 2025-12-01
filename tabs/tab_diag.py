@@ -104,7 +104,6 @@ def render(df, var_meta):
         correction_flag = c3.radio("Correction (2x2):", ['Pearson', "Yates'"], index=0, key='chi_corr_diag') == "Yates'"
         
         # 🟢 NEW: Positive Label Selectors
-        st.caption("Select Positive Label for Risk/Odds Ratio calculation (default is '1'):")
         
         # Helper function to get unique values and set default index
         def get_pos_label_settings(df, col_name):
@@ -126,7 +125,7 @@ def render(df, var_meta):
 
         # Add a placeholder column to maintain alignment
         c6.empty()
-        st.markdown("---")
+        st.caption("Select Positive Label for Risk/Odds Ratio calculation (default is '1'):")
         
         run_col, dl_col = st.columns([1, 1])
         if 'html_output_chi' not in st.session_state: st.session_state.html_output_chi = None
