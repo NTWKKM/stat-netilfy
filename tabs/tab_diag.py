@@ -38,7 +38,13 @@ def render(df, var_meta):
         unique_vals = df[truth].dropna().unique()
         if len(unique_vals) == 2:
             sorted_vals = sorted([str(x) for x in unique_vals])
-            pos_label = rc4.selectbox("Positive Label (1):", sorted_vals, key='roc_pos_diag')
+            
+            # 🟢 NEW LOGIC: Set default index to '1' if it exists
+            default_pos_idx = 0
+            if '1' in sorted_vals:
+                default_pos_idx = sorted_vals.index('1')
+                
+            pos_label = rc4.selectbox("Positive Label (1):", sorted_vals, index=default_pos_idx, key='roc_pos_diag')
         elif len(unique_vals) != 2:
             rc4.warning("Requires 2 unique values.")
 
