@@ -87,19 +87,37 @@ def render(df, var_meta):
                     st.markdown("##### 🔍 Assumption Check (Schoenfeld Residuals)")
                     try:
                         import matplotlib.pyplot as plt
-                        fig_assump, ax_assump = plt.subplots()
-                        cph.check_assumptions(survival_lib.clean_survival_data(df, col_time, col_event, covariates), show_plots=True, ax=ax_assump)
-                        st.pyplot(fig_assump)
                         
-                        # Report HTML (Cox)
+                        # --- FIX for Report: Capture generated figures ---
+                        
+                        # 1. Get a list of currently active figure numbers before running check_assumptions
+                        initial_fignums = plt.get_fignums()
+                        
+                        # 2. Run check_assumptions to generate plots
+                        # FIX: Remove the faulty 'ax' parameter
+                        cph.check_assumptions(survival_lib.clean_survival_data(df, col_time, col_event, covariates), show_plots=True)
+                        
+                        # 3. Capture newly generated figures
+                        final_fignums = plt.get_fignums()
+                        new_fignums = [num for num in final_fignums if num not in initial_fignums]
+                        
+                        # Get the actual Figure objects, display them, and prepare for report
+                        assumption_figs = []
+                        for num in new_fignums:
+                            fig = plt.figure(num)
+                            st.pyplot(fig) # Display figure in Streamlit
+                            assumption_figs.append(fig)
+                        
+                        # Report HTML (Cox) - NOW INCLUDE ALL CAPTURED FIGURES
                         elements = [
                             {'type':'header','data':'Cox Proportional Hazards'},
                             {'type':'table','data':res},
-                            {'type':'header','data':'Assumption Check'},
-                            {'type':'plot','data':fig_assump}
+                            {'type':'header','data':'Assumption Check Plots (Schoenfeld Residuals)'},
+                            # Include all captured figures in the report elements
+                            *[{'type':'plot','data':fig} for fig in assumption_figs] 
                         ]
                         report_html = survival_lib.generate_report_survival(f"Cox: {col_time}", elements)
                         st.download_button("📥 Download Report (Cox)", report_html, "cox_report.html", "text/html")
                         
                     except Exception as e:
-                        st.warning(f"Could not plot assumptions: {e}")
+                        st.warning(f"Could not plot or report assumptions: {e}")
