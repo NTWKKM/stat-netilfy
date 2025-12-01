@@ -33,40 +33,44 @@ def calculate_chi2(df, col1, col2, correction=True, v1_pos=None, v2_pos=None): #
                 return lbl
         return label_str 
     
-    # --- 1. Reorder Column Labels (Outcome) ---
+   # --- 1. Reorder Column Labels (Outcome) ---
     final_col_order_base = base_col_labels[:]
-    if v2_pos is not None and len(base_col_labels) == 2:
+    # 🟢 FIX: Check only if v2_pos is provided (prioritize user choice)
+    if v2_pos is not None: 
         v2_pos_original = get_original_label(v2_pos, base_col_labels)
         
         if v2_pos_original in final_col_order_base:
             final_col_order_base.remove(v2_pos_original)
             final_col_order_base.insert(0, v2_pos_original)
+            
+    # ถ้าผู้ใช้ไม่ได้กำหนดค่า หรือค่านั้นไม่ตรงกับข้อมูลในตาราง ให้เรียงอัตโนมัติ
     else:
-        # Fallback to existing custom sort logic (1 before 0)
         def custom_sort(label):
             try: return float(label)
             except (ValueError, TypeError): return str(label)
         final_col_order_base.sort(key=custom_sort, reverse=True)
-    
+
     final_col_order = final_col_order_base + ['Total'] 
 
     # --- 2. Reorder Row Labels (Exposure) ---
     final_row_order_base = base_row_labels[:]
-    if v1_pos is not None and len(base_row_labels) == 2:
+    # 🟢 FIX: Check only if v1_pos is provided (prioritize user choice)
+    if v1_pos is not None: 
         v1_pos_original = get_original_label(v1_pos, base_row_labels)
         
         if v1_pos_original in final_row_order_base:
             final_row_order_base.remove(v1_pos_original)
             final_row_order_base.insert(0, v1_pos_original)
+    
+    # ถ้าผู้ใช้ไม่ได้กำหนดค่า หรือค่านั้นไม่ตรงกับข้อมูลในตาราง ให้เรียงอัตโนมัติ
     else:
-        # Fallback to existing custom sort logic (1 before 0)
         def custom_sort(label):
             try: return float(label)
             except (ValueError, TypeError): return str(label)
         final_row_order_base.sort(key=custom_sort, reverse=True)
     
     final_row_order = final_row_order_base + ['Total']
-    
+
     # 3. Reindex tables
     tab_raw = tab_raw.reindex(index=final_row_order, columns=final_col_order)
     tab_row_pct = tab_row_pct.reindex(index=final_row_order, columns=final_col_order)
