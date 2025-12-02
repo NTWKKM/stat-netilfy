@@ -8,7 +8,11 @@ import streamlit.components.v1 as components # 🟢 1. ต้อง Import ต�
 from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Medical Stat Tool", layout="wide")
+st.set_page_config(page_title="Medical Stat Tool", layout="wide",menu_items={
+        'Get Help': 'https://www.extremelycoolapp.com/help',
+        'Report a bug': "https://www.extremelycoolapp.com/bug",
+        'About': "# This is a header. This is an *extremely* cool app!"
+    })
 st.title("🏥 Medical Statistical Tool")
 
 # 🟢 FIX: วาง components.html ไว้ที่นี่ (หลัง set_page_config และ st.title)
