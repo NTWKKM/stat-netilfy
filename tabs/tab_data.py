@@ -5,26 +5,28 @@ import numpy as np
 def check_data_quality(df, container):
     """
     Data Quality Checker: 
-    1. Numeric Column -> หา Text แปลกปลอม (เช่น 'abc' ใน Age)
-    2. Text Column    -> หาตัวเลขหลงมา (เช่น '1' ใน Group) 
-                         และหากลุ่มประชากรน้อยผิดปกติ (Rare Category เช่น 'Old Drug')
+    1. Numeric Column -> หา Text แปลกปลอม
+    2. Text Column    -> หาตัวเลขหลงมา และหากลุ่มประชากรน้อยผิดปกติ (Rare Category)
+    
+    Format: แสดงผล 1 บรรทัดต่อ 1 Column เพื่อความเป็นระเบียบ
     """
-    warnings = []
+    warnings = [] # เก็บข้อความรวมระดับคอลัมน์
     total_rows = len(df)
     
     for col in df.columns:
+        col_issues = [] # เก็บปัญหาย่อยๆ ภายในคอลัมน์นี้
+        
         # เตรียมข้อมูลเช็ค
         numeric_vals = pd.to_numeric(df[col], errors='coerce')
         original_vals = df[col].astype(str).str.strip()
         
-        # นับจำนวนค่าที่ไม่ใช่ตัวเลข (Non-Numeric)
+        # จำนวนค่าที่ไม่ใช่ตัวเลข
         is_non_numeric = numeric_vals.isna() & (original_vals != '') & \
                          (original_vals.str.lower() != 'nan') & (original_vals.str.lower() != 'none')
         non_numeric_count = is_non_numeric.sum()
 
         # ======================================================
         # CASE 1: คอลัมน์นี้ควรเป็น "ตัวเลข" (Numeric)
-        # (ถ้าส่วนใหญ่เป็นตัวเลข คือมี non-numeric น้อยกว่า 90%)
         # ======================================================
         if non_numeric_count < (total_rows * 0.9):
             if non_numeric_count > 0:
@@ -34,15 +36,14 @@ def check_data_quality(df, container):
                 row_str = ",".join(map(str, error_rows[:5])) + ("..." if len(error_rows) > 5 else "")
                 val_str = ",".join(map(str, bad_values[:3])) + ("..." if len(bad_values) > 3 else "")
 
-                msg = (f"⚠️ **Column '{col}' (Numeric):** Found {non_numeric_count} text values at rows `{row_str}` "
-                       f"(Values: `{val_str}`). Analysis will treat these as Missing (NaN).")
-                warnings.append(msg)
+                # เพิ่มเข้า list ย่อย
+                col_issues.append(f"Found {non_numeric_count} non-numeric values at rows `{row_str}` (Values: `{val_str}`). Analysis will treat these as NaN.")
 
         # ======================================================
         # CASE 2: คอลัมน์นี้เป็น "ข้อความ" (Categorical/Text)
         # ======================================================
         else:
-            # 2.1: เช็คว่ามี "ตัวเลข" หลงมาไหม? (เช่น 1, 0 ปนใน Group)
+            # 2.1: เช็คว่ามี "ตัวเลข" หลงมาไหม?
             is_numeric_in_text = (~numeric_vals.isna()) & (original_vals != '')
             numeric_in_text_count = is_numeric_in_text.sum()
             
@@ -52,51 +53,51 @@ def check_data_quality(df, container):
                 row_str = ",".join(map(str, error_rows[:5])) + ("..." if len(error_rows) > 5 else "")
                 val_str = ",".join(map(str, bad_values[:3])) + ("..." if len(bad_values) > 3 else "")
                 
-                msg = (f"⚠️ **Column '{col}' (Text):** Found {numeric_in_text_count} numeric values at rows `{row_str}` "
-                       f"(Values: `{val_str}`). This might be inconsistent data.")
-                warnings.append(msg)
+                col_issues.append(f"Found {numeric_in_text_count} numeric values (e.g. 1, 0) at rows `{row_str}` (Values: `{val_str}`).")
 
-            # 🟢 [ส่วนที่เพิ่มกลับมา] 2.2: เช็คว่ามี "คำที่โผล่มาน้อยผิดปกติ" (Rare Category) ไหม?
-            # จะเช็คเฉพาะคอลัมน์ที่ไม่ใช่ ID (โดยดูว่าค่าไม่ซ้ำกันเกิน 80% ของข้อมูลทั้งหมด)
+            # 2.2: เช็ค Rare Category (คำที่โผล่มาน้อยๆ)
             unique_ratio = df[col].nunique() / total_rows
             if unique_ratio < 0.8: 
                 val_counts = df[col].value_counts()
-                
-                # เงื่อนไข Rare: ปรากฏน้อยกว่า 5 ครั้ง (ปรับเลขได้)
                 rare_threshold = 5 
                 rare_vals = val_counts[val_counts < rare_threshold].index.tolist()
                 
                 if len(rare_vals) > 0:
                      val_str = ", ".join(map(str, rare_vals[:5])) + ("..." if len(rare_vals) > 5 else "")
-                     msg = (f"❓ **Column '{col}' (Text):** Found rare categories (appear < {rare_threshold} times): `{val_str}`. "
-                            f"Please check for typos")
-                     warnings.append(msg)
+                     col_issues.append(f"Found rare categories (<{rare_threshold} times): `{val_str}`. Check for typos.")
 
+        # 🟢 สรุปรวมปัญหาของคอลัมน์นี้ (ถ้ามี) ให้เป็น 1 บรรทัด
+        if col_issues:
+            # รวมทุกปัญหาในคอลัมน์นี้ด้วยเว้นวรรค
+            full_msg = " ".join(col_issues)
+            # สร้างข้อความเตือนแบบมีหัวข้อคอลัมน์ชัดเจน
+            warnings.append(f"**Column '{col}':** {full_msg}")
+
+    # แสดงผล (ใช้ \n\n เพื่อเว้นบรรทัดให้ห่างกันชัดเจน)
     if warnings:
-        container.warning("Data Quality Issue Detected\n" + "\n".join(warnings), icon="⚠️")
+        container.warning("Data Quality Issues Detected\n\n" + "\n\n".join([f"- {w}" for w in warnings]), icon="🧐")
 
 def get_clean_data(df, custom_na_list=None):
     """
-    สร้างสำเนาข้อมูลที่ 'Clean' แล้วสำหรับนำไปคำนวณ (Analysis Data)
-    โดยไม่กระทบกับข้อมูลดิบที่แสดงบนหน้าจอ
+    สร้างสำเนาข้อมูลที่ 'Clean' แล้วสำหรับนำไปคำนวณ
     """
     df_clean = df.copy()
     total_rows = len(df_clean)
 
     for col in df_clean.columns:
-        # 1. จัดการ Custom Missing Values
+        # 1. Custom Missing
         if custom_na_list:
              df_clean[col] = df_clean[col].replace(custom_na_list, np.nan)
 
-        # 2. Trim whitespace
+        # 2. Trim
         if df_clean[col].dtype == 'object':
              df_clean[col] = df_clean[col].astype(str).str.strip()
 
-        # 3. ตัดสินใจว่าจะแปลงเป็นตัวเลขหรือไม่
+        # 3. Numeric Conversion Logic
         numeric_vals = pd.to_numeric(df_clean[col], errors='coerce')
         is_non_numeric = numeric_vals.isna()
         
-        # ถ้าแปลงแล้วเป็น NaN น้อยกว่า 90% (แสดงว่าเป็น Numeric Column) ให้แปลงเลย
+        # ถ้าแปลงแล้ว NaN น้อยกว่า 90% (เป็น Numeric) -> ใช้ค่าที่แปลงแล้ว
         if is_non_numeric.sum() < (total_rows * 0.9):
              df_clean[col] = numeric_vals
         
@@ -107,7 +108,7 @@ def render(df):
     
     col_info, col_btn = st.columns([4, 1.5], vertical_alignment="center")
     with col_info:
-        st.info("You can view, scroll, and edit your raw data below. (Text inputs allowed)", icon="💡")
+        st.info("💡 You can view, scroll, and edit your raw data below. (Text inputs allowed)", icon="💡")
 
     with col_btn:
         with st.popover("⚙️ Config Missing Values", use_container_width=True):
@@ -121,10 +122,8 @@ def render(df):
     st.write("") 
     st.write("") 
     
-    # แปลงเป็น String เพื่อให้แก้ไขได้อิสระ
+    # Editor
     df_display = df.astype(str).replace('nan', '')
-    
-    # RAW DATA EDITOR
     edited_df = st.data_editor(
         df_display, 
         num_rows="dynamic", 
@@ -133,11 +132,10 @@ def render(df):
         key='editor_raw'
     )
 
-    # ตรวจสอบ Error
+    # Check Quality
     check_data_quality(edited_df, warning_container)
     
-    # ฝาก custom_na_list ไว้ใน session_state
+    # Save State
     st.session_state['custom_na_list'] = custom_na_list
     
-    # ส่งคืนข้อมูลดิบ (edited_df) กลับไปเลย (Text แปลกๆ จะยังอยู่ครบ)
     return edited_df
