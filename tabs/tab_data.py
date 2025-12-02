@@ -46,22 +46,26 @@ def check_data_quality(df, container):
 def render(df):
     st.subheader("Raw Data Table")
     
-    # 🟢 UPDATE: ปรับ Layout ให้ Input สั้นลง (ใช้ 3 columns)
-    # c1 = Label & Caption (กว้างหน่อย)
-    # c2 = Input Box (กว้างพอดีๆ ไม่ยาวเกิน)
-    # c3 = Spacer (พื้นที่ว่างด้านขวา เพื่อบีบ c2 ให้ไม่ยืดจนสุด)
     # 🟢 ใช้ Popover แทน Columns เพื่อความสะอาดตา
-    with st.popover("⚙️ Config Missing Values"):
-        st.markdown("**Define Custom Missing Values**")
-        st.caption("Values to treat as **NaN** (e.g. `-99`, `?`)")
-        
-        missing_input = st.text_input(
-            "Enter values separated by comma", 
-            value="", 
-            placeholder="e.g. -99, 999"
-        )
+    # สลับเอา col_info ขึ้นก่อน และปรับสัดส่วนเป็น [4, 1.5] ให้ข้อความมีพื้นที่เยอะกว่า
+    col_info, col_btn = st.columns([4, 1.5], vertical_alignment="center")
+    
+    # 1. แสดง Info Box ก่อน (ทางซ้าย)
+    with col_info:
+        st.info("💡 You can view, scroll, and edit your raw data below. (Text inputs allowed)", icon="💡")
 
-    st.info("💡 You can view, scroll, and edit your raw data below. (Text inputs allowed)")
+    # 2. ตามด้วยปุ่ม Config (ทางขวา)
+    with col_btn:
+        with st.popover("⚙️ Config Missing Values", use_container_width=True):
+            st.markdown("**Define Custom Missing Values**")
+            st.caption("Values to treat as **NaN** (e.g. `-99`, `?`)")
+            
+            # ตัวแปรนี้จะถูกส่งไปใช้ต่อด้านล่างได้ปกติ แม้จะอยู่ใน Popover
+            missing_input = st.text_input(
+                "Enter values separated by comma", 
+                value="", 
+                placeholder="e.g. -99, 999"
+            )
     
     # 1. Placeholder for Warnings
     warning_container = st.empty()
