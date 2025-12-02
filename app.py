@@ -105,7 +105,7 @@ if st.sidebar.button("🗑️ Reset All Data", type="primary"):
     # หมายเหตุ: ถ้าใช้ Streamlit เวอร์ชันใหม่ แนะนำให้เปลี่ยนเป็น st.rerun()
 
 # Example Data Generator (โค้ดเดิมต่อจากนี้)
-if st.sidebar.button("📄 Load Example Data"):
+
 # Variable Settings (Metadata)
 if st.session_state.df is not None:
     st.sidebar.header("2. Settings")
