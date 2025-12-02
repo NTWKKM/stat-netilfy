@@ -2,38 +2,25 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import time
-
-# 🟢 1. ปรับปรุง Javascript ให้ค้นหา Loading Screen แบบทะลุ Sandbox
-st.markdown("""
-<script>
-    // ฟังก์ชันค้นหา Loader ทั้งใน scope ปกติ และ Parent scope
-    function hideLoader() {
-        var loader = document.getElementById('loading-screen');
-        
-        // ถ้าหาใน document ตัวเองไม่เจอ ให้ลองหาใน window.parent.document
-        if (!loader && window.parent) {
-            try {
-                loader = window.parent.document.getElementById('loading-screen');
-            } catch (e) {
-                console.log("Cannot access parent document");
-            }
-        }
-
-        if (loader) {
-            loader.style.opacity = '0'; // ทำให้จางลง
-            setTimeout(function() {
-                loader.style.display = 'none'; // แล้วซ่อนถาวร
-            }, 500);
-        }
-    }
-    
-    // เรียกทำงานทันที
-    hideLoader();
-</script>
-""", unsafe_allow_html=True)
+import streamlit.components.v1 as components # 🟢 1. ต้อง Import ตัวนี้เพิ่ม
 
 # Import หน้า Tab ที่แยกไว้ (เพิ่ม tab_survival)
 from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival
+
+# 🟢 2. ใช้ components.html แทน st.markdown เพื่อสั่งปิด Loading Screen
+# ใส่ไว้บรรทัดแรกๆ หลัง set_page_config เลยครับ
+components.html("""
+<script>
+    // window.parent คือการสั่งให้ทะลุ Iframe ของ Component ออกไปที่หน้าหลัก (index.html)
+    var loader = window.parent.document.getElementById('loading-screen');
+    if (loader) {
+        loader.style.opacity = '0'; // สั่งให้จางลง
+        setTimeout(function() {
+            loader.style.display = 'none'; // แล้วซ่อนถาวร
+        }, 500);
+    }
+</script>
+""", height=0) # height=0 เพื่อไม่ให้กินพื้นที่หน้าจอ
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Medical Stat Tool", layout="wide")
