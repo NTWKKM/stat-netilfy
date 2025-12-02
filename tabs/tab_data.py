@@ -44,7 +44,7 @@ def check_data_quality(df, container):
 
     # Display Warnings cleanly
     if warnings:
-        container.warning("### 🧐 Data Quality Issue Detected\n" + "\n".join(warnings), icon="⚠️")
+        container.warning("### Data Quality Issue Detected\n" + "\n".join(warnings), icon="⚠️")
 
 def render(df):
     st.subheader("Raw Data Table")
@@ -53,7 +53,7 @@ def render(df):
     col_info, col_btn = st.columns([4, 1.5], vertical_alignment="center")
     
     with col_info:
-        st.info("💡 You can view, scroll, and edit your raw data below. (Text inputs allowed)", icon="💡")
+        st.info("You can view, scroll, and edit your raw data below. (Text inputs allowed)", icon="💡")
 
     with col_btn:
         with st.popover("⚙️ Config Missing Values", use_container_width=True):
