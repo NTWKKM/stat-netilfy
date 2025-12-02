@@ -139,36 +139,43 @@ if st.session_state.df is not None:
 # 2. MAIN AREA
 # ==========================================
 if st.session_state.df is not None:
-    df = st.session_state.df
+    df = st.session_state.df  # นี่คือ Raw Data (มี 'abc' ปนอยู่)
 
-    # Create Tabs (เพิ่ม Survival Analysis)
     t0, t1, t2, t3, t4, t5 = st.tabs([
         "📄 Raw Data", 
         "📋 Baseline Table 1", 
-        "🔬 Diagnostic Test",
+        "🔬 Diagnostic Test", 
         "🔗 Correlation",
         "📊 Logistic Regression",
-        "⏳ Survival Analysis" # <--- NEW TAB
+        "⏳ Survival Analysis"
     ])
 
     # Call Modules
     with t0:
+        # 🟢 Tab 0: จัดการ Raw Data -> ส่งกลับมาอัปเดต session_state (ยังเป็น Raw)
         st.session_state.df = tab_data.render(df) 
         
+        # 🟢 Generate Clean Data for Analysis: สร้างข้อมูลสะอาดเตรียมไว้ให้ Tab อื่น
+        # ดึง custom_na_list ที่ตั้งค่าไว้มาใช้ด้วย
+        custom_na = st.session_state.get('custom_na_list', [])
+        df_clean = tab_data.get_clean_data(st.session_state.df, custom_na)
+
+    # 🟢 Tab 1-5: ใช้ df_clean (ที่แปลง Text ผิดๆ เป็น NaN แล้ว) ในการคำนวณ
+    # ทำให้กราฟไม่พัง และ Raw Data ไม่หาย
     with t1:
-        tab_table1.render(df, st.session_state.var_meta)
+        tab_table1.render(df_clean, st.session_state.var_meta)
 
     with t2:
-        tab_diag.render(df, st.session_state.var_meta)
+        tab_diag.render(df_clean, st.session_state.var_meta)
 
     with t3:
-        tab_corr.render(df)
+        tab_corr.render(df_clean)
 
     with t4:
-        tab_logit.render(df, st.session_state.var_meta)
+        tab_logit.render(df_clean, st.session_state.var_meta)
 
-    with t5: # <--- NEW RENDER CALL
-        tab_survival.render(df, st.session_state.var_meta)
+    with t5:
+        tab_survival.render(df_clean, st.session_state.var_meta)
         
 else:
     st.info("👈 Please load example data or upload a file to start.")
