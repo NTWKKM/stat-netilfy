@@ -97,9 +97,9 @@ if upl:
         st.sidebar.success("File Uploaded!")
     except Exception as e: st.sidebar.error(f"Error: {e}")
         
-# 🟢 ส่วนที่เพิ่ม: ปุ่ม Reset Data
-# ใช้ icon=":material/delete_forever:" จะได้รูปถังขยะแบบเส้นคมชัด
-if st.sidebar.button("Reset All Data", type="primary", icon=":material/delete_forever:"):
+# 🟢 แก้ไข: ลบพารามิเตอร์ icon ออก และใส่ Emoji ในชื่อปุ่มแทน
+# คุณสามารถเลือก Emoji ได้ตามชอบ เช่น "🗑️", "⚠️", "❌", "♻️"
+if st.sidebar.button("⚠️ Reset All Data", type="primary"):
     # ล้างค่าทุกอย่างใน Session State
     st.session_state.clear()
     st.rerun()
