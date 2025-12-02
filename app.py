@@ -7,8 +7,11 @@ import streamlit.components.v1 as components # 🟢 1. ต้อง Import ต�
 # Import หน้า Tab ที่แยกไว้ (เพิ่ม tab_survival)
 from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival
 
-# 🟢 2. ใช้ components.html แทน st.markdown เพื่อสั่งปิด Loading Screen
-# ใส่ไว้บรรทัดแรกๆ หลัง set_page_config เลยครับ
+# --- CONFIGURATION ---
+st.set_page_config(page_title="Medical Stat Tool", layout="wide")
+st.title("🏥 Medical Statistical Tool")
+
+# 🟢 FIX: วาง components.html ไว้ที่นี่ (หลัง set_page_config และ st.title)
 components.html("""
 <script>
     // window.parent คือการสั่งให้ทะลุ Iframe ของ Component ออกไปที่หน้าหลัก (index.html)
@@ -21,10 +24,6 @@ components.html("""
     }
 </script>
 """, height=0) # height=0 เพื่อไม่ให้กินพื้นที่หน้าจอ
-
-# --- CONFIGURATION ---
-st.set_page_config(page_title="Medical Stat Tool", layout="wide")
-st.title("🏥 Medical Statistical Tool")
 
 # --- INITIALIZE STATE ---
 if 'df' not in st.session_state: st.session_state.df = None
