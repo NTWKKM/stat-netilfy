@@ -4,20 +4,16 @@ import numpy as np
 
 def check_data_quality(df, container):
     """
-    Data Quality Checker (English Version - Compact Mode)
-    Identifies non-numeric values and reports them concisely.
+    Data Quality Checker: ตรวจสอบและแจ้งเตือนจากข้อมูลดิบ (edited_df)
     """
     warnings = []
     
     for col in df.columns:
-        # 1. Try converting to numeric (for checking purpose only)
+        # 1. ลองแปลงเป็นตัวเลขเพื่อเช็ค
         numeric_vals = pd.to_numeric(df[col], errors='coerce')
         
-        # 2. Identify text errors
-        # แปลงเป็น String เพื่อเช็คว่ามีตัวอักษรแปลกปลอมไหม
+        # 2. เช็คว่าเป็นข้อความที่ผิดปกติหรือไม่ (ไม่ใช่ตัวเลข และไม่ใช่ค่าว่าง)
         original_vals = df[col].astype(str).str.strip()
-        
-        # เงื่อนไข: แปลงเป็นตัวเลขไม่ได้ AND ไม่ใช่ช่องว่าง AND ไม่ใช่คำว่า nan/none
         is_text_error = numeric_vals.isna() & (original_vals != '') & \
                         (original_vals.str.lower() != 'nan') & (original_vals.str.lower() != 'none')
         
@@ -25,31 +21,28 @@ def check_data_quality(df, container):
             total_rows = len(df)
             error_count = is_text_error.sum()
             
-            # ถ้ามี Error (แต่ไม่เยอะจนเกินไป เหมือนเป็น Text Column ทั้งอัน)
+            # ถ้ามี Error แจ้งเตือน
             if error_count < (total_rows * 0.9): 
                 error_rows = df.index[is_text_error].tolist()
                 bad_values = df.loc[is_text_error, col].unique()
                 
-                # Format Lists nicely
                 row_str = ",".join(map(str, error_rows[:5])) 
                 if len(error_rows) > 5: row_str += "..."
                 
                 val_str = ",".join(map(str, bad_values[:3])) 
                 if len(bad_values) > 3: val_str += "..."
 
-                # 🟢 Warning Message (แจ้งเตือนอย่างเดียว ไม่บอกว่าแก้ให้แล้ว)
                 msg = (f"⚠️ **Column '{col}':** Found {error_count} non-numeric values at **Rows:** `{row_str}` "
-                       f"(Values: `{val_str}`). Please check your data.")
+                       f"(Values: `{val_str}`). Analysis will treat these as Missing (NaN).")
                 warnings.append(msg)
 
-    # Display Warnings cleanly
     if warnings:
-        container.warning("### Data Quality Issue Detected\n" + "\n".join(warnings), icon="⚠️")
+        container.warning("Data Quality Issue Detected\n" + "\n".join(warnings), icon="⚠️")
 
 def render(df):
     st.subheader("Raw Data Table")
     
-    # 🟢 ปรับ Layout แนวนอน: Info Box (ซ้าย) + ปุ่ม Popover (ขวา)
+    # Layout
     col_info, col_btn = st.columns([4, 1.5], vertical_alignment="center")
     
     with col_info:
@@ -59,27 +52,18 @@ def render(df):
         with st.popover("⚙️ Config Missing Values", use_container_width=True):
             st.markdown("**Define Custom Missing Values**")
             st.caption("Values to treat as **NaN** (e.g. `-99`, `?`)")
-            
-            missing_input = st.text_input(
-                "Enter values separated by comma", 
-                value="", 
-                placeholder="e.g. -99, 999"
-            )
+            missing_input = st.text_input("Enter values separated by comma", value="", placeholder="e.g. -99, 999")
     
-    # 1. Placeholder for Warnings
+    # Placeholder for Warnings
     warning_container = st.empty()
     
-    # 2. Prepare custom missing list
     custom_na_list = [x.strip() for x in missing_input.split(',') if x.strip() != '']
     
-    # 3. Convert to String for Editor (เพื่อให้แก้ไขได้อิสระ)
+    # 🟢 1. เตรียมข้อมูลสำหรับแสดงผล (เป็น String เพื่อให้ User แก้ไขได้อิสระ)
+    st.write("") 
+    st.write("") 
     df_display = df.astype(str).replace('nan', '')
     
-    # 🟢 เพิ่มระยะห่างก่อนเริ่มตาราง (แก้ปัญหา Popup บัง Input)
-    st.write("") 
-    st.write("") 
-
-    # 4. Render Editor
     edited_df = st.data_editor(
         df_display, 
         num_rows="dynamic", 
@@ -88,30 +72,29 @@ def render(df):
         key='editor_raw'
     )
 
-    # 5. Process Data (Without Auto-Delete)
+    # 🟢 2. ตรวจสอบ Error จากข้อมูลดิบที่ User เห็น (edited_df)
+    # ต้องตรวจก่อนแปลงเป็น NaN ไม่งั้นจะหา Text ไม่เจอ
+    check_data_quality(edited_df, warning_container)
+
+    # 🟢 3. สร้างข้อมูลสำหรับส่งไปคำนวณ (Analysis Data)
     df_final = edited_df.copy()
     
     for col in df_final.columns:
-        # 5.1: Replace Custom Missing Values
+        # Replace Custom Missing
         if custom_na_list:
             df_final[col] = df_final[col].replace(custom_na_list, np.nan)
         
-        # 5.2: Trim Whitespace
+        # Trim whitespace
         if df_final[col].dtype == 'object':
              df_final[col] = df_final[col].astype(str).str.strip()
 
-        # 5.3: Try Convert to Numeric (Strictly)
+        # Try Convert to Numeric
         try:
-            # ลองแปลงเป็นตัวเลข ถ้าได้ก็เปลี่ยนเลย
+            # ถ้าแปลงได้ปกติ ก็จบ
             df_final[col] = pd.to_numeric(df_final[col], errors='raise')
         except:
-            # 🟢 ถ้าแปลงไม่ได้ (แสดงว่ามีตัวอักษรปน)
-            # ของเดิม: แปลงเป็น NaN (errors='coerce') -> ทำให้ข้อมูลหายและไม่เตือน
-            # ของใหม่: ไม่ต้องทำอะไร (pass) -> ปล่อยให้เป็น String คาไว้แบบนั้น
-            # ผลลัพธ์: check_data_quality จะมาตรวจเจอทีหลังและแจ้งเตือน User เอง
-            pass
+            # 🟢 ถ้าแปลงไม่ได้ (เช่น "abc") -> บังคับเปลี่ยนเป็น NaN เฉพาะใน df_final
+            # เพื่อให้หน้า Analyze เอาไปคำนวณได้โดยไม่พัง
+            df_final[col] = pd.to_numeric(df_final[col], errors='coerce')
             
-    # 6. Check Quality (ตรวจจับ String ที่หลงเหลืออยู่ใน df_final)
-    check_data_quality(df_final, warning_container)
-
     return df_final
