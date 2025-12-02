@@ -50,20 +50,16 @@ def render(df):
     # c1 = Label & Caption (กว้างหน่อย)
     # c2 = Input Box (กว้างพอดีๆ ไม่ยาวเกิน)
     # c3 = Spacer (พื้นที่ว่างด้านขวา เพื่อบีบ c2 ให้ไม่ยืดจนสุด)
-    c1, c2, c3 = st.columns([3, 2, 5]) 
-    
-    with c1:
-        st.markdown("**⚙️ Custom Missing Values:**")
+    # 🟢 ใช้ Popover แทน Columns เพื่อความสะอาดตา
+    with st.popover("⚙️ Config Missing Values"):
+        st.markdown("**Define Custom Missing Values**")
         st.caption("Values to treat as **NaN** (e.g. `-99`, `?`)")
         
-    with c2:
         missing_input = st.text_input(
-            "Define Missing Values", 
+            "Enter values separated by comma", 
             value="", 
-            placeholder="e.g. -99, 999",
-            label_visibility="collapsed"
+            placeholder="e.g. -99, 999"
         )
-    # c3 ปล่อยว่างไว้
 
     st.info("💡 You can view, scroll, and edit your raw data below. (Text inputs allowed)")
     
