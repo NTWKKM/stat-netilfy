@@ -1,6 +1,20 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import time
+
+# 🟢 1. เพิ่มคำสั่ง Javascript เพื่อซ่อน Loading Screen ของ HTML ทันทีที่ Python รัน
+st.markdown("""
+<script>
+    var loader = document.getElementById('loading-screen');
+    if (loader) {
+        loader.style.opacity = '0'; // ทำให้จางลง
+        setTimeout(function() {
+            loader.style.display = 'none'; // แล้วซ่อนถาวร
+        }, 500);
+    }
+</script>
+""", unsafe_allow_html=True)
 
 # Import หน้า Tab ที่แยกไว้ (เพิ่ม tab_survival)
 from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival
