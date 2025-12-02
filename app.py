@@ -3,16 +3,32 @@ import pandas as pd
 import numpy as np
 import time
 
-# 🟢 1. เพิ่มคำสั่ง Javascript เพื่อซ่อน Loading Screen ของ HTML ทันทีที่ Python รัน
+# 🟢 1. ปรับปรุง Javascript ให้ค้นหา Loading Screen แบบทะลุ Sandbox
 st.markdown("""
 <script>
-    var loader = document.getElementById('loading-screen');
-    if (loader) {
-        loader.style.opacity = '0'; // ทำให้จางลง
-        setTimeout(function() {
-            loader.style.display = 'none'; // แล้วซ่อนถาวร
-        }, 500);
+    // ฟังก์ชันค้นหา Loader ทั้งใน scope ปกติ และ Parent scope
+    function hideLoader() {
+        var loader = document.getElementById('loading-screen');
+        
+        // ถ้าหาใน document ตัวเองไม่เจอ ให้ลองหาใน window.parent.document
+        if (!loader && window.parent) {
+            try {
+                loader = window.parent.document.getElementById('loading-screen');
+            } catch (e) {
+                console.log("Cannot access parent document");
+            }
+        }
+
+        if (loader) {
+            loader.style.opacity = '0'; // ทำให้จางลง
+            setTimeout(function() {
+                loader.style.display = 'none'; // แล้วซ่อนถาวร
+            }, 500);
+        }
     }
+    
+    // เรียกทำงานทันที
+    hideLoader();
 </script>
 """, unsafe_allow_html=True)
 
