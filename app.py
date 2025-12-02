@@ -98,10 +98,11 @@ if upl:
     except Exception as e: st.sidebar.error(f"Error: {e}")
         
 # 🟢 ส่วนที่เพิ่ม: ปุ่ม Reset Data
-if st.sidebar.button("🗑️ Reset All Data", type="primary"):
-    # ล้างค่าทุกอย่างใน Session State (เหมือนกด Refresh หน้าเว็บใหม่)
+# ใช้ icon=":material/delete_forever:" จะได้รูปถังขยะแบบเส้นคมชัด
+if st.sidebar.button("Reset All Data", type="primary", icon=":material/delete_forever:"):
+    # ล้างค่าทุกอย่างใน Session State
     st.session_state.clear()
-    st.rerun() 
+    st.rerun()
     # หมายเหตุ: ถ้าใช้ Streamlit เวอร์ชันใหม่ แนะนำให้เปลี่ยนเป็น st.rerun()
 
 # Example Data Generator (โค้ดเดิมต่อจากนี้)
