@@ -69,11 +69,11 @@ def check_data_quality(df, container):
                 if len(rare_vals) > 0:
                      val_str = ", ".join(map(str, rare_vals[:5])) + ("..." if len(rare_vals) > 5 else "")
                      msg = (f"❓ **Column '{col}' (Text):** Found rare categories (appear < {rare_threshold} times): `{val_str}`. "
-                            f"Please check for typos (e.g. 'Old drug', 'Alternative').")
+                            f"Please check for typos")
                      warnings.append(msg)
 
     if warnings:
-        container.warning("### 🧐 Data Quality Issue Detected\n" + "\n".join(warnings), icon="⚠️")
+        container.warning("Data Quality Issue Detected\n" + "\n".join(warnings), icon="⚠️")
 
 def get_clean_data(df, custom_na_list=None):
     """
@@ -107,7 +107,7 @@ def render(df):
     
     col_info, col_btn = st.columns([4, 1.5], vertical_alignment="center")
     with col_info:
-        st.info("💡 You can view, scroll, and edit your raw data below. (Text inputs allowed)", icon="💡")
+        st.info("You can view, scroll, and edit your raw data below. (Text inputs allowed)", icon="💡")
 
     with col_btn:
         with st.popover("⚙️ Config Missing Values", use_container_width=True):
