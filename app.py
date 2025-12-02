@@ -11,7 +11,6 @@ from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_surviv
 st.set_page_config(page_title="Medical Stat Tool", layout="wide",menu_items={
         'Get Help': 'https://www.extremelycoolapp.com/help',
         'Report a bug': "https://www.extremelycoolapp.com/bug",
-        'About': "# This is a header. This is an *extremely* cool app!"
     })
 st.title("🏥 Medical Statistical Tool")
 
