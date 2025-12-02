@@ -52,7 +52,7 @@ def render(df):
     
     # 1. แสดง Info Box ก่อน (ทางซ้าย)
     with col_info:
-        st.info("💡 You can view, scroll, and edit your raw data below. (Text inputs allowed)", icon="💡")
+        st.info("You can view, scroll, and edit your raw data below. (Text inputs allowed)", icon="💡")
 
     # 2. ตามด้วยปุ่ม Config (ทางขวา)
     with col_btn:
