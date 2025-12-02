@@ -8,15 +8,20 @@
     <script src="https://cdn.jsdelivr.net/npm/@stlite/mountable@0.75.0/build/stlite.js"></script>
     
     <style>
-      /* 🟢 Style สำหรับ Loading Screen */
-      .loading-container {
+      /* 🟢 เพิ่ม ID selector เพื่อให้สั่งซ่อนได้ง่ายๆ */
+      #loading-screen {
         position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        text-align: center;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        z-index: 9999;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: white; /* ใส่พื้นหลังสีขาวบัง Streamlit ไว้ก่อน */
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999; /* อยู่บนสุดเสมอ */
+        transition: opacity 0.5s ease-out; /* ทำ Effect จางหายสวยๆ */
       }
       
       .loading-text {
@@ -24,33 +29,31 @@
         font-size: 1.5rem;
         margin-bottom: 10px;
         font-weight: 600;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       }
       
       .loading-subtext {
         color: #7f8c8d;
         font-size: 0.9rem;
         margin-bottom: 20px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       }
 
-      /* กรอบ Progress Bar */
       .progress-bar-bg {
         width: 300px;
         height: 8px;
         background-color: #ecf0f1;
         border-radius: 4px;
         overflow: hidden;
-        margin: 0 auto;
         box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
       }
 
-      /* ไส้ Progress Bar (วิ่งๆ) */
       .progress-bar-fill {
         height: 100%;
         background: linear-gradient(90deg, #3498db, #2ecc71);
         width: 0%;
         border-radius: 4px;
-        /* Animation หลอกตา: วิ่งไปเรื่อยๆ จนถึง 95% แล้วรอ */
-        animation: load-progress 10s cubic-bezier(0.2, 0.6, 0.4, 1) forwards;
+        animation: load-progress 15s cubic-bezier(0.2, 0.6, 0.4, 1) forwards;
       }
 
       @keyframes load-progress {
@@ -58,30 +61,24 @@
         20% { width: 30%; }
         50% { width: 70%; }
         90% { width: 95%; }
-        100% { width: 98%; } /* ค้างไว้ที่ 98% จนกว่า App จะโหลดเสร็จแล้วทับ */
+        100% { width: 98%; }
       }
 
-      /* Style เดิมสำหรับ Footer */
-      footer {
-        visibility: hidden;
-        height: 0px;
-      }
-      footer:after {
-        content: none;
-      }
+      footer { visibility: hidden; height: 0px; }
+      footer:after { content: none; }
     </style>
   </head>
   
   <body>
-    <div id="root">
-      <div class="loading-container">
+    <div id="loading-screen">
         <div class="loading-text">🏥 Medical Statistical Tool</div>
         <div class="loading-subtext">Initializing Python Environment & Libraries...</div>
         <div class="progress-bar-bg">
           <div class="progress-bar-fill"></div>
         </div>
-      </div>
     </div>
+
+    <div id="root"></div>
 
     <script>
       stlite.mount({
