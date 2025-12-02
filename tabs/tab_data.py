@@ -53,7 +53,7 @@ def check_data_quality(df, container):
                 row_str = ",".join(map(str, error_rows[:5])) + ("..." if len(error_rows) > 5 else "")
                 val_str = ",".join(map(str, bad_values[:3])) + ("..." if len(bad_values) > 3 else "")
                 
-                col_issues.append(f"Found {numeric_in_text_count} numeric values (e.g. 1, 0) at rows `{row_str}` (Values: `{val_str}`).")
+                col_issues.append(f"Found {numeric_in_text_count} numeric values at rows `{row_str}` (Values: `{val_str}`).")
 
             # 2.2: เช็ค Rare Category (คำที่โผล่มาน้อยๆ)
             unique_ratio = df[col].nunique() / total_rows
