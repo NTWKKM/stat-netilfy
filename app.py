@@ -86,7 +86,7 @@ if st.sidebar.button("📄 Load Example Data"):
     }
     
     st.sidebar.success(f"Loaded {n} Example Patients!")
-    st.experimental_rerun()
+    st.rerun()
 
 # File Uploader
 upl = st.sidebar.file_uploader("Upload CSV/Excel", type=['csv', 'xlsx'])
