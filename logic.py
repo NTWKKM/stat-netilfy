@@ -320,7 +320,7 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None):
     
     # 🟢 NEW: เพิ่ม Footer ของ Report (ใส่ก่อนปิด body)
     html += """<div class='report-footer'>
-    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
+    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM n donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
     </div>"""
     
     html += "</body></html>"
