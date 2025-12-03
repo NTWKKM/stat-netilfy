@@ -242,6 +242,6 @@ footer:after {
 st.markdown("""
 <hr style="margin-top: 20px; margin-bottom: 10px; border-color: var(--border-color); opacity: 0.5;">
 <div style='text-align: center; font-size: 0.8em; color: var(--text-color); opacity: 0.8;'>
-    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit; font-weight:bold;">NTWKKM</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
+    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit; font-weight:bold;">NTWKKM n Donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
 </div>
 """, unsafe_allow_html=True)
