@@ -61,13 +61,25 @@ def render(df, var_meta):
                     st.download_button("📥 Download Report (KM)", report_html, "km_report.html", "text/html")
                     
                 else:
-                    # 🟢 Run Nelson-Aalen
-                    fig = survival_lib.fit_nelson_aalen(df, col_time, col_event, grp)
-                    st.pyplot(fig)
-                    st.caption("Note: Nelson-Aalen estimates the cumulative hazard rate function (H(t)).")
+                    # 🟢 Run Nelson-Aalen (แก้ส่วนนี้)
+                    # รับค่า stats_df เพิ่มมาอีก 1 ตัว
+                    fig, stats_df = survival_lib.fit_nelson_aalen(df, col_time, col_event, grp)
                     
-                    # Report HTML (NA)
-                    elements = [{'type':'header','data':'Nelson-Aalen Cumulative Hazard'}, {'type':'plot','data':fig}]
+                    st.pyplot(fig)
+                    
+                    # แสดงตารางสรุป
+                    st.markdown("##### Summary Statistics (N / Events)")
+                    st.dataframe(stats_df)
+                    
+                    st.caption("Note: Nelson-Aalen estimates the cumulative hazard rate function (H(t)). It represents the accumulated risk over time.")
+                    
+                    # Update Report HTML (ส่ง stats_df เข้าไปใน report ด้วย)
+                    elements = [
+                        {'type':'header','data':'Nelson-Aalen Cumulative Hazard'}, 
+                        {'type':'plot','data':fig},
+                        {'type':'header','data':'Summary Statistics'}, # เพิ่มหัวข้อใน report
+                        {'type':'table','data':stats_df}               # เพิ่มตารางใน report
+                    ]
                     report_html = survival_lib.generate_report_survival(f"NA: {col_time}", elements)
                     st.download_button("📥 Download Report (NA)", report_html, "na_report.html", "text/html")
                     
