@@ -100,26 +100,52 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
     
 # --- 🟢 2. Nelson-Aalen (Cumulative Hazard) ---
 def fit_nelson_aalen(df, time_col, event_col, group_col=None):
+    """
+    สร้างกราฟ Nelson-Aalen พร้อมตารางสรุป N/Events
+    """
     data = clean_survival_data(df, time_col, event_col, [group_col] if group_col else [])
     naf = NelsonAalenFitter()
     fig, ax = plt.subplots(figsize=(8, 5))
     
+    stats_res = {} # เตรียมตัวแปรเก็บค่าสถิติ
+    
     if group_col:
-        groups = data[group_col].unique()
+        # กรณีมีกลุ่ม
+        groups = sorted(data[group_col].unique())
         for g in groups:
             mask = data[group_col] == g
-            naf.fit(data.loc[mask, time_col], event_observed=data.loc[mask, event_col], label=str(g))
+            T = data.loc[mask, time_col]
+            E = data.loc[mask, event_col]
+            
+            naf.fit(T, event_observed=E, label=str(g))
             naf.plot_cumulative_hazard(ax=ax)
+            
+            # 🟢 เพิ่ม: เก็บข้อมูลสถิติพื้นฐาน (เหมือน KM)
+            stats_res[f"{g} (N)"] = len(T)
+            stats_res[f"{g} (Events)"] = E.sum()
+            # Nelson-Aalen ไม่มี Median Time ที่นิยมใช้ จึงเก็บแค่ N กับ Events ก็พอ
+            
         ax.set_title(f"Nelson-Aalen Cumulative Hazard: {group_col}")
     else:
-        naf.fit(data[time_col], event_observed=data[event_col], label="All")
+        # กรณีรวม (All)
+        T = data[time_col]
+        E = data[event_col]
+        naf.fit(T, event_observed=E, label="All")
         naf.plot_cumulative_hazard(ax=ax)
+        
+        # 🟢 เพิ่ม: สถิติพื้นฐาน
+        stats_res["Total N"] = len(T)
+        stats_res["Events"] = E.sum()
+        stats_res["Censored"] = len(T) - E.sum()
+        
         ax.set_title("Nelson-Aalen Cumulative Hazard Curve")
         
     ax.set_xlabel(f"Time ({time_col})")
     ax.set_ylabel("Cumulative Hazard")
     ax.grid(True, alpha=0.3)
-    return fig
+    
+    # 🟢 ส่งคืน 2 ค่า: รูปกราฟ และ ตารางสรุป
+    return fig, pd.DataFrame(stats_res, index=["Count"]).T
     
 # --- 3. Cox Proportional Hazards Model ---
 def fit_cox_ph(df, time_col, event_col, covariates):
