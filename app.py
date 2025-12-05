@@ -9,7 +9,7 @@ from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_surviv
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Medical Stat Tool", layout="wide",menu_items={
-        'Get Help': 'https://www.ntwkkm.github.io/infos/stat_manual.html',
+        'Get Help': 'https://ntwkkm.github.io/infos/stat_manual.html',
         'Report a bug': "https://www.extremelycoolapp.com/bug",
     })
 st.title("🏥 Medical Statistical Tool")
