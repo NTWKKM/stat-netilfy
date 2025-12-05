@@ -31,37 +31,44 @@ def clean_survival_data(df, time_col, event_col, covariates=None):
 # --- 1. Kaplan-Meier & Log-Rank ---
 def fit_km_logrank(df, time_col, event_col, group_col=None):
     """
-    สร้างกราฟ Kaplan-Meier และคำนวณ Log-Rank Test
+    สร้างกราฟ Kaplan-Meier และคำนวณ Log-Rank Test พร้อมสรุป N/Events
     """
     data = clean_survival_data(df, time_col, event_col, [group_col] if group_col else [])
     
     kmf = KaplanMeierFitter()
     fig, ax = plt.subplots(figsize=(8, 5))
     
-    stats_res = {}
+    stats_res = {} # จะเก็บข้อมูลสำหรับแสดงในตาราง
     
     if group_col:
-        # กรณีมีกลุ่มเปรียบเทียบ (Multivariate Plot)
-        groups = data[group_col].unique()
+        # --- กรณีมีกลุ่มเปรียบเทียบ ---
+        groups = sorted(data[group_col].unique())
         T_list, E_list, labels = [], [], []
         
-        for i, g in enumerate(groups):
+        for g in groups:
             mask = data[group_col] == g
-            # Fit K-M สำหรับแต่ละกลุ่ม
-            kmf.fit(data.loc[mask, time_col], event_observed=data.loc[mask, event_col], label=str(g))
-            kmf.plot_survival_function(ax=ax, ci_show=False) # ไม่โชว์ CI เพื่อความสะอาดหากมีหลายเส้น
+            T = data.loc[mask, time_col]
+            E = data.loc[mask, event_col]
             
-            # เก็บข้อมูลสำหรับ Log-Rank
-            T_list.append(data.loc[mask, time_col])
-            E_list.append(data.loc[mask, event_col])
-            labels.append(str(g))
+            # Fit K-M
+            kmf.fit(T, event_observed=E, label=str(g))
+            kmf.plot_survival_function(ax=ax, ci_show=False)
             
-            # เก็บ Median Survival
-            stats_res[f"Median Survival ({g})"] = kmf.median_survival_time_
+            # 🟢 เพิ่ม: เก็บข้อมูลสถิติพื้นฐานลง Dictionary
+            n_total = len(T)
+            n_events = E.sum()
+            n_censored = n_total - n_events
+            median_surv = kmf.median_survival_time_
             
-        # Log-Rank Test (เปรียบเทียบกลุ่มแรกกับกลุ่มอื่นๆ หรือ pairwise - ที่นี่ทำแบบรวม)
-        # หมายเหตุ: lifelines logrank_test เปรียบเทียบได้ทีละ 2 กลุ่มหลักๆ 
-        # หรือใช้ multivariate_logrank_test สำหรับ >2 กลุ่ม (แต่ในที่นี้ทำ simple case 2 กลุ่มก่อน)
+            # สร้าง Key ชื่อยาวๆ ให้ชัดเจน
+            stats_res[f"{g} (N)"] = n_total
+            stats_res[f"{g} (Events)"] = n_events
+            stats_res[f"{g} (Median Time)"] = median_surv
+            
+            T_list.append(T)
+            E_list.append(E)
+            
+        # Log-Rank Test
         if len(groups) == 2:
             lr_result = logrank_test(T_list[0], T_list[1], event_observed_A=E_list[0], event_observed_B=E_list[1])
             stats_res['Log-Rank p-value'] = lr_result.p_value
@@ -70,17 +77,27 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
              ax.set_title(f"KM Curve: {group_col}")
              
     else:
-        # กรณีไม่มีกลุ่ม (Univariate Plot)
-        kmf.fit(data[time_col], event_observed=data[event_col], label="All")
+        # --- กรณีไม่มีกลุ่ม (All) ---
+        T = data[time_col]
+        E = data[event_col]
+        kmf.fit(T, event_observed=E, label="All")
         kmf.plot_survival_function(ax=ax)
+        
+        # 🟢 เพิ่ม: สถิติพื้นฐาน
+        stats_res["Total N"] = len(T)
+        stats_res["Events"] = E.sum()
+        stats_res["Censored"] = len(T) - E.sum()
         stats_res["Median Survival"] = kmf.median_survival_time_
+        
         ax.set_title("Kaplan-Meier Survival Curve")
         
     ax.set_xlabel(f"Time ({time_col})")
     ax.set_ylabel("Survival Probability")
     ax.grid(True, alpha=0.3)
     
+    # ส่งคืนรูปกราฟ และ Dataframe สรุปผล
     return fig, pd.DataFrame(stats_res, index=["Value"]).T
+    
 # --- 🟢 2. Nelson-Aalen (Cumulative Hazard) ---
 def fit_nelson_aalen(df, time_col, event_col, group_col=None):
     data = clean_survival_data(df, time_col, event_col, [group_col] if group_col else [])
