@@ -35,7 +35,8 @@ def run_binary_logit(y, X, method='default'):
         # 🟢 CASE 1: FIRTH'S LOGISTIC REGRESSION (Recommended)
         if method == 'firth':
             if not HAS_FIRTH:
-                return None, None, None, "Library 'firthlogist' not installed. Using standard method instead."
+                # ถ้า User เลือก Firth แต่ไม่มี Library ให้ Return Error
+                return None, None, None, "Library 'firthlogist' not installed. Please define requirements.txt or use Standard method."
             
             # firthlogist: fit_intercept=False เพราะเราใส่ Constant ใน X ไปแล้ว
             fl = FirthLogisticRegression(fit_intercept=False) 
@@ -71,8 +72,9 @@ def get_label(col_name, var_meta):
     return f"<b>{orig_name}</b><br><span style='color:#666; font-size:0.9em'>{label}</span>"
 
 # ✅ CACHE DATA: ช่วยให้เว็บเร็วขึ้น ไม่ต้องคำนวณใหม่ทุกครั้งที่กดปุ่มอื่น
+# 🟢 NOTE: ต้องเพิ่ม method ลงใน argument เพื่อให้ cache แยกกันตาม method ที่เลือก
 @st.cache_data(show_spinner=False)
-def analyze_outcome(outcome_name, df, var_meta=None):
+def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     if outcome_name not in df.columns:
         return f"<div class='alert'>⚠️ Outcome '{outcome_name}' not found.</div>"
     
@@ -84,8 +86,15 @@ def analyze_outcome(outcome_name, df, var_meta=None):
     results_db = {} 
     sorted_cols = sorted(df.columns)
 
-    # เลือก Method หลัก: ถ้ามี Firth ให้ใช้ Firth, ถ้าไม่มีใช้ BFGS
-    preferred_method = 'firth' if HAS_FIRTH else 'bfgs'
+    # 🟢 Logic การเลือก Method ตามที่ User สั่ง
+    preferred_method = 'bfgs' # Default fallback
+    
+    if method == 'auto':
+        preferred_method = 'firth' if HAS_FIRTH else 'bfgs'
+    elif method == 'firth':
+        preferred_method = 'firth'
+    elif method == 'bfgs':
+        preferred_method = 'bfgs'
 
     for col in sorted_cols:
         if col == outcome_name: continue
@@ -195,7 +204,7 @@ def analyze_outcome(outcome_name, df, var_meta=None):
                 res['test_name'] = "-"
 
         # --- UNIVARIATE REGRESSION (Crude OR) ---
-        # 🟢 ใช้ Firth ถ้ามี เพราะ Univariate มักเจอ Zero cells ใน Subgroup
+        # 🟢 ใช้ Method ที่ User เลือก
         data_uni = pd.DataFrame({'y': y, 'x': X_num}).dropna()
         if not data_uni.empty and data_uni['x'].nunique() > 1:
             params, conf, pvals, status = run_binary_logit(data_uni['y'], data_uni[['x']], method=preferred_method)
@@ -203,11 +212,10 @@ def analyze_outcome(outcome_name, df, var_meta=None):
                 coef = params['x']
                 or_val = np.exp(coef)
                 
-                # Check if conf exists (Firth or Standard)
                 if 'x' in conf.index:
                     ci_low, ci_high = np.exp(conf.loc['x'][0]), np.exp(conf.loc['x'][1])
                 else:
-                    ci_low, ci_high = np.nan, np.nan # Fallback
+                    ci_low, ci_high = np.nan, np.nan 
                     
                 res['or'] = f"{or_val:.2f} ({ci_low:.2f}-{ci_high:.2f})"
                 res['p_or'] = pvals['x']
@@ -235,7 +243,7 @@ def analyze_outcome(outcome_name, df, var_meta=None):
         final_n_multi = len(multi_data)
         
         if not multi_data.empty and final_n_multi > 10:
-            # 🟢 ใช้ Firth สำหรับ Multivariate (แก้ปัญหา Separation ได้ดีที่สุด)
+            # 🟢 ใช้ Method ที่ User เลือก สำหรับ Multivariate
             params, conf, pvals, status = run_binary_logit(multi_data['y'], multi_data[cand_valid], method=preferred_method)
             
             if status == "OK":
@@ -293,7 +301,12 @@ def analyze_outcome(outcome_name, df, var_meta=None):
         html_rows.append(row_html)
     
     # Update Footer Note
-    method_note = "Firth's Penalized Likelihood (Better for small samples/rare events)" if HAS_FIRTH else "Binary Logistic Regression (BFGS)"
+    if preferred_method == 'firth':
+        method_note = "Firth's Penalized Likelihood (User Selected)"
+    elif preferred_method == 'bfgs':
+        method_note = "Standard Binary Logistic Regression (MLE)"
+    else:
+        method_note = "Binary Logistic Regression"
 
     return f"""
     <div id='{outcome_name}' class='table-container'>
@@ -320,7 +333,8 @@ def analyze_outcome(outcome_name, df, var_meta=None):
     </div><br>
     """
 
-def process_data_and_generate_html(df, target_outcome, var_meta=None):
+# 🟢 UPDATE: เพิ่ม method='auto' ใน parameter
+def process_data_and_generate_html(df, target_outcome, var_meta=None, method='auto'):
     css_style = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; }
@@ -347,7 +361,8 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None):
     
     html = f"<!DOCTYPE html><html><head>{css_style}</head><body>"
     html += "<h1>Analysis Report</h1>"
-    html += analyze_outcome(target_outcome, df, var_meta)
+    # 🟢 ส่งต่อ method ไปยัง analyze_outcome
+    html += analyze_outcome(target_outcome, df, var_meta, method=method)
     
     html += """<div class='report-footer'>
     &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM n donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
