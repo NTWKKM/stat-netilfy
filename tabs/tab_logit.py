@@ -22,7 +22,7 @@ def check_perfect_separation(df, target_col):
     return risky_vars
 
 def render(df, var_meta):
-    st.subheader("4.Binary Logistic Regression Analysis")
+    st.subheader("4. Binary Logistic Regression Analysis")
     ##### Logistic Regression Analysis
     st.info("""
     **💡 Guide:** Models the relationship between predictors and the **probability** of a **binary outcome** (e.g., disease/no disease).
@@ -57,6 +57,27 @@ def render(df, var_meta):
         else:
             exclude_cols = st.multiselect("Exclude Variables (Optional):", all_cols, key='logit_exclude_opt')
 
+    # 🟢 NEW: เพิ่มส่วนเลือก Method (User Selection)
+    st.write("---")
+    st.markdown("**⚙️ Analysis Settings:**")
+    method_choice = st.radio(
+        "Regression Method:",
+        ["Auto (Recommended)", "Standard (MLE)", "Firth's (Penalized)"],
+        index=0,
+        horizontal=True,
+        help="Standard: Usual Logistic Regression. Firth: Reduces bias and handles separation (Recommended for small sample size/rare events)."
+    )
+    
+    # แปลงตัวเลือกเป็นรหัสที่ logic.py เข้าใจ
+    if "Firth" in method_choice:
+        algo = 'firth'
+    elif "Standard" in method_choice:
+        algo = 'bfgs'
+    else:
+        algo = 'auto'
+
+    st.write("") # Spacer
+
     run_col, dl_col = st.columns([1, 1])
     if 'html_output_logit' not in st.session_state: st.session_state.html_output_logit = None
 
@@ -67,7 +88,8 @@ def render(df, var_meta):
             with st.spinner("Calculating..."):
                 try:
                     final_df = df.drop(columns=exclude_cols, errors='ignore')
-                    html = process_data_and_generate_html(final_df, target, var_meta=var_meta)
+                    # 🟢 ส่งค่า algo (method) ไปให้ function
+                    html = process_data_and_generate_html(final_df, target, var_meta=var_meta, method=algo)
                     st.session_state.html_output_logit = html 
                     st.components.v1.html(html, height=600, scrolling=True)
                 except Exception as e:
