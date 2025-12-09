@@ -6,7 +6,6 @@ import io, base64
 import streamlit as st # 🟢 1. IMPORT STREAMLIT
 
 @st.cache_data(show_spinner=False) # 🟢 2. ADD CACHE
-
 def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_pos=None):
     """
     (SYNCED WITH diag_test.py) - คำนวณ Chi-square
