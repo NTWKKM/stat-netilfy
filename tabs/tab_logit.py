@@ -63,7 +63,11 @@ def render(df, var_meta):
         ["Auto (Recommended)", "Standard (MLE)", "Firth's (Penalized)"],
         index=0,
         horizontal=True,
-        help="Standard: Usual Logistic Regression. Firth: Reduces bias and handles separation (Recommended for small sample size/rare events)."
+        # 🟢 ใช้ """ (Triple Quotes) เพื่อเขียนหลายบรรทัด
+        help="""
+        - **Standard:** Usual Logistic Regression.
+        - **Firth:** Reduces bias and handles separation (Recommended for small sample size/rare events).
+        """
     )
     
     # แปลงตัวเลือกเป็นรหัสที่ logic.py เข้าใจ
