@@ -34,18 +34,17 @@ def calculate_descriptive(df, col):
             "Category": counts.index, "Count": counts.values, "Percentage (%)": percent.values
         }).sort_values("Count", ascending=False)
 
-@st.cache_data(show_spinner=False) # 🟢 2. ADD CACHE
-def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_pos=None):
+@st.cache_data(show_spinner=False)
+def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_pos=None): # 👈 แก้บรรทัดนี้
     """
-    (SYNCED WITH correlation.py)
-    คำนวณ Chi-square พร้อมตาราง 2 ชั้น, Risk Interpretation และการจัดเรียง Label 
+    (SYNCED WITH diag_test.py) - คำนวณ Chi-square
     """
     if col1 not in df.columns or col2 not in df.columns: 
         return None, None, "Columns not found", None
     
     data = df[[col1, col2]].dropna()
     
-    # 1. สร้างตาราง Crosstab ทั้ง 3 แบบ
+    # 1. Crosstabs
     tab_chi2 = pd.crosstab(data[col1], data[col2])
     tab_raw = pd.crosstab(data[col1], data[col2], margins=True, margins_name="Total")
     tab_row_pct = pd.crosstab(data[col1], data[col2], normalize='index', margins=True, margins_name="Total") * 100
@@ -61,7 +60,7 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             if str(lbl) == label_str:
                 return lbl
         return label_str 
-
+    
     # Reorder Cols
     final_col_order_base = base_col_labels[:]
     if v2_pos is not None: 
@@ -74,7 +73,6 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             try: return float(label)
             except: return str(label)
         final_col_order_base.sort(key=custom_sort, reverse=True)
-
     final_col_order = final_col_order_base + ['Total'] 
 
     # Reorder Rows
@@ -89,7 +87,6 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             try: return float(label)
             except: return str(label)
         final_row_order_base.sort(key=custom_sort, reverse=True)
-    
     final_row_order = final_row_order_base + ['Total']
 
     # Reindex
@@ -114,23 +111,21 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     display_tab = pd.DataFrame(display_data, columns=col_names, index=index_names)
     display_tab.index.name = col1
     
-    # Chi-square Stats
-     try:
-        # ตรวจสอบว่าเป็น 2x2 หรือไม่ (Fisher บังคับ 2x2 ใน scipy)
+    # 3. Stats
+    try:
         is_2x2 = (tab_chi2.shape == (2, 2))
         
+        # ✅ ตอนนี้ method จะมีค่าแล้ว ไม่ Error
         if "Fisher" in method:
             if not is_2x2:
                 return display_tab, None, "Error: Fisher's Exact Test requires a 2x2 table.", None
             
-            # Fisher's Exact Test
             odds_ratio, p_value = stats.fisher_exact(tab_chi2)
             method_name = "Fisher's Exact Test"
             msg = f"{method_name}: P-value={p_value:.4f}, OR={odds_ratio:.4f}"
             stats_res = {"Test": method_name, "Statistic (OR)": odds_ratio, "P-value": p_value, "Degrees of Freedom": "-", "N": len(data)}
             
         else:
-            # Pearson / Yates
             use_correction = True if "Yates" in method else False
             chi2, p, dof, ex = stats.chi2_contingency(tab_chi2, correction=use_correction)
             
@@ -141,18 +136,16 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             msg = f"{method_name}: Chi2={chi2:.4f}, p={p:.4f}"
             stats_res = {"Test": method_name, "Statistic": chi2, "P-value": p, "Degrees of Freedom": dof, "N": len(data)}
             
-            # เตือนถ้าควรใช้ Fisher (Expected < 5)
             if (ex < 5).any() and is_2x2 and not use_correction:
                 msg += " ⚠️ Warning: Expected count < 5. Consider using Fisher's Exact Test."
                 
-        # Risk Calculation
+        # 4. Risk
         risk_df = None
         if is_2x2:
             try:
                 vals = tab_chi2.values
                 a, b = vals[0, 0], vals[0, 1]
                 c, d = vals[1, 0], vals[1, 1]
-                
                 row_labels = tab_chi2.index.tolist(); col_labels = tab_chi2.columns.tolist()
                 label_exp = str(row_labels[0]); label_unexp = str(row_labels[1]); label_event = str(col_labels[0])
                 
@@ -173,7 +166,6 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             except: pass
 
         return display_tab, stats_res, msg, risk_df
-
     except Exception as e:
         return display_tab, None, str(e), None
 
