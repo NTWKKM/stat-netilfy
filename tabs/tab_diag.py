@@ -101,7 +101,14 @@ def render(df, var_meta):
         v1 = c1.selectbox("Variable 1 (Exposure/Row):", all_cols, index=v1_idx, key='chi_v1_diag')
         v2 = c2.selectbox("Variable 2 (Outcome/Col):", all_cols, index=v2_idx, key='chi_v2_diag')
         
-        correction_flag = c3.radio("Correction (2x2):", ['Pearson', "Yates'"], index=0, key='chi_corr_diag') == "Yates'"
+       # 🟢 UPDATE: เพิ่ม Fisher's Exact Test และเปลี่ยนชื่อตัวแปรเป็น method_choice
+        method_choice = cc3.radio(
+            "Test Method (for 2x2):", 
+            ['Pearson (Standard)', "Yates' correction", "Fisher's Exact Test"], 
+            index=0, 
+            key='chi_corr_method_tab',
+            help="Pearson: Best for large samples. Yates: Conservative correction. Fisher: Exact test, MUST use if any expected count < 5."
+        )
         
         # 🟢 NEW: Positive Label Selectors
         
@@ -130,13 +137,13 @@ def render(df, var_meta):
         run_col, dl_col = st.columns([1, 1])
         if 'html_output_chi' not in st.session_state: st.session_state.html_output_chi = None
 
-        if run_col.button("Run Chi-Square", key='btn_chi_diag'):
-           # 🟢 UPDATE 4: Pass new parameters to calculate_chi2
-            tab, stats, msg, risk_df = diag_test.calculate_chi2(
+        if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run'):
+            # 🟢 UPDATE: ส่ง method_choice ไปแทน correction_flag
+            tab, stats, msg, risk_df = correlation.calculate_chi2(
                 df, v1, v2, 
-                correction=correction_flag,
-                v1_pos=v1_pos_label, # <--- NEW PARAMETER
-                v2_pos=v2_pos_label  # <--- NEW PARAMETER
+                method=method_choice, # <--- เปลี่ยนตรงนี้
+                v1_pos=v1_pos_label,
+                v2_pos=v2_pos_label
             )
             
             if tab is not None:
