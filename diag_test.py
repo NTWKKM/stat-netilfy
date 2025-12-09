@@ -35,7 +35,8 @@ def calculate_descriptive(df, col):
         }).sort_values("Count", ascending=False)
 
 @st.cache_data(show_spinner=False) # 🟢 2. ADD CACHE
-def calculate_chi2(df, col1, col2, correction=True, v1_pos=None, v2_pos=None):
+
+def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_pos=None):
     """
     (SYNCED WITH correlation.py)
     คำนวณ Chi-square พร้อมตาราง 2 ชั้น, Risk Interpretation และการจัดเรียง Label 
