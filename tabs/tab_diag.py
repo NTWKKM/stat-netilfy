@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import diag_test # Import from root
-import correlation
 
 def render(df, var_meta):
     st.subheader("2. Diagnostic Test & Statistics")
