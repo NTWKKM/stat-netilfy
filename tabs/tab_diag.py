@@ -102,7 +102,7 @@ def render(df, var_meta):
         v2 = c2.selectbox("Variable 2 (Outcome/Col):", all_cols, index=v2_idx, key='chi_v2_diag')
         
        # 🟢 UPDATE: เพิ่ม Fisher's Exact Test และเปลี่ยนชื่อตัวแปรเป็น method_choice
-        method_choice = cc3.radio(
+        method_choice = c3.radio(
             "Test Method (for 2x2):", 
             ['Pearson (Standard)', "Yates' correction", "Fisher's Exact Test"], 
             index=0, 
