@@ -14,7 +14,7 @@ st.set_page_config(page_title="Medical Stat Tool", layout="wide",menu_items={
     })
 st.title("🏥 Medical Statistical Tool")
 
- 🟢 FIX: วาง components.html ไว้ที่นี่ (หลัง set_page_config และ st.title)
+# 🟢 FIX: วาง components.html ไว้ที่นี่ (หลัง set_page_config และ st.title)
 components.html("""
 <script>
     // window.parent คือการสั่งให้ทะลุ Iframe ของ Component ออกไปที่หน้าหลัก (index.html)
