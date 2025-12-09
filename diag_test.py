@@ -4,7 +4,9 @@ import scipy.stats as stats
 from sklearn.metrics import roc_curve, roc_auc_score
 import matplotlib.pyplot as plt
 import io, base64
+import streamlit as st # 🟢 1. IMPORT STREAMLIT
 
+@st.cache_data(show_spinner=False) # 🟢 2. ADD CACHE
 def calculate_descriptive(df, col):
     """คำนวณสถิติพื้นฐาน"""
     if col not in df.columns: return "Column not found"
@@ -32,11 +34,11 @@ def calculate_descriptive(df, col):
             "Category": counts.index, "Count": counts.values, "Percentage (%)": percent.values
         }).sort_values("Count", ascending=False)
 
+@st.cache_data(show_spinner=False) # 🟢 2. ADD CACHE
 def calculate_chi2(df, col1, col2, correction=True, v1_pos=None, v2_pos=None):
     """
     (SYNCED WITH correlation.py)
     คำนวณ Chi-square พร้อมตาราง 2 ชั้น, Risk Interpretation และการจัดเรียง Label 
-    ตามที่ User กำหนด (v1_pos, v2_pos) หรือตามค่าเริ่มต้น (1 ก่อน 0)
     """
     if col1 not in df.columns or col2 not in df.columns: 
         return None, None, "Columns not found", None
@@ -48,105 +50,81 @@ def calculate_chi2(df, col1, col2, correction=True, v1_pos=None, v2_pos=None):
     tab_raw = pd.crosstab(data[col1], data[col2], margins=True, margins_name="Total")
     tab_row_pct = pd.crosstab(data[col1], data[col2], normalize='index', margins=True, margins_name="Total") * 100
     
-    # --- 🟢 START SYNC: REORDERING LOGIC (Using User Positive Labels) ---
+    # --- REORDERING LOGIC ---
     all_col_labels = tab_raw.columns.tolist() 
     all_row_labels = tab_raw.index.tolist()
     base_col_labels = [col for col in all_col_labels if col != 'Total']
     base_row_labels = [row for row in all_row_labels if row != 'Total']
 
-    # Function to get the correct original label object (e.g., int 1) from its string representation ('1')
     def get_original_label(label_str, df_labels):
-        # The labels in df_labels can be int, float, or str. Match by string representation.
         for lbl in df_labels:
             if str(lbl) == label_str:
                 return lbl
-        # Fallback: should not happen if selected from UI
         return label_str 
 
-    # --- 1. Reorder Column Labels (Outcome) ---
+    # Reorder Cols
     final_col_order_base = base_col_labels[:]
-    # 🟢 FIX: Check only if v2_pos is provided (prioritize user choice)
     if v2_pos is not None: 
         v2_pos_original = get_original_label(v2_pos, base_col_labels)
-        
         if v2_pos_original in final_col_order_base:
             final_col_order_base.remove(v2_pos_original)
             final_col_order_base.insert(0, v2_pos_original)
-            
-    # ถ้าผู้ใช้ไม่ได้กำหนดค่า หรือค่านั้นไม่ตรงกับข้อมูลในตาราง ให้เรียงอัตโนมัติ
     else:
         def custom_sort(label):
             try: return float(label)
-            except (ValueError, TypeError): return str(label)
+            except: return str(label)
         final_col_order_base.sort(key=custom_sort, reverse=True)
 
     final_col_order = final_col_order_base + ['Total'] 
 
-    # --- 2. Reorder Row Labels (Exposure) ---
+    # Reorder Rows
     final_row_order_base = base_row_labels[:]
-    # 🟢 FIX: Check only if v1_pos is provided (prioritize user choice)
     if v1_pos is not None: 
         v1_pos_original = get_original_label(v1_pos, base_row_labels)
-        
         if v1_pos_original in final_row_order_base:
             final_row_order_base.remove(v1_pos_original)
             final_row_order_base.insert(0, v1_pos_original)
-    
-    # ถ้าผู้ใช้ไม่ได้กำหนดค่า หรือค่านั้นไม่ตรงกับข้อมูลในตาราง ให้เรียงอัตโนมัติ
     else:
         def custom_sort(label):
             try: return float(label)
-            except (ValueError, TypeError): return str(label)
+            except: return str(label)
         final_row_order_base.sort(key=custom_sort, reverse=True)
     
     final_row_order = final_row_order_base + ['Total']
 
-    # 3. Reindex tables
+    # Reindex
     tab_raw = tab_raw.reindex(index=final_row_order, columns=final_col_order)
     tab_row_pct = tab_row_pct.reindex(index=final_row_order, columns=final_col_order)
     tab_chi2 = tab_chi2.reindex(index=final_row_order_base, columns=final_col_order_base)
     
     col_names = final_col_order 
     index_names = final_row_order
-    # --- 🟢 END SYNC: REORDERING LOGIC ---
 
     display_data = []
-    
     for row_name in index_names:
         row_data = []
         for col_name in col_names:
             count = tab_raw.loc[row_name, col_name]
-            
-            # 🟢 FIX: Handle 'Total' column explicitly (KeyError fix)
-            if col_name == 'Total':
-                pct = 100.0
-            else:
-                pct = tab_row_pct.loc[row_name, col_name]
-                
-            # 🟢 FIX: Format only Count (Row%)
+            if col_name == 'Total': pct = 100.0
+            else: pct = tab_row_pct.loc[row_name, col_name]
             cell_content = f"{count} ({pct:.1f}%)"
             row_data.append(cell_content)
-            
         display_data.append(row_data)
     
     display_tab = pd.DataFrame(display_data, columns=col_names, index=index_names)
     display_tab.index.name = col1
     
-    # 3. คำนวณ Chi-square Stats
+    # Chi-square Stats
     try:
         chi2, p, dof, ex = stats.chi2_contingency(tab_chi2, correction=correction)
-        
         method_name = "Chi-Square"
         if tab_chi2.shape == (2, 2):
             method_name += " (with Yates' Correction)" if correction else " (Pearson Uncorrected)"
             
         msg = f"{method_name}: Chi2={chi2:.4f}, p={p:.4f}"
+        stats_res = {"Test": method_name, "Statistic": chi2, "P-value": p, "Degrees of Freedom": dof, "N": len(data)}
         
-        stats_res = {
-            "Test": method_name, "Statistic": chi2, "P-value": p, "Degrees of Freedom": dof, "N": len(data)
-        }
-        
-        # 4. Risk Calculation
+        # Risk Calculation
         risk_df = None
         if tab_chi2.shape == (2, 2):
             try:
@@ -178,8 +156,7 @@ def calculate_chi2(df, col1, col2, correction=True, v1_pos=None, v2_pos=None):
     except Exception as e:
         return display_tab, None, str(e), None
 
-# --- ROC Functions (คงเดิม) ---
-
+# --- ROC Functions ---
 def auc_ci_hanley_mcneil(auc, n1, n2):
     q1 = auc / (2 - auc); q2 = 2 * (auc**2) / (1 + auc)
     se_auc = np.sqrt(((auc * (1 - auc)) + (n1 - 1)*(q1 - auc**2) + (n2 - 1)*(q2 - auc**2)) / (n1 * n2))
@@ -203,6 +180,7 @@ def auc_ci_delong(y_true, y_scores):
     se_auc = np.sqrt((s10 / n_pos) + (s01 / n_neg))
     return auc - 1.96*se_auc, auc + 1.96*se_auc, se_auc
 
+@st.cache_data(show_spinner=False) # 🟢 2. ADD CACHE
 def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
     data = df[[truth_col, score_col]].dropna()
     y_true_raw = data[truth_col]
@@ -239,11 +217,7 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
     return stats_res, None, fig, coords_df
 
 def generate_report(title, elements):
-    """
-    (SYNCED WITH correlation.py)
-    สร้าง HTML Report โดย Manual Construction ตาราง Contingency Table 
-    ตาม Layout ที่ User ต้องการ (Header 2 ชั้น, แถวแรกว่างซ้าย)
-    """
+    # (คงเดิม - เพราะมีการปิด plt.close(data) ในนี้อยู่แล้ว)
     css_style = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; margin: 0; color: #333; }
@@ -273,44 +247,30 @@ def generate_report(title, elements):
         elif element_type == 'table': 
             idx = not ('Interpretation' in data.columns)
             html += data.to_html(index=idx, classes='report-table')
-            
         elif element_type == 'contingency_table':
             col_labels = data.columns.tolist() 
             row_labels = data.index.tolist()   
             exp_name = data.index.name         
             out_name = element.get('outcome_col', 'Outcome')
-            
-            # Start Table
             html_tab = "<table>"
-            
-            # --- Header Row 1 ---
             html_tab += "<thead><tr>"
             html_tab += "<th style='background-color: white; border: none;'></th>" 
             html_tab += f"<th colspan='{len(col_labels)}' class='th-outcome'>{out_name}</th>"
             html_tab += "</tr>"
-            
-            # --- Header Row 2 ---
             html_tab += "<tr>"
             html_tab += f"<th class='th-exposure'>{exp_name}</th>"
-            for label in col_labels:
-                html_tab += f"<th>{label}</th>"
+            for label in col_labels: html_tab += f"<th>{label}</th>"
             html_tab += "</tr></thead>"
-            
-            # --- Body (Rows 3-5) ---
             html_tab += "<tbody>"
-            # 🟢 FIX: Iterate over row_labels and col_labels explicitly to ensure ordering
             for idx_label in row_labels:
                 html_tab += "<tr>"
                 html_tab += f"<td class='td-label'>{idx_label}</td>"
-                
                 for col_label in col_labels:
-                    val = data.loc[idx_label, col_label] # Fetch value using explicit index/column
+                    val = data.loc[idx_label, col_label]
                     html_tab += f"<td>{val}</td>"
                 html_tab += "</tr>"
             html_tab += "</tbody></table>"
-            
             html += html_tab
-            
         elif element_type == 'plot':
             buf = io.BytesIO()
             if isinstance(data, plt.Figure):
