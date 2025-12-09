@@ -14,19 +14,19 @@ st.set_page_config(page_title="Medical Stat Tool", layout="wide",menu_items={
     })
 st.title("🏥 Medical Statistical Tool")
 
-# 🟢 FIX: วาง components.html ไว้ที่นี่ (หลัง set_page_config และ st.title)
-#components.html("""
-#<script>
-#    // window.parent คือการสั่งให้ทะลุ Iframe ของ Component ออกไปที่หน้าหลัก (index.html)
-#    var loader = window.parent.document.getElementById('loading-screen');
-#    if (loader) {
-#        loader.style.opacity = '0'; // สั่งให้จางลง
-#        setTimeout(function() {
-#            loader.style.display = 'none'; // แล้วซ่อนถาวร
-#        }, 500);
-#    }
-#</script>
-#""", height=0) # height=0 เพื่อไม่ให้กินพื้นที่หน้าจอ
+ 🟢 FIX: วาง components.html ไว้ที่นี่ (หลัง set_page_config และ st.title)
+components.html("""
+<script>
+    // window.parent คือการสั่งให้ทะลุ Iframe ของ Component ออกไปที่หน้าหลัก (index.html)
+    var loader = window.parent.document.getElementById('loading-screen');
+    if (loader) {
+        loader.style.opacity = '0'; // สั่งให้จางลง
+        setTimeout(function() {
+            loader.style.display = 'none'; // แล้วซ่อนถาวร
+        }, 500);
+    }
+</script>
+""", height=0) # height=0 เพื่อไม่ให้กินพื้นที่หน้าจอ
 
 # --- INITIALIZE STATE ---
 if 'df' not in st.session_state: st.session_state.df = None
