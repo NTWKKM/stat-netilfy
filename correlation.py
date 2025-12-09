@@ -84,17 +84,38 @@ def calculate_chi2(df, col1, col2, correction=True, v1_pos=None, v2_pos=None):
     
     # 3. Stats
     try:
-        chi2, p, dof, ex = stats.chi2_contingency(tab_chi2, correction=correction)
-        method_name = "Chi-Square"
-        if tab_chi2.shape == (2, 2):
-            method_name += " (with Yates' Correction)" if correction else " (Pearson Uncorrected)"
-            
-        msg = f"{method_name}: Chi2={chi2:.4f}, p={p:.4f}"
-        stats_res = {"Test": method_name, "Statistic": chi2, "P-value": p, "Degrees of Freedom": dof, "N": len(data)}
+        # ตรวจสอบว่าเป็น 2x2 หรือไม่ (Fisher บังคับ 2x2 ใน scipy)
+        is_2x2 = (tab_chi2.shape == (2, 2))
         
+        if "Fisher" in method:
+            if not is_2x2:
+                return display_tab, None, "Error: Fisher's Exact Test requires a 2x2 table.", None
+            
+            # Fisher's Exact Test
+            odds_ratio, p_value = stats.fisher_exact(tab_chi2)
+            method_name = "Fisher's Exact Test"
+            msg = f"{method_name}: P-value={p_value:.4f}, OR={odds_ratio:.4f}"
+            stats_res = {"Test": method_name, "Statistic (OR)": odds_ratio, "P-value": p_value, "Degrees of Freedom": "-", "N": len(data)}
+            
+        else:
+            # Pearson / Yates
+            use_correction = True if "Yates" in method else False
+            chi2, p, dof, ex = stats.chi2_contingency(tab_chi2, correction=use_correction)
+            
+            method_name = "Chi-Square"
+            if is_2x2:
+                method_name += " (with Yates')" if use_correction else " (Pearson)"
+            
+            msg = f"{method_name}: Chi2={chi2:.4f}, p={p:.4f}"
+            stats_res = {"Test": method_name, "Statistic": chi2, "P-value": p, "Degrees of Freedom": dof, "N": len(data)}
+            
+            # เตือนถ้าควรใช้ Fisher (Expected < 5)
+            if (ex < 5).any() and is_2x2 and not use_correction:
+                msg += " ⚠️ Warning: Expected count < 5. Consider using Fisher's Exact Test."
+                
         # 4. Risk
         risk_df = None
-        if tab_chi2.shape == (2, 2):
+        if is_2x2:
             try:
                 vals = tab_chi2.values
                 a, b = vals[0, 0], vals[0, 1]
