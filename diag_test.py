@@ -35,7 +35,6 @@ def calculate_descriptive(df, col):
         }).sort_values("Count", ascending=False)
 
 @st.cache_data(show_spinner=False) # 🟢 2. ADD CACHE
-
 def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_pos=None):
     """
     (SYNCED WITH correlation.py)
