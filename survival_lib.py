@@ -5,6 +5,7 @@ from lifelines import KaplanMeierFitter, CoxPHFitter, NelsonAalenFitter
 from lifelines.statistics import logrank_test
 import io
 import base64
+import streamlit as st # 🟢 1. IMPORT STREAMLIT
 
 # --- Helper: Clean Data ---
 def clean_survival_data(df, time_col, event_col, covariates=None):
@@ -29,6 +30,7 @@ def clean_survival_data(df, time_col, event_col, covariates=None):
     return data
 
 # --- 1. Kaplan-Meier & Log-Rank ---
+@st.cache_data(show_spinner=False) # 🟢 2. ADD CACHE
 def fit_km_logrank(df, time_col, event_col, group_col=None):
     """
     สร้างกราฟ Kaplan-Meier และคำนวณ Log-Rank Test พร้อมสรุป N/Events
@@ -99,6 +101,7 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
     return fig, pd.DataFrame(stats_res, index=["Value"]).T
     
 # --- 🟢 2. Nelson-Aalen (Cumulative Hazard) ---
+@st.cache_data(show_spinner=False) # 🟢 2. ADD CACHE
 def fit_nelson_aalen(df, time_col, event_col, group_col=None):
     """
     สร้างกราฟ Nelson-Aalen พร้อมตารางสรุป N/Events
@@ -148,6 +151,7 @@ def fit_nelson_aalen(df, time_col, event_col, group_col=None):
     return fig, pd.DataFrame(stats_res, index=["Count"]).T
     
 # --- 3. Cox Proportional Hazards Model ---
+@st.cache_data(show_spinner=False) # 🟢 2. ADD CACHE
 def fit_cox_ph(df, time_col, event_col, covariates):
     """
     วิเคราะห์ Cox Regression และตรวจสอบ Assumption
@@ -195,7 +199,7 @@ def generate_report_survival(title, elements):
         elif el['type'] == 'plot':
             buf = io.BytesIO()
             el['data'].savefig(buf, format='png', bbox_inches='tight')
-            plt.close(el['data'])
+            plt.close(el['data']) # ✅ Already has close, good.
             uri = base64.b64encode(buf.getvalue()).decode('utf-8')
             html += f'<img src="data:image/png;base64,{uri}" style="max-width:100%;"/>'
             
