@@ -106,7 +106,7 @@ def render(df, var_meta):
             "Test Method (for 2x2):", 
             ['Pearson (Standard)', "Yates' correction", "Fisher's Exact Test"], 
             index=0, 
-            key='chi_corr_method_tab',
+            key='chi_corr_method_diag',
             help="Pearson: Best for large samples. Yates: Conservative correction. Fisher: Exact test, MUST use if any expected count < 5."
         )
         
