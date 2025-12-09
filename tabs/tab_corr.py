@@ -39,9 +39,14 @@ def render(df):
         v1 = cc1.selectbox("Variable 1 (Exposure/Row):", all_cols, index=v1_idx, key='chi1_corr_tab') 
         v2 = cc2.selectbox("Variable 2 (Outcome/Col):", all_cols, index=v2_idx, key='chi2_corr_tab')
         
-        correction_flag = cc3.radio("Correction Method (for 2x2):", 
-                                    ['Pearson (Standard)', "Yates' correction"], 
-                                    index=0, key='chi_corr_method_tab') == "Yates' correction"
+        # 🟢 UPDATE: เพิ่ม help tooltip ตรงนี้ครับ
+        correction_flag = cc3.radio(
+            "Correction Method (for 2x2):", 
+            ['Pearson (Standard)', "Yates' correction"], 
+            index=0, 
+            key='chi_corr_method_tab',
+            help="Pearson: Standard Chi-square (Best for large samples). Yates: Continuity correction (Conservative). Recommended when expected cell counts < 5 to reduce false positives."
+        ) == "Yates' correction"
 
         # 🟢 NEW: Positive Label Selectors
 
