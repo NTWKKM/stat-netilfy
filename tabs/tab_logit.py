@@ -58,8 +58,6 @@ def render(df, var_meta):
             exclude_cols = st.multiselect("Exclude Variables (Optional):", all_cols, key='logit_exclude_opt')
 
     # 🟢 NEW: เพิ่มส่วนเลือก Method (User Selection)
-    st.write("---")
-    st.markdown("**⚙️ Analysis Settings:**")
     method_choice = st.radio(
         "Regression Method:",
         ["Auto (Recommended)", "Standard (MLE)", "Firth's (Penalized)"],
