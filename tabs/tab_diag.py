@@ -139,7 +139,7 @@ def render(df, var_meta):
 
         if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run'):
             # 🟢 UPDATE: ส่ง method_choice ไปแทน correction_flag
-            tab, stats, msg, risk_df = correlation.calculate_chi2(
+            tab, stats, msg, risk_df = diag_test.calculate_chi2(
                 df, v1, v2, 
                 method=method_choice, # <--- เปลี่ยนตรงนี้
                 v1_pos=v1_pos_label,
