@@ -39,15 +39,15 @@ def render(df):
         v1 = cc1.selectbox("Variable 1 (Exposure/Row):", all_cols, index=v1_idx, key='chi1_corr_tab') 
         v2 = cc2.selectbox("Variable 2 (Outcome/Col):", all_cols, index=v2_idx, key='chi2_corr_tab')
         
-        # 🟢 UPDATE: เพิ่ม help tooltip ตรงนี้ครับ
-        correction_flag = cc3.radio(
-            "Correction Method (for 2x2):", 
-            ['Pearson (Standard)', "Yates' correction"], 
+        # 🟢 UPDATE: เพิ่ม Fisher's Exact Test และเปลี่ยนชื่อตัวแปรเป็น method_choice
+        method_choice = cc3.radio(
+            "Test Method (for 2x2):", 
+            ['Pearson (Standard)', "Yates' correction", "Fisher's Exact Test"], 
             index=0, 
             key='chi_corr_method_tab',
-            help="Pearson: Standard Chi-square (Best for large samples). Yates: Continuity correction (Conservative). Recommended when expected cell counts < 5 to reduce false positives."
-        ) == "Yates' correction"
-
+            help="Pearson: Best for large samples. Yates: Conservative correction. Fisher: Exact test, MUST use if any expected count < 5."
+        )
+        
         # 🟢 NEW: Positive Label Selectors
 
         # Helper function to get unique values and set default index (Duplicated for tab_corr)
@@ -76,12 +76,12 @@ def render(df):
         if 'html_output_corr_cat' not in st.session_state: st.session_state.html_output_corr_cat = None
 
         if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run'):
-            # 🟢 UPDATE 4: Pass new parameters to calculate_chi2
+            # 🟢 UPDATE: ส่ง method_choice ไปแทน correction_flag
             tab, stats, msg, risk_df = correlation.calculate_chi2(
                 df, v1, v2, 
-                correction=correction_flag,
-                v1_pos=v1_pos_label, # <--- NEW PARAMETER
-                v2_pos=v2_pos_label  # <--- NEW PARAMETER
+                method=method_choice, # <--- เปลี่ยนตรงนี้
+                v1_pos=v1_pos_label,
+                v2_pos=v2_pos_label
             )
             
             if tab is not None:
