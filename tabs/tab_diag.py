@@ -174,6 +174,20 @@ def render(df, var_meta):
                 * 0.81 - 1.00: Perfect
         """)
         
+       # --- 🟢 NEW: Agreement (Kappa) ---
+    with sub_tab3:
+        st.markdown("##### Agreement Analysis (Cohen's Kappa)")
+        st.info("""
+             **💡 Guide:** Evaluates the **agreement** between two raters or two methods classifying items into categories.
+             * **Cohen's Kappa (κ):** Measures agreement adjusting for chance. 
+             * **Interpretation:** * < 0: Poor
+                 * 0.01 - 0.20: Slight
+                 * 0.21 - 0.40: Fair
+                 * 0.41 - 0.60: Moderate
+                 * 0.61 - 0.80: Substantial
+                 * 0.81 - 1.00: Perfect
+         """)
+        
         # 🟢 เพิ่ม Logic การเลือกอัตโนมัติ (Auto-select)
         all_cols = df.columns.tolist()
         
@@ -181,13 +195,14 @@ def render(df, var_meta):
         kv1_default_idx = 0
         kv2_default_idx = min(1, len(all_cols) - 1)
         
+        # --- เริ่มค้นหา Rater A ---
         for i, col in enumerate(all_cols):
             # ตรวจสอบชื่อที่มีคำว่า 'Dr_A', 'Rater_1', 'Diagnosis_A'
             if 'dr_a' in col.lower() or 'rater_1' in col.lower() or 'diagnosis_a' in col.lower():
                 kv1_default_idx = i
                 break
         
-        # 2. Logic หาคอลัมน์ที่น่าจะเป็น Rater B
+        # --- เริ่มค้นหา Rater B ---
         for i, col in enumerate(all_cols):
             if 'dr_b' in col.lower() or 'rater_2' in col.lower() or 'diagnosis_b' in col.lower():
                 kv2_default_idx = i
@@ -199,8 +214,9 @@ def render(df, var_meta):
             kv2_default_idx = min(kv1_default_idx + 1, len(all_cols) - 1)
             
         k1, k2 = st.columns(2)
-        kv1 = k1.selectbox("Rater/Method 1:", all_cols, index=0, key='kappa_v1_diag')
-        kv2 = k2.selectbox("Rater/Method 2:", all_cols, index=min(1, len(all_cols)-1), key='kappa_v2_diag')
+        # 🟢 FIX BUG: ใช้ index ที่คำนวณได้
+        kv1 = k1.selectbox("Rater/Method 1:", all_cols, index=kv1_default_idx, key='kappa_v1_diag')
+        kv2 = k2.selectbox("Rater/Method 2:", all_cols, index=kv2_default_idx, key='kappa_v2_diag')
         
         k_run, k_dl = st.columns([1, 1])
         if 'html_output_kappa' not in st.session_state: st.session_state.html_output_kappa = None
