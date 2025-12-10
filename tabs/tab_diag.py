@@ -137,7 +137,7 @@ def render(df, var_meta):
         run_col, dl_col = st.columns([1, 1])
         if 'html_output_chi' not in st.session_state: st.session_state.html_output_chi = None
 
-        if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run'):
+        if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run_diag'):
             # 🟢 UPDATE: ส่ง method_choice ไปแทน correction_flag
             tab, stats, msg, risk_df = diag_test.calculate_chi2(
                 df, v1, v2, 
