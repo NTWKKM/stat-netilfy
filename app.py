@@ -80,20 +80,35 @@ if st.sidebar.button("📄 Load Example Data"):
     event_prob = event_prob.clip(min=0.1, max=0.9) 
     event_death = np.random.binomial(1, event_prob)
     
+    # 🟢 8. Agreement Variables (Cohen's Kappa) -- เพิ่มส่วนนี้ --
+    # สร้างผลวินิจฉัยของหมอ A (สุ่มมาเลย)
+    diag_dr_a = np.random.binomial(1, 0.3, n) # ความชุกโรค 30%
+    
+    # สร้างผลหมอ B โดย Copy จาก A มาก่อน (เพื่อให้ Agreement สูง)
+    diag_dr_b = diag_dr_a.copy()
+    
+    # สร้างความไม่ตรงกัน (Disagreement) ประมาณ 10-15% ของเคสทั้งหมด
+    # สุ่มเลือก Index มาจำนวนหนึ่ง แล้วสลับค่า (0->1, 1->0)
+    num_mismatch = int(0.12 * n) # 12% Error rate
+    mismatch_idx = np.random.choice(n, num_mismatch, replace=False)
+    diag_dr_b[mismatch_idx] = 1 - diag_dr_b[mismatch_idx] # Flip ค่า
+
     # Create DataFrame and Metadata
     data = {
         'ID': range(1, n+1),
-        # Convert group to string for the DataFrame as in original code
         'Group_Treatment': np.where(group == 0, 'Standard Care', 'New Drug'), 
         'Age': age,
         'Sex': sex,
         'BMI': bmi,
-        'Hypertension': hypertension, # 0/1
-        'Risk_Score': risk_score, # Continuous
-        'Inflammation_Marker': inflammation_marker, # Continuous
-        'Outcome_Disease': outcome_disease, # 0/1
-        'Time_Days': time_days, # Continuous
-        'Event_Death': event_death # 0/1 (Status)
+        'Hypertension': hypertension, 
+        'Risk_Score': risk_score, 
+        'Inflammation_Marker': inflammation_marker, 
+        'Outcome_Disease': outcome_disease, 
+        'Time_Days': time_days, 
+        'Event_Death': event_death,
+        # 🟢 ใส่ข้อมูล Agreement ลง DataFrame
+        'Diagnosis_Dr_A': diag_dr_a,
+        'Diagnosis_Dr_B': diag_dr_b
     }
     
     st.session_state.df = pd.DataFrame(data)
@@ -101,7 +116,10 @@ if st.sidebar.button("📄 Load Example Data"):
         'Sex': {'type':'Categorical', 'map':{0:'Female', 1:'Male'}},
         'Hypertension': {'type':'Categorical', 'map':{0:'No', 1:'Yes'}},
         'Outcome_Disease': {'type':'Categorical', 'map':{0:'Healthy', 1:'Disease'}},
-        'Event_Death': {'type':'Categorical', 'map':{0:'Censored', 1:'Event (Death)'}} # NEW: สำหรับ Survival Analysis
+        'Event_Death': {'type':'Categorical', 'map':{0:'Censored', 1:'Event (Death)'}},
+        # 🟢 เพิ่ม Meta Map ให้แสดงผลสวยๆ
+        'Diagnosis_Dr_A': {'type':'Categorical', 'map':{0:'Negative', 1:'Positive'}},
+        'Diagnosis_Dr_B': {'type':'Categorical', 'map':{0:'Negative', 1:'Positive'}}
     }
     
     st.sidebar.success(f"Loaded {n} Example Patients!")
