@@ -5,14 +5,13 @@ from lifelines import KaplanMeierFitter, CoxPHFitter, NelsonAalenFitter
 from lifelines.statistics import logrank_test
 import io
 import base64
-import streamlit as st # 🟢 1. IMPORT STREAMLIT
+import contextlib # 🟢 3. IMPORT CONTEXTLIB (จำเป็นสำหรับ Assumption Check)
+import streamlit as st
 
 # --- Helper: Clean Data ---
 def clean_survival_data(df, time_col, event_col, covariates=None):
     """
     เตรียมข้อมูลสำหรับ Survival Analysis
-    - ลบแถวที่มี Missing Value ในคอลัมน์ที่เลือก
-    - แปลงค่าให้เป็น Numeric
     """
     cols = [time_col, event_col]
     if covariates:
@@ -30,22 +29,22 @@ def clean_survival_data(df, time_col, event_col, covariates=None):
     return data
 
 # --- 1. Kaplan-Meier & Log-Rank ---
-@st.cache_data(show_spinner=False) # 🟢 2. ADD CACHE
+@st.cache_data(show_spinner=False)
 def fit_km_logrank(df, time_col, event_col, group_col=None):
     """
-    สร้างกราฟ Kaplan-Meier และคำนวณ Log-Rank Test พร้อมสรุป N/Events
+    สร้างกราฟ Kaplan-Meier และคำนวณ Log-Rank Test
     """
     data = clean_survival_data(df, time_col, event_col, [group_col] if group_col else [])
     
     kmf = KaplanMeierFitter()
     fig, ax = plt.subplots(figsize=(8, 5))
     
-    stats_res = {} # จะเก็บข้อมูลสำหรับแสดงในตาราง
+    stats_res = {}
     
     if group_col:
         # --- กรณีมีกลุ่มเปรียบเทียบ ---
         groups = sorted(data[group_col].unique())
-        T_list, E_list, labels = [], [], []
+        T_list, E_list = [], []
         
         for g in groups:
             mask = data[group_col] == g
@@ -56,13 +55,11 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
             kmf.fit(T, event_observed=E, label=str(g))
             kmf.plot_survival_function(ax=ax, ci_show=False)
             
-            # 🟢 เพิ่ม: เก็บข้อมูลสถิติพื้นฐานลง Dictionary
+            # เก็บข้อมูลสถิติ
             n_total = len(T)
             n_events = E.sum()
-            n_censored = n_total - n_events
             median_surv = kmf.median_survival_time_
             
-            # สร้าง Key ชื่อยาวๆ ให้ชัดเจน
             stats_res[f"{g} (N)"] = n_total
             stats_res[f"{g} (Events)"] = n_events
             stats_res[f"{g} (Median Time)"] = median_surv
@@ -70,7 +67,7 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
             T_list.append(T)
             E_list.append(E)
             
-        # Log-Rank Test
+        # Log-Rank Test (ทำเฉพาะเมื่อมี 2 กลุ่ม)
         if len(groups) == 2:
             lr_result = logrank_test(T_list[0], T_list[1], event_observed_A=E_list[0], event_observed_B=E_list[1])
             stats_res['Log-Rank p-value'] = lr_result.p_value
@@ -85,7 +82,6 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
         kmf.fit(T, event_observed=E, label="All")
         kmf.plot_survival_function(ax=ax)
         
-        # 🟢 เพิ่ม: สถิติพื้นฐาน
         stats_res["Total N"] = len(T)
         stats_res["Events"] = E.sum()
         stats_res["Censored"] = len(T) - E.sum()
@@ -97,23 +93,22 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
     ax.set_ylabel("Survival Probability")
     ax.grid(True, alpha=0.3)
     
-    # ส่งคืนรูปกราฟ และ Dataframe สรุปผล
+    # ส่งคืนรูปกราฟ และ Dataframe
     return fig, pd.DataFrame(stats_res, index=["Value"]).T
     
-# --- 🟢 2. Nelson-Aalen (Cumulative Hazard) ---
-@st.cache_data(show_spinner=False) # 🟢 2. ADD CACHE
+# --- 2. Nelson-Aalen (Cumulative Hazard) ---
+@st.cache_data(show_spinner=False)
 def fit_nelson_aalen(df, time_col, event_col, group_col=None):
     """
-    สร้างกราฟ Nelson-Aalen พร้อมตารางสรุป N/Events
+    สร้างกราฟ Nelson-Aalen
     """
     data = clean_survival_data(df, time_col, event_col, [group_col] if group_col else [])
     naf = NelsonAalenFitter()
     fig, ax = plt.subplots(figsize=(8, 5))
     
-    stats_res = {} # เตรียมตัวแปรเก็บค่าสถิติ
+    stats_res = {}
     
     if group_col:
-        # กรณีมีกลุ่ม
         groups = sorted(data[group_col].unique())
         for g in groups:
             mask = data[group_col] == g
@@ -123,23 +118,18 @@ def fit_nelson_aalen(df, time_col, event_col, group_col=None):
             naf.fit(T, event_observed=E, label=str(g))
             naf.plot_cumulative_hazard(ax=ax)
             
-            # 🟢 เพิ่ม: เก็บข้อมูลสถิติพื้นฐาน (เหมือน KM)
             stats_res[f"{g} (N)"] = len(T)
             stats_res[f"{g} (Events)"] = E.sum()
-            # Nelson-Aalen ไม่มี Median Time ที่นิยมใช้ จึงเก็บแค่ N กับ Events ก็พอ
             
         ax.set_title(f"Nelson-Aalen Cumulative Hazard: {group_col}")
     else:
-        # กรณีรวม (All)
         T = data[time_col]
         E = data[event_col]
         naf.fit(T, event_observed=E, label="All")
         naf.plot_cumulative_hazard(ax=ax)
         
-        # 🟢 เพิ่ม: สถิติพื้นฐาน
         stats_res["Total N"] = len(T)
         stats_res["Events"] = E.sum()
-        stats_res["Censored"] = len(T) - E.sum()
         
         ax.set_title("Nelson-Aalen Cumulative Hazard Curve")
         
@@ -147,32 +137,50 @@ def fit_nelson_aalen(df, time_col, event_col, group_col=None):
     ax.set_ylabel("Cumulative Hazard")
     ax.grid(True, alpha=0.3)
     
-    # 🟢 ส่งคืน 2 ค่า: รูปกราฟ และ ตารางสรุป
     return fig, pd.DataFrame(stats_res, index=["Count"]).T
     
 # --- 3. Cox Proportional Hazards Model ---
-@st.cache_data(show_spinner=False) # 🟢 2. ADD CACHE
+@st.cache_data(show_spinner=False)
 def fit_cox_ph(df, time_col, event_col, covariates):
     """
-    วิเคราะห์ Cox Regression และตรวจสอบ Assumption
+    วิเคราะห์ Cox Regression
     """
+    # 🟢 เก็บข้อมูล Cleaned Data ไว้ใช้ return
     data = clean_survival_data(df, time_col, event_col, covariates)
     
     cph = CoxPHFitter()
     try:
-        # Fit Model
         cph.fit(data, duration_col=time_col, event_col=event_col)
         
-        # ดึงผลลัพธ์ (Summary)
         summary_df = cph.summary[['coef', 'exp(coef)', 'exp(coef) lower 95%', 'exp(coef) upper 95%', 'p']]
         summary_df.columns = ['Coef', 'HR', 'Lower 95% CI', 'Upper 95% CI', 'P-value']
         
-        return cph, summary_df, None
+        # 🟢 เพิ่ม: Return data กลับไปด้วย เพื่อเอาไป check assumption
+        return cph, summary_df, data, None
     except Exception as e:
-        return None, None, str(e)
+        # 🟢 เพิ่ม: Return None ให้ครบ 4 ตัว
+        return None, None, None, str(e)
 
-# --- 4. Generate Report (Format เดิมของ Project) ---
+# --- 🟢 4. New: Assumption Check ---
+def check_cph_assumptions(cph, data):
+    """
+    ตรวจสอบ Assumption และดักจับข้อความ Advice
+    """
+    try:
+        f = io.StringIO()
+        with contextlib.redirect_stdout(f):
+            # Lifelines จะ print advice และวาดกราฟลงใน plt ปัจจุบัน
+            cph.check_assumptions(data, p_value_threshold=0.05, show_plots=True)
+        
+        advice_text = f.getvalue()
+        fig = plt.gcf() # ดึงกราฟที่เพิ่งวาด
+        return advice_text, fig
+    except Exception as e:
+        return f"Error checking assumptions: {str(e)}", None
+
+# --- 5. Generate Report ---
 def generate_report_survival(title, elements):
+    # (ใช้โค้ดเดิมของคุณได้เลย)
     css_style = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; }
@@ -199,7 +207,7 @@ def generate_report_survival(title, elements):
         elif el['type'] == 'plot':
             buf = io.BytesIO()
             el['data'].savefig(buf, format='png', bbox_inches='tight')
-            plt.close(el['data']) # ✅ Already has close, good.
+            plt.close(el['data'])
             uri = base64.b64encode(buf.getvalue()).decode('utf-8')
             html += f'<img src="data:image/png;base64,{uri}" style="max-width:100%;"/>'
             
