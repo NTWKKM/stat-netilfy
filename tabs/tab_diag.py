@@ -174,6 +174,30 @@ def render(df, var_meta):
                 * 0.81 - 1.00: Perfect
         """)
         
+        # 🟢 เพิ่ม Logic การเลือกอัตโนมัติ (Auto-select)
+        all_cols = df.columns.tolist()
+        
+        # 1. Logic หาคอลัมน์ที่น่าจะเป็น Rater A
+        kv1_default_idx = 0
+        kv2_default_idx = min(1, len(all_cols) - 1)
+        
+        for i, col in enumerate(all_cols):
+            # ตรวจสอบชื่อที่มีคำว่า 'Dr_A', 'Rater_1', 'Diagnosis_A'
+            if 'dr_a' in col.lower() or 'rater_1' in col.lower() or 'diagnosis_a' in col.lower():
+                kv1_default_idx = i
+                break
+        
+        # 2. Logic หาคอลัมน์ที่น่าจะเป็น Rater B
+        for i, col in enumerate(all_cols):
+            if 'dr_b' in col.lower() or 'rater_2' in col.lower() or 'diagnosis_b' in col.lower():
+                kv2_default_idx = i
+                break
+
+        # ป้องกันไม่ให้ Rater 1 และ Rater 2 เป็นคอลัมน์เดียวกัน ถ้าเจอชื่อที่ตรงกัน
+        if kv1_default_idx == kv2_default_idx and len(all_cols) > 1:
+            # ถ้าชื่อซ้ำกัน ให้ Rater 2 เลือกคอลัมน์ถัดไป
+            kv2_default_idx = min(kv1_default_idx + 1, len(all_cols) - 1)
+            
         k1, k2 = st.columns(2)
         kv1 = k1.selectbox("Rater/Method 1:", all_cols, index=0, key='kappa_v1_diag')
         kv2 = k2.selectbox("Rater/Method 2:", all_cols, index=min(1, len(all_cols)-1), key='kappa_v2_diag')
