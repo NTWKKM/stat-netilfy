@@ -159,21 +159,7 @@ def render(df, var_meta):
             if st.session_state.html_output_chi:
                 st.download_button("📥 Download Report", st.session_state.html_output_chi, "chi2_diag.html", "text/html", key='dl_chi_diag')
             else: st.button("📥 Download Report", disabled=True, key='ph_chi_diag')
-    
-    # --- 🟢 NEW: Agreement (Kappa) ---
-    with sub_tab3:
-        st.markdown("##### Agreement Analysis (Cohen's Kappa)")
-        st.info("""
-            **💡 Guide:** Evaluates the **agreement** between two raters or two methods classifying items into categories.
-            * **Cohen's Kappa (κ):** Measures agreement adjusting for chance. 
-            * **Interpretation:** * < 0: Poor
-                * 0.01 - 0.20: Slight
-                * 0.21 - 0.40: Fair
-                * 0.41 - 0.60: Moderate
-                * 0.61 - 0.80: Substantial
-                * 0.81 - 1.00: Perfect
-        """)
-        
+       
        # --- 🟢 NEW: Agreement (Kappa) ---
     with sub_tab3:
         st.markdown("##### Agreement Analysis (Cohen's Kappa)")
