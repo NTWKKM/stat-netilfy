@@ -45,7 +45,7 @@ def render(df):
             ['Pearson (Standard)', "Yates' correction", "Fisher's Exact Test"], 
             index=0, 
             # สังเกต 2: เปลี่ยน key เป็น _diag เพื่อไม่ให้ซ้ำ
-            key='chi_corr_method_diag',
+            key='chi_corr_method_tab',
             help="""
                 - Pearson: Best for large samples. 
                 - Yates: Conservative correction. 
