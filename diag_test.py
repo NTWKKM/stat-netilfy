@@ -1,12 +1,14 @@
 import pandas as pd
 import numpy as np
 import scipy.stats as stats
-from sklearn.metrics import roc_curve, roc_auc_score
+from sklearn.metrics import roc_curve, roc_auc_score, cohen_kappa_score # 🟢 Import เพิ่ม
 import matplotlib.pyplot as plt
 import io, base64
-import streamlit as st # 🟢 1. IMPORT STREAMLIT
+import streamlit as st 
 
-@st.cache_data(show_spinner=False) # 🟢 2. ADD CACHE
+# ... (ฟังก์ชัน calculate_descriptive และ calculate_chi2 ของเดิม เก็บไว้เหมือนเดิม) ...
+
+@st.cache_data(show_spinner=False) 
 def calculate_descriptive(df, col):
     """คำนวณสถิติพื้นฐาน"""
     if col not in df.columns: return "Column not found"
@@ -35,16 +37,14 @@ def calculate_descriptive(df, col):
         }).sort_values("Count", ascending=False)
 
 @st.cache_data(show_spinner=False)
-def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_pos=None): # 👈 แก้บรรทัดนี้
-    """
-    (SYNCED WITH diag_test.py) - คำนวณ Chi-square
-    """
+def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_pos=None):
+    """(SYNCED) คำนวณ Chi-square/Fisher"""
     if col1 not in df.columns or col2 not in df.columns: 
         return None, None, "Columns not found", None
     
     data = df[[col1, col2]].dropna()
     
-    # 1. Crosstabs
+    # 1. Crosstab
     tab_chi2 = pd.crosstab(data[col1], data[col2])
     tab_raw = pd.crosstab(data[col1], data[col2], margins=True, margins_name="Total")
     tab_row_pct = pd.crosstab(data[col1], data[col2], normalize='index', margins=True, margins_name="Total") * 100
@@ -57,10 +57,9 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
 
     def get_original_label(label_str, df_labels):
         for lbl in df_labels:
-            if str(lbl) == label_str:
-                return lbl
+            if str(lbl) == label_str: return lbl
         return label_str 
-    
+
     # Reorder Cols
     final_col_order_base = base_col_labels[:]
     if v2_pos is not None: 
@@ -111,35 +110,26 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     display_tab = pd.DataFrame(display_data, columns=col_names, index=index_names)
     display_tab.index.name = col1
     
-    # 3. Stats
+    # Stats
     try:
         is_2x2 = (tab_chi2.shape == (2, 2))
         
-        # ✅ ตอนนี้ method จะมีค่าแล้ว ไม่ Error
         if "Fisher" in method:
-            if not is_2x2:
-                return display_tab, None, "Error: Fisher's Exact Test requires a 2x2 table.", None
-            
+            if not is_2x2: return display_tab, None, "Error: Fisher's Exact Test requires a 2x2 table.", None
             odds_ratio, p_value = stats.fisher_exact(tab_chi2)
             method_name = "Fisher's Exact Test"
             msg = f"{method_name}: P-value={p_value:.4f}, OR={odds_ratio:.4f}"
             stats_res = {"Test": method_name, "Statistic (OR)": odds_ratio, "P-value": p_value, "Degrees of Freedom": "-", "N": len(data)}
-            
         else:
             use_correction = True if "Yates" in method else False
             chi2, p, dof, ex = stats.chi2_contingency(tab_chi2, correction=use_correction)
-            
             method_name = "Chi-Square"
-            if is_2x2:
-                method_name += " (with Yates')" if use_correction else " (Pearson)"
-            
+            if is_2x2: method_name += " (with Yates')" if use_correction else " (Pearson)"
             msg = f"{method_name}: Chi2={chi2:.4f}, p={p:.4f}"
             stats_res = {"Test": method_name, "Statistic": chi2, "P-value": p, "Degrees of Freedom": dof, "N": len(data)}
-            
             if (ex < 5).any() and is_2x2 and not use_correction:
                 msg += " ⚠️ Warning: Expected count < 5. Consider using Fisher's Exact Test."
-                
-        # 4. Risk
+        
         risk_df = None
         if is_2x2:
             try:
@@ -148,7 +138,6 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                 c, d = vals[1, 0], vals[1, 1]
                 row_labels = tab_chi2.index.tolist(); col_labels = tab_chi2.columns.tolist()
                 label_exp = str(row_labels[0]); label_unexp = str(row_labels[1]); label_event = str(col_labels[0])
-                
                 risk_exp = a/(a+b) if (a+b)>0 else 0; risk_unexp = c/(c+d) if (c+d)>0 else 0
                 rr = risk_exp/risk_unexp if risk_unexp>0 else np.nan
                 rd = risk_exp - risk_unexp; nnt = abs(1/rd) if rd!=0 else np.inf
@@ -166,10 +155,48 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             except: pass
 
         return display_tab, stats_res, msg, risk_df
+
     except Exception as e:
         return display_tab, None, str(e), None
 
-# --- ROC Functions ---
+# 🟢 NEW: ฟังก์ชันคำนวณ Kappa
+@st.cache_data(show_spinner=False)
+def calculate_kappa(df, col1, col2):
+    if col1 not in df.columns or col2 not in df.columns:
+        return None, "Columns not found", None
+
+    data = df[[col1, col2]].dropna()
+    if data.empty: return None, "No data after dropping NAs", None
+
+    # แปลงเป็น String เพื่อให้ชัวร์ว่าเป็น Categorical
+    y1 = data[col1].astype(str)
+    y2 = data[col2].astype(str)
+
+    # คำนวณ Kappa
+    try:
+        kappa = cohen_kappa_score(y1, y2)
+        
+        # แปลผล (Landis & Koch, 1977)
+        if kappa < 0: interp = "Poor agreement"
+        elif kappa <= 0.20: interp = "Slight agreement"
+        elif kappa <= 0.40: interp = "Fair agreement"
+        elif kappa <= 0.60: interp = "Moderate agreement"
+        elif kappa <= 0.80: interp = "Substantial agreement"
+        else: interp = "Perfect/Almost perfect agreement"
+
+        res_df = pd.DataFrame({
+            "Statistic": ["Cohen's Kappa", "N (Pairs)", "Interpretation"],
+            "Value": [f"{kappa:.4f}", f"{len(data)}", interp]
+        })
+        
+        # Confusion Matrix
+        conf_matrix = pd.crosstab(y1, y2, rownames=[f"{col1} (Obs 1)"], colnames=[f"{col2} (Obs 2)"])
+        
+        return res_df, None, conf_matrix
+    except Exception as e:
+        return None, str(e), None
+
+# --- ROC Functions (เหมือนเดิม) ---
 def auc_ci_hanley_mcneil(auc, n1, n2):
     q1 = auc / (2 - auc); q2 = 2 * (auc**2) / (1 + auc)
     se_auc = np.sqrt(((auc * (1 - auc)) + (n1 - 1)*(q1 - auc**2) + (n2 - 1)*(q2 - auc**2)) / (n1 * n2))
@@ -193,7 +220,7 @@ def auc_ci_delong(y_true, y_scores):
     se_auc = np.sqrt((s10 / n_pos) + (s01 / n_neg))
     return auc - 1.96*se_auc, auc + 1.96*se_auc, se_auc
 
-@st.cache_data(show_spinner=False) # 🟢 2. ADD CACHE
+@st.cache_data(show_spinner=False)
 def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
     data = df[[truth_col, score_col]].dropna()
     y_true_raw = data[truth_col]
