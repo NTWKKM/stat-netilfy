@@ -102,12 +102,17 @@ def render(df, var_meta):
         v2 = c2.selectbox("Variable 2 (Outcome/Col):", all_cols, index=v2_idx, key='chi_v2_diag')
         
        # 🟢 UPDATE: เพิ่ม Fisher's Exact Test และเปลี่ยนชื่อตัวแปรเป็น method_choice
-        method_choice = cc3.radio(
+       # สังเกต 1: ใช้ c3 (ไม่ใช่ cc3)
+        method_choice = c3.radio(
             "Test Method (for 2x2):", 
             ['Pearson (Standard)', "Yates' correction", "Fisher's Exact Test"], 
             index=0, 
-            key='chi_corr_method_tab',
-            help="Pearson: Best for large samples. Yates: Conservative correction. Fisher: Exact test, MUST use if any expected count < 5."
+            # สังเกต 2: เปลี่ยน key เป็น _diag เพื่อไม่ให้ซ้ำ
+            key='chi_corr_method_diag',
+            help="""
+                - Pearson: Best for large samples. 
+                - Yates: Conservative correction. 
+                - Fisher: Exact test, MUST use if any expected count < 5."""
         )
         
         
