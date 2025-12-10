@@ -46,9 +46,9 @@ def render(df):
             index=0, 
             key='chi_corr_method_tab',
             help="""
-            - **Pearson:** Best for large samples. 
-            - **Yates:** Conservative correction. 
-            - **Fisher:** Exact test, MUST use if any expected count < 5."""
+            - Pearson: Best for large samples. 
+            - Yates: Conservative correction. 
+            - Fisher: Exact test, MUST use if any expected count < 5."""
         )
         
         # 🟢 NEW: Positive Label Selectors
