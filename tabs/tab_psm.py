@@ -50,11 +50,11 @@ def render(df, var_meta):
     final_treat_col = treat_col
 
     if not is_numeric_binary:
-        st.markdown("---")
+        # st.markdown("---")
         st.warning(f"⚠️ Variable '{treat_col}' is text/categorical. Please specify which value is the **Treatment Group**.")
         
-        # 🟢 ปรับปรุง: ใช้ 3 Columns เท่ากัน (1:1:1) โดยอันสุดท้ายว่าง
-        c_sel, c_msg, c_empty = st.columns(3) 
+        # 🟢 ปรับปรุง: ใช้ Columns แบ่งพื้นที่ให้อยู่บรรทัดเดียวกัน
+        c_sel, c_msg = st.columns([2, 1]) 
         
         with c_sel:
             target_val = st.selectbox(f"Select value for 'Treatment/Case' (will be mapped to 1):", unique_treat, key='psm_target_select')
@@ -64,12 +64,9 @@ def render(df, var_meta):
         df_analysis[final_treat_col] = np.where(df_analysis[treat_col] == target_val, 1, 0)
         
         with c_msg:
-             # ใส่ Spacer นิดหน่อยเพื่อให้ตรงกับ Selectbox
-            st.write("") 
+            # ใส่ Spacer นิดหน่อยเพื่อให้ตรงกับ Selectbox
             st.write("")
             st.success(f"✅ Mapped: '{target_val}' = 1")
-            
-        # c_empty ปล่อยว่างไว้ตาม requirement
     
     # จัดการ Covariates ที่เป็น Text (One-hot Encoding)
     if cov_cols:
