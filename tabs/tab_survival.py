@@ -107,6 +107,8 @@ def render(df, var_meta):
                 
                 st.pyplot(fig)
                 st.dataframe(stats)
+                report_html = survival_lib.generate_report_survival(f"NA: {col_time}", elements)
+                    st.download_button("📥 Download Report (NA)", report_html, "lm_report.html", "text/html")
 
     # ==========================
     # TAB 3: Cox Regression
