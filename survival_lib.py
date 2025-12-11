@@ -81,6 +81,7 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
         
         stats_res["Total N"] = len(T)
         stats_res["Events"] = E.sum()
+        stats_res["Censored"] = len(T) - E.sum()
         stats_res["Median Survival"] = kmf.median_survival_time_
         
         ax.set_title("Kaplan-Meier Survival Curve")
@@ -106,10 +107,12 @@ def fit_nelson_aalen(df, time_col, event_col, group_col=None):
         groups = sorted(data[group_col].unique())
         for g in groups:
             mask = data[group_col] == g
-            naf.fit(data.loc[mask, time_col], event_observed=data.loc[mask, event_col], label=str(g))
-            naf.plot_cumulative_hazard(ax=ax)
-            stats_res[f"{g} (Events)"] = data.loc[mask, event_col].sum()
-        ax.set_title(f"Nelson-Aalen: {group_col}")
+            group_data = data.loc[mask]
+            if not group_data.empty:
+                naf.fit(group_data[time_col], event_observed=group_data[event_col], label=str(g))
+                naf.plot_cumulative_hazard(ax=ax)
+                stats_res[f"{g} (N)"] = len(group_data)
+                stats_res[f"{g} (Events)"] = group_data[event_col].sum()
     else:
         T = data[time_col]
         E = data[event_col]
