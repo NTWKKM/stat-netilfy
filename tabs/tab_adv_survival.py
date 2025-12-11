@@ -27,7 +27,7 @@ def render(df):
         event_idx = next((i for i, c in enumerate(all_cols) if 'event' in c.lower() or 'dead' in c.lower()), min(1, len(all_cols)-1))
 
         col_time = c1.selectbox("⏳ Time Variable:", all_cols, index=time_idx, key='lm_time')
-        col_event = c2.selectbox("💀 Event Variable (1=Event):", all_cols, index=event_idx, key='lm_event')
+        col_event = c2.selectbox("💀 Event Variable (1=Event):", [c for c in all_cols if c != col_time], key='lm_event')
         
         # Landmark Slider
         max_t = df[col_time].dropna().max() if not df.empty and pd.api.types.is_numeric_dtype(df[col_time]) and df[col_time].notna().any() else 100.0
