@@ -4,6 +4,13 @@ import numpy as np
 import time
 import streamlit.components.v1 as components 
 
+# 🟢 FIX 1: เพิ่ม tab_adv_survival กลับเข้าไปใน Import List
+try:
+    from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival, tab_psm, tab_adv_survival
+except Exception as e:
+    st.error(f"Critical Error importing modules: {e}")
+    st.stop()
+
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Medical Stat Tool", layout="wide",menu_items={
         'Get Help': 'https://ntwkkm.github.io/infos/stat_manual.html',
@@ -24,14 +31,6 @@ components.html("""
     }
 </script>
 """, height=0) # height=0 เพื่อไม่ให้กินพื้นที่หน้าจอ
-
-# --- 3. IMPORTS (ย้ายมาไว้ตรงนี้) ---
-# ถ้า Import พัง user จะเห็น Error สีแดงบนหน้าเว็บ แทนที่จะเห็นหน้าจอโหลดค้าง
-try:
-    from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival, tab_psm, tab_adv_survival
-except Exception as e:
-    st.error(f"Critical Error importing modules: {e}")
-    st.stop()
         
 # --- INITIALIZE STATE ---
 if 'df' not in st.session_state: st.session_state.df = None
@@ -175,23 +174,23 @@ if st.session_state.df is not None:
 if st.session_state.df is not None:
     df = st.session_state.df 
 
-    # 🟢 เพิ่ม Tab 8: Advanced Survival
+    # 🟢 FIX 2: เพิ่ม Tab t7 สำหรับ Advanced Survival Analysis
     t0, t1, t2, t3, t4, t5, t6, t7 = st.tabs([
         "📄 Raw Data", 
         "📋 Baseline Table 1", 
         "🔬 Diagnostic Test", 
         "🔗 Correlation",
         "📊 Logistic Regression",
-        "📉 Survival Analysis",
+        "⏳ Survival Analysis",
         "⚖️ Propensity Score",
-        "⏳ Adv. Survival"  # 🟢 New Tab
+        "📈 Adv. Survival" # 🟢 New Tab
     ])
 
+    # Call Modules
     with t0:
-        st.session_state.df = tab_data.render(df)
-    # Clean Data for Analysis
-    custom_na = st.session_state.get('custom_na_list', [])
-    df_clean = tab_data.get_clean_data(st.session_state.df, custom_na)
+        st.session_state.df = tab_data.render(df) 
+        custom_na = st.session_state.get('custom_na_list', [])
+        df_clean = tab_data.get_clean_data(st.session_state.df, custom_na)
 
     with t1: tab_table1.render(df_clean, st.session_state.var_meta)
     with t2: tab_diag.render(df_clean, st.session_state.var_meta)
@@ -200,8 +199,9 @@ if st.session_state.df is not None:
     with t5: tab_survival.render(df_clean, st.session_state.var_meta)
     with t6: tab_psm.render(df_clean, st.session_state.var_meta)
     
-    # 🟢 Call New Tab
-    with t7: tab_adv_survival.render(df_clean)
+    # 🟢 FIX 3: แก้ไขการเรียกใช้ฟังก์ชันให้ส่ง argument ครบ 2 ตัว
+    with t7: 
+        tab_adv_survival.render(df_clean, st.session_state.var_meta)
         
 else:
     st.info("👈 Please load example data or upload a file to start.")
@@ -214,7 +214,6 @@ else:
 5.  **Binary Logistic Regression**
 6.  **Survival Analysis**
 7.  **Propensity Score Matching (New!)**
-8.  **Advanced Survival Analysis**
     """)
     
 # ==========================================
