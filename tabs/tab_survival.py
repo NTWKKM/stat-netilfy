@@ -134,8 +134,10 @@ def render(df, _var_meta):
         covariates = st.multiselect("Select Covariates (Predictors):", [c for c in all_cols if c not in [col_time, col_event]], key='surv_cox_vars')
         
         # State Management (ยังคงไว้เผื่อ Download Button)
-        if 'cox_res' not in st.session_state: st.session_state.cox_res = None
-        if 'cox_html' not in st.session_state: st.session_state.cox_html = None
+        if 'cox_res' not in st.session_state:
+            st.session_state.cox_res = None
+        if 'cox_html' not in st.session_state:
+            st.session_state.cox_html = None
 
         if st.button("🚀 Run Cox Model & Check Assumptions", key='btn_run_cox'):
             if not covariates:
