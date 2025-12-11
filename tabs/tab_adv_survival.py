@@ -1,10 +1,9 @@
 import streamlit as st
 import pandas as pd
 import survival_lib
-import matplotlib.pyplot as plt
 
 # 🟢 FIX 1: ต้องรับ var_meta เพื่อให้สอดคล้องกับ app.py และโครงสร้างโปรเจกต์
-def render(df, var_meta): 
+def render(df, _var_meta):
     """
     Render a Streamlit UI for fitting a time-dependent (start–stop) Cox proportional hazards model.
     
