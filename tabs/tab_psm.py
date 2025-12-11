@@ -66,7 +66,7 @@ def render(df, var_meta):
         c_sel, c_msg = st.columns([2, 1]) 
         
         with c_sel:
-            target_val = st.selectbox(f"Select value for 'Treatment/Case' (will be mapped to 1):", unique_treat, key='psm_target_select')
+            target_val = st.selectbox("Select value for 'Treatment/Case' (will be mapped to 1):", unique_treat, key='psm_target_select')
         
         # คำนวณ
         final_treat_col = f"{treat_col}_encoded"
