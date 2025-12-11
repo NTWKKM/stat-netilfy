@@ -183,7 +183,7 @@ if st.session_state.df is not None:
         "📊 Logistic Regression",
         "⏳ Survival Analysis",
         "⚖️ Propensity Score",
-        "📈 Adv. Survival" # 🟢 New Tab
+        "📈 Time Cox Regs" # 🟢 New Tab
     ])
 
     # Call Modules
@@ -213,7 +213,8 @@ else:
 4.  **Continuous Correlation**
 5.  **Binary Logistic Regression**
 6.  **Survival Analysis**
-7.  **Propensity Score Matching (New!)**
+7.  **Propensity Score Matching**
+8.  **Time-Dependent Cox Regression (New!)**
     """)
     
 # ==========================================
