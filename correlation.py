@@ -56,7 +56,7 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     else:
         def custom_sort(label):
             try: return float(label)
-            except: return str(label)
+            except (ValueError, TypeError): return str(label)
         final_row_order_base.sort(key=custom_sort, reverse=True)
     final_row_order = final_row_order_base + ['Total']
 
