@@ -187,7 +187,8 @@ if st.session_state.df is not None:
         "⏳ Adv. Survival"  # 🟢 New Tab
     ])
 
-    with t0: st.session_state.df = tab_data.render(df) 
+    with t0:
+        st.session_state.df = tab_data.render(df)
     # Clean Data for Analysis
     custom_na = st.session_state.get('custom_na_list', [])
     df_clean = tab_data.get_clean_data(st.session_state.df, custom_na)
