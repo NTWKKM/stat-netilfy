@@ -120,4 +120,5 @@ def render(df, var_meta):
     with dl_col:
         if st.session_state.html_output_logit:
             st.download_button("📥 Download Report", st.session_state.html_output_logit, "logit.html", "text/html", key='dl_logit')
-        else: st.button("📥 Download Report", disabled=True, key='ph_logit')
+        else:
+            st.button("📥 Download Report", disabled=True, key='ph_logit')
