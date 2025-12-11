@@ -30,7 +30,8 @@ def render(df, var_meta):
     treat_idx = 0
     for i, c in enumerate(all_cols):
         if df[c].nunique() == 2 and ('group' in c.lower() or 'treat' in c.lower()):
-            treat_idx = i; break
+            treat_idx = i
+            break
             
     treat_col = c1.selectbox("💊 Treatment Variable (Binary):", all_cols, index=treat_idx, key='psm_treat')
     outcome_col = c2.selectbox("🎯 Outcome Variable (Optional):", ["None"] + all_cols, key='psm_outcome')
