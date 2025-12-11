@@ -200,7 +200,7 @@ if st.session_state.df is not None:
     with t6: tab_psm.render(df_clean, st.session_state.var_meta)
     
     # 🟢 Call New Tab
-    with t7: tab_adv_survival.render(df_clean, st.session_state.var_meta)
+    with t7: tab_adv_survival.render(df_clean)
         
 else:
     st.info("👈 Please load example data or upload a file to start.")
