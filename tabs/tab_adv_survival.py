@@ -30,8 +30,8 @@ def render(df):
         col_event = c2.selectbox("💀 Event Variable (1=Event):", all_cols, index=event_idx, key='lm_event')
         
         # Landmark Slider
-        max_t = float(df[col_time].max()) if not df.empty else 100.0
-        landmark_t = st.slider(f"Select Landmark Time ({col_time}):", 0.0, max_t, max_t*0.1, key='lm_slider')
+        max_t = df[col_time].dropna().max() if not df.empty and pd.api.types.is_numeric_dtype(df[col_time]) and df[col_time].notna().any() else 100.0
+        landmark_t = st.slider(f"Select Landmark Time ({col_time}):", 0.0, float(max_t), float(max_t) * 0.1, key='lm_slider')
         
         col_group = st.selectbox("Compare Group (Optional):", ["None"] + all_cols, key='lm_group')
 
