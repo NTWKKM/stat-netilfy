@@ -3,6 +3,20 @@ import pandas as pd
 import correlation # Import from root
 
 def render(df):
+    """
+    Render the Correlation Analysis UI for both categorical (Chi-Square & risk measures) and continuous (Pearson/Spearman) analyses.
+    
+    Builds two Streamlit sub-tabs:
+    - Categorical: UI for selecting two categorical variables, test method for 2x2 tables (Pearson, Yates, Fisher), positive labels for risk/odds calculations, runs chi-square/risk analysis, displays an interactive HTML report, and enables downloading the report.
+    - Continuous: UI for selecting two numeric variables and correlation method (Pearson or Spearman), runs correlation analysis, displays an interactive HTML report with statistics and a scatter plot, and enables downloading the report.
+    
+    Side effects:
+    - Renders Streamlit controls, info, and results to the active Streamlit app.
+    - Stores generated HTML reports in st.session_state under keys 'html_output_corr_cat' (categorical) and 'html_output_corr_cont' (continuous) to enable downloads.
+    
+    Parameters:
+        df (pandas.DataFrame): Input dataset whose columns populate the variable selectors and whose data are used for the analyses.
+    """
     st.subheader("3. Correlation Analysis")
     
     sub_tab1, sub_tab2 = st.tabs([

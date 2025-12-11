@@ -3,6 +3,22 @@ import pandas as pd
 import diag_test # ✅ ใช้ diag_test ตัวเดียว
 
 def render(df, var_meta):
+    """
+    Render Streamlit UI panels for diagnostic tests and statistics.
+    
+    Displays five interactive tabs for common diagnostic analyses:
+    - ROC Curve & AUC
+    - Chi-Square & Risk (2x2) with RR/OR/NNT
+    - Agreement (Cohen's Kappa)
+    - Reliability (Intraclass Correlation Coefficient, ICC)
+    - Descriptive statistics
+    
+    Each tab provides controls for selecting columns from `df`, running the analysis, viewing results as embedded HTML, and downloading an HTML report. Generated report HTML is stored in Streamlit session state under keys: `html_output_roc`, `html_output_chi`, `html_output_kappa`, `html_output_icc`, and `html_output_desc`.
+    
+    Parameters:
+        df (pandas.DataFrame): Input dataset containing the variables to analyze; column names are used for UI selections.
+        var_meta (Any): Metadata about variables (unused for visible output selection unless integrated by UI); present for potential future use.
+    """
     st.subheader("2. Diagnostic Test & Statistics")
    # 🟢 UPDATE: เพิ่ม Tab "Reliability (ICC)" เป็น Tab ที่ 4
     sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5 = st.tabs([
@@ -113,6 +129,18 @@ def render(df, var_meta):
         
         # Positive Label Selectors
         def get_pos_label_settings(df, col_name):
+            """
+            Compute candidate positive-label values for a column and determine a default selection index.
+            
+            Parameters:
+                df (pandas.DataFrame): DataFrame containing the column.
+                col_name (str): Name of the column to inspect.
+            
+            Returns:
+                tuple:
+                    unique_vals (list[str]): Sorted list of the column's unique non-null values as strings.
+                    default_idx (int): Index into `unique_vals` to use as the default positive label (index of value `'1'` if present; otherwise `0`).
+            """
             unique_vals = [str(x) for x in df[col_name].dropna().unique()]
             unique_vals.sort()
             default_idx = 0
