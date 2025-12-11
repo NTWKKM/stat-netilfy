@@ -192,9 +192,10 @@ def calculate_kappa(df, col1, col2):
         # Confusion Matrix
         conf_matrix = pd.crosstab(y1, y2, rownames=[f"{col1} (Obs 1)"], colnames=[f"{col2} (Obs 2)"])
         
-        return res_df, None, conf_matrix
-    except Exception as e:
+    except ValueError as e:
         return None, str(e), None
+    else:
+        return res_df, None, conf_matrix
 
 # --- ROC Functions (เหมือนเดิม) ---
 def auc_ci_hanley_mcneil(auc, n1, n2):
