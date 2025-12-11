@@ -4,9 +4,6 @@ import numpy as np
 import time
 import streamlit.components.v1 as components 
 
-# Import หน้า Tab ที่แยกไว้ (🟢 เพิ่ม tab_psm เข้าไป)
-from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival, tab_psm
-
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Medical Stat Tool", layout="wide",menu_items={
         'Get Help': 'https://ntwkkm.github.io/infos/stat_manual.html',
@@ -28,6 +25,14 @@ components.html("""
 </script>
 """, height=0) # height=0 เพื่อไม่ให้กินพื้นที่หน้าจอ
 
+# --- 3. IMPORTS (ย้ายมาไว้ตรงนี้) ---
+# ถ้า Import พัง user จะเห็น Error สีแดงบนหน้าเว็บ แทนที่จะเห็นหน้าจอโหลดค้าง
+try:
+    from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival, tab_psm
+except Exception as e:
+    st.error(f"Critical Error importing modules: {e}")
+    st.stop()
+        
 # --- INITIALIZE STATE ---
 if 'df' not in st.session_state: st.session_state.df = None
 if 'var_meta' not in st.session_state: st.session_state.var_meta = {}
