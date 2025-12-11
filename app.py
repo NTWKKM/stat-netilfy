@@ -213,7 +213,7 @@ else:
 5.  **Binary Logistic Regression**
 6.  **Survival Analysis**
 7.  **Propensity Score Matching (New!)**
-ค.  **Advance Survival Analysis**
+8.  **Advanced Survival Analysis**
     """)
     
 # ==========================================
