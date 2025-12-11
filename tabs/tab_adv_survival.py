@@ -44,14 +44,14 @@ def render(df, _var_meta):
             st.error("Select covariates first.")
         else:
             # Validate that required columns are numeric
-            numeric_cols = [start_col, stop_col, event_col] + covs
+            numeric_cols = [start_col, stop_col, event_col, *covs]
             non_numeric = [c for c in numeric_cols if not pd.api.types.is_numeric_dtype(df[c])]
             if non_numeric:
                 st.error(f"The following columns must be numeric: {', '.join(non_numeric)}")
                 return
 
             with st.spinner("Fitting Model..."):
-                ctv, res, err = survival_lib.fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covs)
+                _ctv, res, err = survival_lib.fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covs)
                 if err:
                     st.error(f"Error: {err}")
                 else:
