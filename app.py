@@ -28,7 +28,7 @@ components.html("""
 # --- 3. IMPORTS (ย้ายมาไว้ตรงนี้) ---
 # ถ้า Import พัง user จะเห็น Error สีแดงบนหน้าเว็บ แทนที่จะเห็นหน้าจอโหลดค้าง
 try:
-    from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival, tab_psm
+    from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival, tab_psm, tab_adv_survival
 except Exception as e:
     st.error(f"Critical Error importing modules: {e}")
     st.stop()
@@ -175,32 +175,33 @@ if st.session_state.df is not None:
 if st.session_state.df is not None:
     df = st.session_state.df 
 
-    # 🟢 UPDATE: เพิ่ม Tab "⚖️ Propensity Score" เป็นอันดับที่ 7
-    t0, t1, t2, t3, t4, t5, t6 = st.tabs([
+    # 🟢 เพิ่ม Tab 8: Advanced Survival
+    t0, t1, t2, t3, t4, t5, t6, t7 = st.tabs([
         "📄 Raw Data", 
         "📋 Baseline Table 1", 
         "🔬 Diagnostic Test", 
         "🔗 Correlation",
         "📊 Logistic Regression",
-        "⏳ Survival Analysis",
-        "⚖️ Propensity Score" # 🟢 NEW TAB
+        "📉 Survival Analysis",
+        "⚖️ Propensity Score",
+        "⏳ Adv. Survival"  # 🟢 New Tab
     ])
 
-    # Call Modules
     with t0:
-        st.session_state.df = tab_data.render(df) 
-        custom_na = st.session_state.get('custom_na_list', [])
-        df_clean = tab_data.get_clean_data(st.session_state.df, custom_na)
+        st.session_state.df = tab_data.render(df)
+    # Clean Data for Analysis
+    custom_na = st.session_state.get('custom_na_list', [])
+    df_clean = tab_data.get_clean_data(st.session_state.df, custom_na)
 
     with t1: tab_table1.render(df_clean, st.session_state.var_meta)
     with t2: tab_diag.render(df_clean, st.session_state.var_meta)
     with t3: tab_corr.render(df_clean)
     with t4: tab_logit.render(df_clean, st.session_state.var_meta)
     with t5: tab_survival.render(df_clean, st.session_state.var_meta)
+    with t6: tab_psm.render(df_clean, st.session_state.var_meta)
     
-    # 🟢 เรียกใช้ tab_psm ใน tab ที่ 7
-    with t6: 
-        tab_psm.render(df_clean, st.session_state.var_meta)
+    # 🟢 Call New Tab
+    with t7: tab_adv_survival.render(df_clean)
         
 else:
     st.info("👈 Please load example data or upload a file to start.")
@@ -213,6 +214,7 @@ else:
 5.  **Binary Logistic Regression**
 6.  **Survival Analysis**
 7.  **Propensity Score Matching (New!)**
+8.  **Advanced Survival Analysis**
     """)
     
 # ==========================================

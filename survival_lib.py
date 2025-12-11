@@ -1,30 +1,28 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from lifelines import KaplanMeierFitter, CoxPHFitter, NelsonAalenFitter
+from lifelines import KaplanMeierFitter, CoxPHFitter, NelsonAalenFitter, CoxTimeVaryingFitter
 from lifelines.statistics import logrank_test
 import io
 import base64
-import contextlib # 🟢 3. IMPORT CONTEXTLIB (จำเป็นสำหรับ Assumption Check)
+import contextlib
 import streamlit as st
 
 # --- Helper: Clean Data ---
 def clean_survival_data(df, time_col, event_col, covariates=None):
     """
-    เตรียมข้อมูลสำหรับ Survival Analysis
+    เตรียมข้อมูลสำหรับ Survival Analysis ทั่วไป (One row per patient)
     """
     cols = [time_col, event_col]
     if covariates:
         cols += covariates
     
-    # เลือกเฉพาะคอลัมน์ที่ใช้
+    # เลือกเฉพาะคอลัมน์ที่ใช้ และแปลงเป็นตัวเลข
     data = df[cols].copy()
-    
-    # แปลงเป็นตัวเลข (Coerce errors to NaN)
     for c in data.columns:
         data[c] = pd.to_numeric(data[c], errors='coerce')
         
-    # ลบ NaN
+    # ลบแถวที่มี Missing Value (Complete Case Analysis)
     data = data.dropna()
     return data
 
@@ -32,7 +30,7 @@ def clean_survival_data(df, time_col, event_col, covariates=None):
 @st.cache_data(show_spinner=False)
 def fit_km_logrank(df, time_col, event_col, group_col=None):
     """
-    สร้างกราฟ Kaplan-Meier และคำนวณ Log-Rank Test
+    สร้างกราฟ Kaplan-Meier และทำ Log-Rank Test (รองรับ Landmark Analysis โดยรับ df ที่กรองมาแล้ว)
     """
     data = clean_survival_data(df, time_col, event_col, [group_col] if group_col else [])
     
@@ -42,7 +40,7 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
     stats_res = {}
     
     if group_col:
-        # --- กรณีมีกลุ่มเปรียบเทียบ ---
+        # เปรียบเทียบระหว่างกลุ่ม
         groups = sorted(data[group_col].unique())
         T_list, E_list = [], []
         
@@ -51,35 +49,34 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
             T = data.loc[mask, time_col]
             E = data.loc[mask, event_col]
             
-            # Fit K-M
-            kmf.fit(T, event_observed=E, label=str(g))
-            kmf.plot_survival_function(ax=ax, ci_show=False)
+            if len(T) > 0:
+                kmf.fit(T, event_observed=E, label=str(g))
+                kmf.plot_survival_function(ax=ax, ci_show=False)
+                
+                # เก็บสถิติพื้นฐาน
+                stats_res[f"{g} (N)"] = len(T)
+                stats_res[f"{g} (Events)"] = E.sum()
+                stats_res[f"{g} (Median)"] = kmf.median_survival_time_
+                
+                T_list.append(T)
+                E_list.append(E)
             
-            # เก็บข้อมูลสถิติ
-            n_total = len(T)
-            n_events = E.sum()
-            median_surv = kmf.median_survival_time_
-            
-            stats_res[f"{g} (N)"] = n_total
-            stats_res[f"{g} (Events)"] = n_events
-            stats_res[f"{g} (Median Time)"] = median_surv
-            
-            T_list.append(T)
-            E_list.append(E)
-            
-        # Log-Rank Test (ทำเฉพาะเมื่อมี 2 กลุ่ม)
-        if len(groups) == 2:
-            lr_result = logrank_test(T_list[0], T_list[1], event_observed_A=E_list[0], event_observed_B=E_list[1])
-            stats_res['Log-Rank p-value'] = lr_result.p_value
-            ax.set_title(f"KM Curve: {group_col} (p = {lr_result.p_value:.4f})")
+        # Log-Rank Test (ถ้ามี 2 กลุ่มขึ้นไป)
+        if len(T_list) >= 2:
+            if len(T_list) == 2:
+                lr_result = logrank_test(T_list[0], T_list[1], event_observed_A=E_list[0], event_observed_B=E_list[1])
+                stats_res['Log-Rank p-value'] = lr_result.p_value
+                ax.set_title(f"KM Curve: {group_col} (p = {lr_result.p_value:.4f})")
+            else:
+                ax.set_title(f"KM Curve: {group_col}")
         else:
              ax.set_title(f"KM Curve: {group_col}")
              
     else:
-        # --- กรณีไม่มีกลุ่ม (All) ---
+        # ดูภาพรวม (ไม่มีกลุ่มเปรียบเทียบ)
         T = data[time_col]
         E = data[event_col]
-        kmf.fit(T, event_observed=E, label="All")
+        kmf.fit(T, event_observed=E, label="All Patients")
         kmf.plot_survival_function(ax=ax)
         
         stats_res["Total N"] = len(T)
@@ -93,104 +90,119 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
     ax.set_ylabel("Survival Probability")
     ax.grid(True, alpha=0.3)
     
-    # ส่งคืนรูปกราฟ และ Dataframe
     return fig, pd.DataFrame(stats_res, index=["Value"]).T
-    
+
 # --- 2. Nelson-Aalen (Cumulative Hazard) ---
 @st.cache_data(show_spinner=False)
 def fit_nelson_aalen(df, time_col, event_col, group_col=None):
     """
-    สร้างกราฟ Nelson-Aalen
+    สร้างกราฟ Nelson-Aalen (Cumulative Hazard)
     """
     data = clean_survival_data(df, time_col, event_col, [group_col] if group_col else [])
     naf = NelsonAalenFitter()
     fig, ax = plt.subplots(figsize=(8, 5))
-    
     stats_res = {}
     
     if group_col:
         groups = sorted(data[group_col].unique())
         for g in groups:
             mask = data[group_col] == g
-            T = data.loc[mask, time_col]
-            E = data.loc[mask, event_col]
-            
-            naf.fit(T, event_observed=E, label=str(g))
-            naf.plot_cumulative_hazard(ax=ax)
-            
-            stats_res[f"{g} (N)"] = len(T)
-            stats_res[f"{g} (Events)"] = E.sum()
-            
-        ax.set_title(f"Nelson-Aalen Cumulative Hazard: {group_col}")
+            group_data = data.loc[mask]
+            if not group_data.empty:
+                naf.fit(group_data[time_col], event_observed=group_data[event_col], label=str(g))
+                naf.plot_cumulative_hazard(ax=ax)
+                stats_res[f"{g} (N)"] = len(group_data)
+                stats_res[f"{g} (Events)"] = group_data[event_col].sum()
     else:
         T = data[time_col]
         E = data[event_col]
         naf.fit(T, event_observed=E, label="All")
         naf.plot_cumulative_hazard(ax=ax)
-        
         stats_res["Total N"] = len(T)
         stats_res["Events"] = E.sum()
-        
-        ax.set_title("Nelson-Aalen Cumulative Hazard Curve")
+        ax.set_title("Nelson-Aalen Cumulative Hazard")
         
     ax.set_xlabel(f"Time ({time_col})")
     ax.set_ylabel("Cumulative Hazard")
     ax.grid(True, alpha=0.3)
     
     return fig, pd.DataFrame(stats_res, index=["Count"]).T
-    
-# --- 3. Cox Proportional Hazards Model ---
+
+# --- 3. Cox Proportional Hazards (Standard) ---
 @st.cache_data(show_spinner=False)
 def fit_cox_ph(df, time_col, event_col, covariates):
     """
-    วิเคราะห์ Cox Regression
+    วิเคราะห์ Cox Regression แบบมาตรฐาน (Time-Independent)
     """
-    # 🟢 เก็บข้อมูล Cleaned Data ไว้ใช้ return
     data = clean_survival_data(df, time_col, event_col, covariates)
-    
     cph = CoxPHFitter()
     try:
         cph.fit(data, duration_col=time_col, event_col=event_col)
         
         summary_df = cph.summary[['coef', 'exp(coef)', 'exp(coef) lower 95%', 'exp(coef) upper 95%', 'p']]
-        summary_df.columns = ['Coef', 'HR', 'Lower 95% CI', 'Upper 95% CI', 'P-value']
+        summary_df.columns = ['Coef', 'HR', 'Lower 95%', 'Upper 95%', 'P-value']
         
-        # 🟢 เพิ่ม: Return data กลับไปด้วย เพื่อเอาไป check assumption
         return cph, summary_df, data, None
     except Exception as e:
-        # 🟢 เพิ่ม: Return None ให้ครบ 4 ตัว
         return None, None, None, str(e)
 
-# --- 🟢 4. New: Assumption Check (แก้ไขให้รับหลายกราฟ) ---
+# --- 🟢 4. Time-Dependent Cox Regression (New!) ---
+@st.cache_data(show_spinner=False)
+def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariates):
+    """
+    วิเคราะห์ Cox Model ที่ตัวแปรเปลี่ยนตามเวลา (ต้องใช้ข้อมูล Long Format: Start-Stop)
+    """
+    # 1. เลือกคอลัมน์ที่จำเป็น
+    cols = [id_col, event_col, start_col, stop_col] + covariates
+    
+    # 2. จัดการข้อมูล (ควรตรวจสอบว่า df มี NaN หรือไม่ก่อน drop)
+    data = df[cols].copy()
+    data = data.dropna()
+    
+    # 3. ตรวจสอบเบื้องต้น (เช่น start < stop)
+    if data.empty:
+         return None, None, "Error: Data is empty after selecting columns and dropping NAs."
+         
+    if (data[start_col] >= data[stop_col]).any():
+        return None, None, "Error: Found rows where Start Time >= Stop Time."
+
+    ctv = CoxTimeVaryingFitter()
+    try:
+        # fit() ต้องการ id_col เพื่อรู้ว่าแถวไหนเป็นคนเดียวกัน
+        ctv.fit(data, id_col=id_col, event_col=event_col, start_col=start_col, stop_col=stop_col, show_progress=False)
+        
+        summary_df = ctv.summary[['coef', 'exp(coef)', 'exp(coef) lower 95%', 'exp(coef) upper 95%', 'p']]
+        summary_df.columns = ['Coef', 'HR', 'Lower 95%', 'Upper 95%', 'P-value']
+        
+        return ctv, summary_df, None
+    except Exception as e:
+        return None, None, f"Model Failed: {str(e)}"
+
+# --- 5. Check Assumptions ---
 def check_cph_assumptions(cph, data):
     """
-    ตรวจสอบ Assumption และดักจับข้อความ Advice + กราฟทั้งหมด
+    ตรวจสอบ Proportional Hazards Assumption
     """
     try:
         f = io.StringIO()
-        
-        # 1. จำ ID ของกราฟที่มีอยู่ก่อนเริ่มวาด
         old_figs = plt.get_fignums()
         
         with contextlib.redirect_stdout(f):
-            # Lifelines จะวาดกราฟออกมา (อาจจะหลายรูป)
+            # lifelines จะ print คำแนะนำและ plot กราฟออกมา
             cph.check_assumptions(data, p_value_threshold=0.05, show_plots=True)
         
         advice_text = f.getvalue()
         
-        # 2. หา ID ของกราฟที่ "งอกใหม่" (ที่มีในปัจจุบัน แต่ไม่มีใน old_figs)
+        # ดักจับกราฟที่ถูกสร้างขึ้นใหม่
         new_figs_nums = [n for n in plt.get_fignums() if n not in old_figs]
-        
-        # 3. ดึง Object กราฟออกมาเป็น List
         figs = [plt.figure(n) for n in new_figs_nums]
         
-        return advice_text, figs # ✅ ส่งคืนเป็น List [fig1, fig2, ...]
+        return advice_text, figs
     except Exception as e:
         return f"Error checking assumptions: {str(e)}", []
 
-# --- 5. Generate Report ---
+# --- 6. Report Generator ---
 def generate_report_survival(title, elements):
-    # (ใช้โค้ดเดิมของคุณได้เลย)
     css_style = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; }

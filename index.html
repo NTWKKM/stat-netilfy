@@ -72,37 +72,34 @@
   <body>
     <div id="loading-screen">
         <div class="loading-text">🏥 Medical Statistical Tool</div>
-        <div class="loading-subtext">Initializing Python Environment & Libraries...</div>
-        <div class="progress-bar-bg">
-          <div class="progress-bar-fill"></div>
-        </div>
+        <div class="loading-subtext">Initializing Python Environment...</div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill"></div></div>
     </div>
-
     <div id="root"></div>
-
     <script>
       stlite.mount({
         requirements: [
-            "streamlit>=1.42.0", // 🟢 กำหนดเป็นเวอร์ชันล่าสุด (หรือใหม่กว่า)
+            "streamlit>=1.42.0",
             "pandas", 
             "numpy", 
             "scipy",
-            "statsmodels",   // จำเป็นสำหรับ Table 1 และ Logistic
-            "openpyxl",      // จำเป็นสำหรับอ่านไฟล์ Excel
+            "statsmodels",
+            "openpyxl",
             "matplotlib", 
             "lifelines",
-            "scikit-learn",  // จำเป็นสำหรับ PSM
-            "seaborn",       // จำเป็นสำหรับกราฟ PSM
-            "firthlogist"    // จำเป็นสำหรับ Logistic Regression
+            "formulaic",      // 🟢 ต้องมีตัวนี้สำหรับ Time-Dependent Cox
+            "scikit-learn",
+            "seaborn",
+            "firthlogist"
         ],
         entrypoint: "app.py",
         files: {
           "app.py": { url: "./app.py" },
-          "logic.py": { url: "./logic.py" },
           "survival_lib.py": { url: "./survival_lib.py" },
-          "psm_lib.py": { url: "./psm_lib.py" },       
-          "diag_test.py": { url: "./diag_test.py" },
+          "psm_lib.py": { url: "./psm_lib.py" },
+          "logic.py": { url: "./logic.py" },
           "table_one.py": { url: "./table_one.py" },
+          "diag_test.py": { url: "./diag_test.py" },
           "correlation.py": { url: "./correlation.py" },
           
           "tabs/__init__.py": { url: "./tabs/__init__.py" },
@@ -112,7 +109,10 @@
           "tabs/tab_corr.py": { url: "./tabs/tab_corr.py" },
           "tabs/tab_logit.py": { url: "./tabs/tab_logit.py" },
           "tabs/tab_survival.py": { url: "./tabs/tab_survival.py" },
-          "tabs/tab_psm.py": { url: "./tabs/tab_psm.py" }
+          "tabs/tab_psm.py": { url: "./tabs/tab_psm.py" },
+          
+          // 🟢 เพิ่มไฟล์ใหม่ตรงนี้
+          "tabs/tab_adv_survival.py": { url: "./tabs/tab_adv_survival.py" } 
         },
       }, document.getElementById("root"));
     </script>
