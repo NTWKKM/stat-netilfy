@@ -72,14 +72,10 @@
   <body>
     <div id="loading-screen">
         <div class="loading-text">🏥 Medical Statistical Tool</div>
-        <div class="loading-subtext">Initializing Python Environment & Libraries...</div>
-        <div class="progress-bar-bg">
-          <div class="progress-bar-fill"></div>
-        </div>
+        <div class="loading-subtext">Initializing Python Environment...</div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill"></div></div>
     </div>
-
     <div id="root"></div>
-
     <script>
       stlite.mount({
         requirements: [
@@ -99,11 +95,11 @@
         entrypoint: "app.py",
         files: {
           "app.py": { url: "./app.py" },
-          "logic.py": { url: "./logic.py" },
           "survival_lib.py": { url: "./survival_lib.py" },
-          "psm_lib.py": { url: "./psm_lib.py" },       
-          "diag_test.py": { url: "./diag_test.py" },
+          "psm_lib.py": { url: "./psm_lib.py" },
+          "logic.py": { url: "./logic.py" },
           "table_one.py": { url: "./table_one.py" },
+          "diag_test.py": { url: "./diag_test.py" },
           "correlation.py": { url: "./correlation.py" },
           
           "tabs/__init__.py": { url: "./tabs/__init__.py" },
@@ -113,7 +109,10 @@
           "tabs/tab_corr.py": { url: "./tabs/tab_corr.py" },
           "tabs/tab_logit.py": { url: "./tabs/tab_logit.py" },
           "tabs/tab_survival.py": { url: "./tabs/tab_survival.py" },
-          "tabs/tab_psm.py": { url: "./tabs/tab_psm.py" }
+          "tabs/tab_psm.py": { url: "./tabs/tab_psm.py" },
+          
+          // 🟢 เพิ่มไฟล์ใหม่ตรงนี้
+          "tabs/tab_adv_survival.py": { url: "./tabs/tab_adv_survival.py" } 
         },
       }, document.getElementById("root"));
     </script>
