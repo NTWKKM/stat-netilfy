@@ -256,6 +256,87 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
     coords_df = pd.DataFrame({'Threshold': thresholds, 'Sens': tpr, 'Spec': 1-fpr}).round(4)
     return stats_res, None, fig, coords_df
 
+# 🟢 NEW: ฟังก์ชันคำนวณ ICC (Intraclass Correlation Coefficient)
+@st.cache_data(show_spinner=False)
+def calculate_icc(df, cols):
+    """
+    คำนวณ ICC(2,1) และ ICC(3,1) โดยใช้ Two-way ANOVA Formula
+    Ref: Shrout & Fleiss (1979), Koo & Li (2016)
+    """
+    # 1. Prepare Data
+    if len(cols) < 2: return None, "Please select at least 2 variables (raters/methods).", None
+    data = df[cols].dropna()
+    n, k = data.shape # n=subjects, k=raters
+    
+    if n < 2: return None, "Insufficient data (need at least 2 rows).", None
+    
+    # 2. ANOVA Calculations (Manual Calculation using Numpy for Speed & No Dependency)
+    # Grand Mean
+    grand_mean = data.values.mean()
+    
+    # Sum of Squares
+    SStotal = ((data.values - grand_mean)**2).sum()
+    
+    # Between-subjects (Rows)
+    row_means = data.mean(axis=1)
+    SSrow = k * ((row_means - grand_mean)**2).sum()
+    
+    # Between-raters (Cols)
+    col_means = data.mean(axis=0)
+    SScol = n * ((col_means - grand_mean)**2).sum()
+    
+    # Residual (Error)
+    SSres = SStotal - SSrow - SScol
+    
+    # Degrees of Freedom
+    df_row = n - 1
+    df_col = k - 1
+    df_res = df_row * df_col
+    
+    # Mean Squares
+    MSrow = SSrow / df_row
+    MScol = SScol / df_col
+    MSres = SSres / df_res
+    
+    # 3. Calculate ICCs
+    # ICC(3,1) Consistency: Fixed raters, Single measure
+    # Formula: (MSR - MSE) / (MSR + (k-1)MSE)
+    icc3_1 = (MSrow - MSres) / (MSrow + (k - 1) * MSres)
+    
+    # ICC(2,1) Absolute Agreement: Random raters, Single measure
+    # Formula: (MSR - MSE) / (MSR + (k-1)MSE + (k/n)(MSC - MSE))
+    icc2_1 = (MSrow - MSres) / (MSrow + (k - 1) * MSres + (k / n) * (MScol - MSres))
+    
+    # Interpretation (Koo & Li, 2016)
+    def interpret_icc(v):
+        if v < 0.5: return "Poor"
+        elif v < 0.75: return "Moderate"
+        elif v < 0.9: return "Good"
+        else: return "Excellent"
+
+    res_df = pd.DataFrame({
+        "Model": ["ICC(2,1) - Absolute Agreement", "ICC(3,1) - Consistency"],
+        "Description": [
+            "Use when raters are random & agreement matters (e.g. 2 different machines)", 
+            "Use when raters are fixed & consistency matters (e.g. ranking consistency)"
+        ],
+        "ICC Value": [icc2_1, icc3_1],
+        "Interpretation": [interpret_icc(icc2_1), interpret_icc(icc3_1)]
+    })
+    
+    # Format Value
+    res_df["ICC Value"] = res_df["ICC Value"].map('{:.4f}'.format)
+    
+    # ANOVA Table (Optional, for debugging or detailed report)
+    anova_df = pd.DataFrame({
+        "Source": ["Between Subjects (Rows)", "Between Raters (Cols)", "Residual (Error)"],
+        "SS": [SSrow, SScol, SSres],
+        "df": [df_row, df_col, df_res],
+        "MS": [MSrow, MScol, MSres]
+    })
+    
+    return res_df, None, anova_df
+    
 def generate_report(title, elements):
     # (คงเดิม - เพราะมีการปิด plt.close(data) ในนี้อยู่แล้ว)
     css_style = """
