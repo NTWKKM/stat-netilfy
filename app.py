@@ -116,7 +116,7 @@ if st.sidebar.button("📄 Load Example Data"):
         'Event_Death': event_death,
         # 🟢 ใส่ข้อมูล Agreement ลง DataFrame
         'Diagnosis_Dr_A': diag_dr_a,
-        'Diagnosis_Dr_B': diag_dr_b
+        'Diagnosis_Dr_B': diag_dr_b,
         # 🟢 เพิ่มตัวแปร ICC ลง DataFrame
         'SBP_Machine_1': sbp_machine_1,
         'SBP_Machine_2': sbp_machine_2
