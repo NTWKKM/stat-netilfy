@@ -4,34 +4,45 @@ import numpy as np
 import time
 import streamlit.components.v1 as components 
 
-# 🟢 FIX 1: เพิ่ม tab_adv_survival กลับเข้าไปใน Import List
+import streamlit as st
+import pandas as pd
+import numpy as np
+import time
+import streamlit.components.v1 as components 
+
+# ==========================================
+# 1. ย้าย CONFIG และ LOADING SCREEN KILLER มาไว้บนสุด
+# ==========================================
+st.set_page_config(page_title="Medical Stat Tool", layout="wide", menu_items={
+        'Get Help': 'https://ntwkkm.github.io/infos/stat_manual.html',
+        'Report a bug': "https://www.extremelycoolapp.com/bug",
+    })
+
+st.title("🏥 Medical Statistical Tool")
+
+# สั่งปิด Loading Screen ทันที เพื่อให้ถ้ามี Error ด้านล่าง เราจะยังเห็นข้อความ Error ได้
+components.html("""
+<script>
+    var loader = window.parent.document.getElementById('loading-screen');
+    if (loader) {
+        loader.style.opacity = '0';
+        setTimeout(function() {
+            loader.style.display = 'none';
+        }, 500);
+    }
+</script>
+""", height=0)
+
+# ==========================================
+# 2. ค่อยเริ่ม IMPORT MODULES (จุดเสี่ยง Error)
+# ==========================================
 try:
+    # พยายาม import ไฟล์ ถ้าไฟล์ไหนมีปัญหามันจะแจ้งเตือนให้เห็นบนหน้าจอแทนการหมุนค้าง
     from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival, tab_psm, tab_adv_survival
 except Exception as e:
     st.error(f"Critical Error importing modules: {e}")
     st.stop()
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="Medical Stat Tool", layout="wide",menu_items={
-        'Get Help': 'https://ntwkkm.github.io/infos/stat_manual.html',
-        'Report a bug': "https://www.extremelycoolapp.com/bug",
-    })
-st.title("🏥 Medical Statistical Tool")
-
-# 🟢 FIX: วาง components.html ไว้ที่นี่ (หลัง set_page_config และ st.title)
-components.html("""
-<script>
-    // window.parent คือการสั่งให้ทะลุ Iframe ของ Component ออกไปที่หน้าหลัก (index.html)
-    var loader = window.parent.document.getElementById('loading-screen');
-    if (loader) {
-        loader.style.opacity = '0'; // สั่งให้จางลง
-        setTimeout(function() {
-            loader.style.display = 'none'; // แล้วซ่อนถาวร
-        }, 500);
-    }
-</script>
-""", height=0) # height=0 เพื่อไม่ให้กินพื้นที่หน้าจอ
-        
 # --- INITIALIZE STATE ---
 if 'df' not in st.session_state: st.session_state.df = None
 if 'var_meta' not in st.session_state: st.session_state.var_meta = {}
