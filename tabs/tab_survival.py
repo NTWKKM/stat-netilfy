@@ -3,7 +3,7 @@ import pandas as pd
 import survival_lib
 import matplotlib.pyplot as plt
 
-def render(df, var_meta):
+def render(df, _var_meta):
     """
     Render an interactive Streamlit UI for survival analysis including Kaplan–Meier, Nelson–Aalen, landmark analysis, and Cox regression workflows.
     
