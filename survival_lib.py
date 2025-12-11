@@ -111,8 +111,12 @@ def fit_nelson_aalen(df, time_col, event_col, group_col=None):
             stats_res[f"{g} (Events)"] = data.loc[mask, event_col].sum()
         ax.set_title(f"Nelson-Aalen: {group_col}")
     else:
-        naf.fit(data[time_col], event_observed=data[event_col], label="All")
+        T = data[time_col]
+        E = data[event_col]
+        naf.fit(T, event_observed=E, label="All")
         naf.plot_cumulative_hazard(ax=ax)
+        stats_res["Total N"] = len(T)
+        stats_res["Events"] = E.sum()
         ax.set_title("Nelson-Aalen Cumulative Hazard")
         
     ax.set_xlabel(f"Time ({time_col})")
