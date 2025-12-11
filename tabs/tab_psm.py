@@ -164,4 +164,4 @@ def render(df, var_meta):
                     st.download_button("📥 Download Report HTML", html_rep, "psm_report.html", "text/html")
                     
             except Exception as e:
-                st.error(f"Error during PSM: {e}")
+                st.error(f"Error during PSM ({type(e).__name__}): {e}")
