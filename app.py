@@ -93,6 +93,14 @@ if st.sidebar.button("📄 Load Example Data"):
     mismatch_idx = np.random.choice(n, num_mismatch, replace=False)
     diag_dr_b[mismatch_idx] = 1 - diag_dr_b[mismatch_idx] # Flip ค่า
 
+    # 🟢 9. Reliability Variables (ICC) -- เพิ่มส่วนนี้ --
+    # จำลองการวัด SBP (Systolic Blood Pressure) จาก 2 เครื่อง
+    sbp_machine_1 = np.random.normal(120, 15, n).round(0)
+    
+    # Machine 2: มีความคลาดเคลื่อนเล็กน้อย (Noise) + Systematic Bias (เช่น วัดได้สูงกว่าจริง 2 mmHg)
+    sbp_machine_2 = sbp_machine_1 + np.random.normal(2, 3, n) 
+    sbp_machine_2 = sbp_machine_2.round(0)
+
     # Create DataFrame and Metadata
     data = {
         'ID': range(1, n+1),
@@ -109,6 +117,9 @@ if st.sidebar.button("📄 Load Example Data"):
         # 🟢 ใส่ข้อมูล Agreement ลง DataFrame
         'Diagnosis_Dr_A': diag_dr_a,
         'Diagnosis_Dr_B': diag_dr_b
+        # 🟢 เพิ่มตัวแปร ICC ลง DataFrame
+        'SBP_Machine_1': sbp_machine_1,
+        'SBP_Machine_2': sbp_machine_2
     }
     
     st.session_state.df = pd.DataFrame(data)
