@@ -174,7 +174,7 @@ def render(df, _var_meta):
                                 st.write("**Schoenfeld Residuals Plots:**")
                                 for fig in figs_assump:
                                     st.pyplot(fig)
-                                    # ไม่ต้อง plt.close() ที่นี่
+                                    plt.close(fig)
                             else:
                                 st.info("No assumption plots generated (maybe model is valid or too simple).")
 
