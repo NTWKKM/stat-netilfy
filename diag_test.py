@@ -270,7 +270,6 @@ def calculate_icc(df, cols):
      
     if n < 2: return None, "Insufficient data (need at least 2 rows).", None
     if k < 2: return None, "Insufficient raters (need at least 2 columns).", None
-    if df_row * df_col == 0: return None, "Insufficient variance to compute ICC.", None
     
     # 2. ANOVA Calculations (Manual Calculation using Numpy for Speed & No Dependency)
     # Grand Mean
