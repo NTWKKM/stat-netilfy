@@ -61,21 +61,17 @@ def render(df, var_meta):
         st.success(f"Mapped: '{target_val}' = 1, Others = 0")
     
     # จัดการ Covariates ที่เป็น Text (One-hot Encoding)
-    # ถ้าตัวแปรไหนเป็น Text ระบบจะแปลงเป็นตัวเลขให้ (เช่น Sex: Male/Female -> Sex_Male: 0/1)
     if cov_cols:
-        df_analysis = pd.get_dummies(df_analysis, columns=[c for c in cov_cols if df_analysis[c].dtype == 'object'], drop_first=True)
-        # อัปเดตรายชื่อ cov_cols หลังแปลง (เอาชื่อคอลัมน์ใหม่มาใช้)
-        # (หมายเหตุ: วิธีนี้ง่ายสุดสำหรับ sklearn)
-        # แต่เพื่อความง่ายใน library เราจะใช้เฉพาะคอลัมน์ที่เป็นตัวเลขแล้ว
-        final_cov_cols = [c for c in df_analysis.columns if c not in [treat_col, outcome_col, final_treat_col] and c in df_analysis.columns]
-        # กรองเอาเฉพาะที่เกี่ยวกับ cov เดิม (ป้องกันตัวแปรอื่นปนมา)
-        # ง่ายที่สุดคือใช้ pd.get_dummies เฉพาะ X
-        X_encoded = pd.get_dummies(df[cov_cols], drop_first=True)
-        final_cov_cols = X_encoded.columns.tolist()
-        # รวม X_encoded กลับเข้าไปใน df_analysis
-        df_analysis = pd.concat([df_analysis, X_encoded], axis=1)
-        # ลบคอลัมน์ซ้ำ (ถ้ามี)
-        df_analysis = df_analysis.loc[:, ~df_analysis.columns.duplicated()]
+        # แปลงเฉพาะคอลัมน์ที่เป็น Object (Text)
+        cat_covs = [c for c in cov_cols if df_analysis[c].dtype == 'object']
+        if cat_covs:
+            df_analysis = pd.get_dummies(df_analysis, columns=cat_covs, drop_first=True)
+            
+        # ระบุคอลัมน์ Covariates ใหม่หลังจากแปลงแล้ว (เอาเฉพาะที่เป็นตัวเลข และไม่ใช่ treatment/outcome)
+        numeric_cols = df_analysis.select_dtypes(include=np.number).columns.tolist()
+        final_cov_cols = [c for c in numeric_cols if c not in [treat_col, outcome_col, final_treat_col]]
+    else:
+        final_cov_cols = []
 
     # PSM Settings
     with st.expander("⚙️ Advanced Settings"):
@@ -83,7 +79,7 @@ def render(df, var_meta):
     
     # --- 3. Run Analysis ---
     if st.button("🚀 Run Matching", key='btn_psm'):
-        if not cov_cols:
+        if not final_cov_cols: # ใช้ final_cov_cols แทน cov_cols เพื่อความชัวร์
             st.error("Please select at least one covariate.")
         else:
             try:
@@ -115,14 +111,14 @@ def render(df, var_meta):
                         
                         c_tab.markdown("**SMD Table:**")
                         smd_merge = pd.merge(smd_pre, smd_post, on='Variable', suffixes=('_Pre', '_Post'))
-                        c_tab.dataframe(smd_merge.style.format("{:.4f}").background_gradient(cmap='Reds', subset=['SMD_Post']))
                         
+                        # 🟢 FIX: ลบ .background_gradient(...) ออกเพื่อแก้ Error ColormapRegistry
+                        c_tab.dataframe(smd_merge.style.format("{:.4f}"))
+                        
+                        c_tab.caption("*SMD < 0.1 indicates good balance.*")
+
                     with t_res2:
                         st.write(f"Matched Dataset ({len(df_matched)} rows):")
-                        # โชว์ข้อมูลดิบ (ดึงข้อมูลเดิมกลับมาแสดงคู่กับ ID)
-                        # แต่ใน df_matched ตอนนี้เป็นข้อมูลที่ encode แล้ว
-                        # ถ้าอยากโชว์ข้อมูลเดิม อาจจะต้อง map index กลับ (ขั้นสูง)
-                        # เบื้องต้นโชว์ df_matched ไปก่อน
                         st.dataframe(df_matched.head(50))
                         
                         csv = df_matched.to_csv(index=False).encode('utf-8')
