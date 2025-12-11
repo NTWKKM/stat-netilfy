@@ -104,7 +104,6 @@ def render(df, var_meta):
                             # --- Display Results ---
                             st.dataframe(res.style.format("{:.4f}"))
                             
-                            st.markdown("---")
                             st.markdown("##### 🔍 Proportional Hazards Assumption Check")
                             
                             # Show Text Report
