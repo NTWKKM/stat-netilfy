@@ -83,9 +83,6 @@ def perform_matching(df, treatment_col, ps_col='ps_logit', caliper=0.2):
     caliper_width = caliper * sd_logit
     
     # Nearest Neighbors
-    if len(control) < 1:
-        return None, "Not enough controls."
-        
     nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(control[[ps_col]])
     distances, indices = nbrs.kneighbors(treated[[ps_col]])
     
