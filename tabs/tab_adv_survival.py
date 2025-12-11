@@ -3,7 +3,7 @@ import pandas as pd
 import survival_lib
 import matplotlib.pyplot as plt
 
-def render(df, var_meta):
+def render(df):
     st.subheader("⏳ Advanced Survival Analysis")
     st.info("""
     **Modules:**
