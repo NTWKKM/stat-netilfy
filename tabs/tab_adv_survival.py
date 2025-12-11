@@ -36,6 +36,10 @@ def render(df):
         col_group = st.selectbox("Compare Group (Optional):", ["None"] + all_cols, key='lm_group')
 
         if st.button("Run Landmark Analysis", key='btn_lm'):
+            if not pd.api.types.is_numeric_dtype(df[col_time]) or not pd.api.types.is_numeric_dtype(df[col_event]):
+                st.error(f"Time column ('{col_time}') and Event column ('{col_event}') must be numeric.")
+                return
+
             # 🟢 Filter Data (หัวใจของ Landmark)
             mask = df[col_time] >= landmark_t
             df_lm = df[mask].copy()
