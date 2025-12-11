@@ -50,7 +50,7 @@ def render(df, var_meta):
     final_treat_col = treat_col
 
     if not is_numeric_binary:
-        st.markdown("---")
+        # st.markdown("---")
         st.warning(f"⚠️ Variable '{treat_col}' is text/categorical. Please specify which value is the **Treatment Group**.")
         
         # 🟢 ปรับปรุง: ใช้ Columns แบ่งพื้นที่ให้อยู่บรรทัดเดียวกัน
@@ -64,9 +64,6 @@ def render(df, var_meta):
         df_analysis[final_treat_col] = np.where(df_analysis[treat_col] == target_val, 1, 0)
         
         with c_msg:
-             # ใส่ Spacer นิดหน่อยเพื่อให้ตรงกับ Selectbox
-            st.write("") 
-            st.write("")
             st.success(f"✅ Mapped: '{target_val}' = 1")
     
     # จัดการ Covariates ที่เป็น Text (One-hot Encoding)
