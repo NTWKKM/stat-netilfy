@@ -179,8 +179,10 @@ def plot_love_plot(smd_pre, smd_post):
     Returns:
         matplotlib.figure.Figure: Figure object containing the Love plot.
     """
-    smd_pre = smd_pre.copy(); smd_pre['Stage'] = 'Unmatched'
-    smd_post = smd_post.copy(); smd_post['Stage'] = 'Matched'
+    smd_pre = smd_pre.copy()
+    smd_pre['Stage'] = 'Unmatched'
+    smd_post = smd_post.copy()
+    smd_post['Stage'] = 'Matched'
     
     df_plot = pd.concat([smd_pre, smd_post])
     
