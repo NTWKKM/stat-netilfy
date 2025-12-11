@@ -11,7 +11,18 @@ import streamlit as st
 # --- Helper: Clean Data ---
 def clean_survival_data(df, time_col, event_col, covariates=None):
     """
-    เตรียมข้อมูลสำหรับ Survival Analysis ทั่วไป (One row per patient)
+    Prepare a numeric, complete-case DataFrame for survival analysis with one row per subject.
+    
+    This function selects the requested time, event, and optional covariate columns from the input DataFrame, coerces all selected columns to numeric (invalid parsing becomes NaN), and drops any rows containing missing values.
+    
+    Parameters:
+        df (pd.DataFrame): Source data.
+        time_col (str): Name of the duration/time-to-event column.
+        event_col (str): Name of the event indicator column (typically 0/1).
+        covariates (list[str] | None): Optional list of covariate column names to include.
+    
+    Returns:
+        pd.DataFrame: Cleaned DataFrame containing only the requested columns as numeric types and only complete cases (no missing values).
     """
     cols = [time_col, event_col]
     if covariates:
@@ -30,7 +41,20 @@ def clean_survival_data(df, time_col, event_col, covariates=None):
 @st.cache_data(show_spinner=False)
 def fit_km_logrank(df, time_col, event_col, group_col=None):
     """
-    สร้างกราฟ Kaplan-Meier และทำ Log-Rank Test (รองรับ Landmark Analysis โดยรับ df ที่กรองมาแล้ว)
+    Fit and plot Kaplan–Meier survival curves and perform log-rank testing for group comparisons.
+    
+    This function accepts pre-filtered data (suitable for landmark analyses), fits Kaplan–Meier estimators either overall or by group, plots the survival curves, and computes basic summary statistics. If two groups are present, a log-rank test is performed and its p-value is included in the results and plot title.
+    
+    Parameters:
+        df (pandas.DataFrame): Input dataset containing time, event, and optional grouping columns.
+        time_col (str): Column name for survival or follow-up time.
+        event_col (str): Column name for the event indicator (1=event, 0=censored).
+        group_col (str, optional): Column name for a grouping variable to produce group-wise curves and comparisons. If omitted, a single overall curve is produced.
+    
+    Returns:
+        tuple: (figure, stats_df)
+            figure (matplotlib.figure.Figure): Matplotlib Figure containing the Kaplan–Meier plot.
+            stats_df (pandas.DataFrame): Table of summary statistics (per-group or overall) with rows for each statistic and columns for groups or a single "Value" column.
     """
     data = clean_survival_data(df, time_col, event_col, [group_col] if group_col else [])
     
@@ -96,7 +120,18 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
 @st.cache_data(show_spinner=False)
 def fit_nelson_aalen(df, time_col, event_col, group_col=None):
     """
-    สร้างกราฟ Nelson-Aalen (Cumulative Hazard)
+    Create and plot a Nelson–Aalen cumulative hazard curve, optionally stratified by a grouping column.
+    
+    Parameters:
+        df (pandas.DataFrame): Input dataset containing time, event, and optional group columns.
+        time_col (str): Column name for survival time or follow-up time.
+        event_col (str): Column name for the event indicator (1 for event, 0 for censored).
+        group_col (str, optional): Column name to stratify the cumulative hazard by groups. If omitted, the function fits a single curve for all patients.
+    
+    Returns:
+        tuple: A tuple (fig, stats_df) where:
+            - fig (matplotlib.figure.Figure): Figure containing the Nelson–Aalen cumulative hazard plot.
+            - stats_df (pandas.DataFrame): Table of counts and event totals per group (or total counts when no group_col is provided).
     """
     data = clean_survival_data(df, time_col, event_col, [group_col] if group_col else [])
     naf = NelsonAalenFitter()
@@ -132,7 +167,19 @@ def fit_nelson_aalen(df, time_col, event_col, group_col=None):
 @st.cache_data(show_spinner=False)
 def fit_cox_ph(df, time_col, event_col, covariates):
     """
-    วิเคราะห์ Cox Regression แบบมาตรฐาน (Time-Independent)
+    Fit a time-independent Cox proportional hazards model on numeric, complete-case data.
+    
+    Parameters:
+        df (pandas.DataFrame): Input dataset.
+        time_col (str): Column name containing event durations.
+        event_col (str): Column name containing the event/censoring indicator (0/1).
+        covariates (list[str]): List of covariate column names to include in the model.
+    
+    Returns:
+        cph (lifelines.CoxPHFitter or None): Fitted CoxPHFitter when successful, otherwise `None`.
+        summary_df (pandas.DataFrame or None): Summary table with columns `['Coef', 'HR', 'Lower 95%', 'Upper 95%', 'P-value']` when successful, otherwise `None`.
+        data (pandas.DataFrame or None): Cleaned numeric complete-case DataFrame used for fitting when successful, otherwise `None`.
+        error (str or None): Error message string if fitting failed, otherwise `None`.
     """
     data = clean_survival_data(df, time_col, event_col, covariates)
     cph = CoxPHFitter()
@@ -150,7 +197,24 @@ def fit_cox_ph(df, time_col, event_col, covariates):
 @st.cache_data(show_spinner=False)
 def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariates):
     """
-    วิเคราะห์ Cox Model ที่ตัวแปรเปลี่ยนตามเวลา (ต้องใช้ข้อมูล Long Format: Start-Stop)
+    Fit a time-varying Cox proportional hazards model using start–stop (long-format) data.
+    
+    Parameters:
+        df (pd.DataFrame): Source dataframe containing long-format (start–stop) rows.
+        id_col (str): Column name identifying subject/patient IDs.
+        event_col (str): Column name for the event indicator (1 if event occurred, 0 if censored).
+        start_col (str): Column name for the interval start time.
+        stop_col (str): Column name for the interval stop time.
+        covariates (list[str]): List of time-varying covariate column names to include in the model.
+    
+    Returns:
+        tuple:
+            - fitted_model (CoxTimeVaryingFitter or None): The fitted CoxTimeVaryingFitter on success, otherwise None.
+            - summary_df (pd.DataFrame or None): A summary table with columns ['Coef', 'HR', 'Lower 95%', 'Upper 95%', 'P-value'] on success, otherwise None.
+            - error (str or None): None on success; otherwise an error message describing the failure. Possible error messages include:
+                - "Error: Data is empty after selecting columns and dropping NAs." when no rows remain after selecting required columns and dropping missing values.
+                - "Error: Found rows where Start Time >= Stop Time." when any interval has start greater than or equal to stop.
+                - "Model Failed: <details>" when model fitting raises an exception.
     """
     # 1. เลือกคอลัมน์ที่จำเป็น
     cols = [id_col, event_col, start_col, stop_col] + covariates
@@ -181,7 +245,16 @@ def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariates)
 # --- 5. Check Assumptions ---
 def check_cph_assumptions(cph, data):
     """
-    ตรวจสอบ Proportional Hazards Assumption
+    Check proportional hazards assumptions for a fitted Cox model and capture the textual diagnostics and any generated diagnostic plots.
+    
+    Parameters:
+        cph: A fitted lifelines Cox model (e.g., CoxPHFitter or CoxTimeVaryingFitter) whose assumptions will be checked.
+        data: pandas.DataFrame used as the input to the assumption checks.
+    
+    Returns:
+        tuple:
+            advice_text (str): Textual diagnostic output produced by lifelines' check_assumptions (or an error message if the check failed).
+            figs (list[matplotlib.figure.Figure]): List of matplotlib Figure objects created by the diagnostic checks; empty if none or on error.
     """
     try:
         f = io.StringIO()
@@ -203,6 +276,18 @@ def check_cph_assumptions(cph, data):
 
 # --- 6. Report Generator ---
 def generate_report_survival(title, elements):
+    """
+    Assemble an HTML report from given titled elements (text, headers, tables, and plots) suitable for embedding or saving.
+    
+    Parameters:
+        title (str): Report title displayed at the top of the report.
+        elements (list): Ordered list of elements to include in the report. Each element is a dict with:
+            - type (str): One of 'text', 'header', 'table', or 'plot'.
+            - data: For 'text' and 'header', a string; for 'table', a pandas DataFrame; for 'plot', a matplotlib Figure.
+    
+    Returns:
+        html (str): A complete HTML document as a string containing embedded styles, the rendered elements, and a footer.
+    """
     css_style = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; }

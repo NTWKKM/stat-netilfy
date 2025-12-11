@@ -4,6 +4,15 @@ import survival_lib
 import matplotlib.pyplot as plt
 
 def render(df, var_meta):
+    """
+    Render an interactive Streamlit UI for survival analysis including Kaplan–Meier, Nelson–Aalen, landmark analysis, and Cox regression workflows.
+    
+    Builds a three-tab interface that lets users select time and event columns (with automatic detection), compare groups, run Kaplan–Meier or Nelson–Aalen estimations, perform landmark filtering and analysis at a chosen timepoint, fit a Cox proportional hazards model with covariate selection, check proportional-hazards assumptions, display results and plots, and generate downloadable HTML reports for each analysis.
+    
+    Parameters:
+        df (pandas.DataFrame): Input dataset containing time-to-event and event indicator columns along with candidate covariates.
+        var_meta (dict-like): Optional variable metadata used by UI or reporting (column labels, types, descriptions); may be unused for some flows but supplied for report generation or future extensions.
+    """
     st.subheader("5. Survival Analysis")
     st.info("""
 **💡 Guide:**
