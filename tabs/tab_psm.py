@@ -64,6 +64,8 @@ def render(df, var_meta):
         df_analysis[final_treat_col] = np.where(df_analysis[treat_col] == target_val, 1, 0)
         
         with c_msg:
+            # ใส่ Spacer นิดหน่อยเพื่อให้ตรงกับ Selectbox
+            st.write("")
             st.success(f"✅ Mapped: '{target_val}' = 1")
     
     # จัดการ Covariates ที่เป็น Text (One-hot Encoding)
