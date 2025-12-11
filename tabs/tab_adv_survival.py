@@ -66,9 +66,9 @@ def render(df):
         
         c1, c2, c3, c4 = st.columns(4)
         id_col = c1.selectbox("🆔 ID Column:", all_cols, key='td_id')
-        start_col = c2.selectbox("▶️ Start Time:", all_cols, key='td_start')
-        stop_col = c3.selectbox("⏹️ Stop Time:", all_cols, index=min(1, len(all_cols)-1), key='td_stop')
-        event_col = c4.selectbox("💀 Event (at Stop):", all_cols, index=min(2, len(all_cols)-1), key='td_event')
+        start_col = c2.selectbox("▶️ Start Time:", [c for c in all_cols if c != id_col], key='td_start')
+        stop_col = c3.selectbox("⏹️ Stop Time:", [c for c in all_cols if c not in [id_col, start_col]], key='td_stop')
+        event_col = c4.selectbox("💀 Event (at Stop):", [c for c in all_cols if c not in [id_col, start_col, stop_col]], key='td_event')
         
         covs = st.multiselect("Select Time-Dependent Covariates:", 
                               [c for c in all_cols if c not in [id_col, start_col, stop_col, event_col]], 
