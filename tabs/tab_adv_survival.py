@@ -5,6 +5,15 @@ import matplotlib.pyplot as plt
 
 # 🟢 FIX 1: ต้องรับ var_meta เพื่อให้สอดคล้องกับ app.py และโครงสร้างโปรเจกต์
 def render(df, var_meta): 
+    """
+    Render the Time-Dependent Cox survival analysis UI and handle user-driven model fitting.
+    
+    Displays controls for selecting ID, start time, stop time, event, and time-dependent covariates from `df`, enforces that data are long-format (start–stop), validates that selected numeric columns are numeric and that at least one covariate is chosen, and—when the user runs the model—calls `survival_lib.fit_cox_time_varying` to fit the model and presents the fitted results or errors in the Streamlit app.
+    
+    Parameters:
+        df (pandas.DataFrame): Input dataset used to populate selection widgets and to fit the model.
+        var_meta (Any): Project or variable metadata for alignment/context (used only for UI/contextual purposes).
+    """
     st.subheader("⏳ Advanced Survival Analysis")
     st.info("""
     **Modules:**

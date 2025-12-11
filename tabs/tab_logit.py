@@ -4,7 +4,20 @@ import numpy as np
 from logic import process_data_and_generate_html # Import จาก root
 
 def check_perfect_separation(df, target_col):
-    """Helper Function for Logistic"""
+    """
+    Identify predictor columns that may cause perfect separation with respect to a binary target.
+    
+    This function attempts to coerce the target column to numeric and ignores rows with non-numeric target values.
+    It examines each predictor (except the target) that has fewer than 10 unique values and marks a predictor as risky
+    if any cell in the contingency table between that predictor and the target is zero.
+    
+    Parameters:
+        df (pandas.DataFrame): Dataframe containing predictors and the target column.
+        target_col (str): Name of the target column in `df`.
+    
+    Returns:
+        list: Column names that may cause perfect separation (empty list if target is invalid or no risky variables found).
+    """
     risky_vars = []
     try:
         y = pd.to_numeric(df[target_col], errors='coerce').dropna()
@@ -22,6 +35,15 @@ def check_perfect_separation(df, target_col):
     return risky_vars
 
 def render(df, var_meta):
+    """
+    Render the Streamlit UI for configuring and running a binary logistic regression analysis.
+    
+    Renders controls to choose the binary outcome, optionally exclude predictors, select a regression method (Auto / Standard / Firth), and run the analysis. When executed, the function runs the analysis, displays the generated HTML report in-page, and stores the report HTML in st.session_state.html_output_logit for download.
+    
+    Parameters:
+        df (pandas.DataFrame): Input dataset containing the outcome and predictor variables.
+        var_meta (mapping): Metadata about variables (used to annotate the report and results).
+    """
     st.subheader("4. Binary Logistic Regression Analysis")
     ##### Logistic Regression Analysis
     st.info("""

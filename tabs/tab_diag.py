@@ -3,6 +3,15 @@ import pandas as pd
 import diag_test # ✅ ใช้ diag_test ตัวเดียว
 
 def render(df, var_meta):
+    """
+    Render the diagnostic testing and statistical analysis UI for the given dataset.
+    
+    Displays interactive Streamlit tabs for ROC/AUC, Chi-square & risk measures, Cohen's Kappa agreement, Intraclass Correlation Coefficient (ICC) reliability, and descriptive statistics; runs analyses via diag_test and stores per-tab HTML reports in Streamlit session state for viewing and download.
+    
+    Parameters:
+        df (pandas.DataFrame): Dataset containing variables used for analyses.
+        var_meta (Mapping | None): Optional variable metadata (e.g., labels or types) used to inform defaults or UI hints; may be None.
+    """
     st.subheader("2. Diagnostic Test & Statistics")
    # 🟢 UPDATE: เพิ่ม Tab "Reliability (ICC)" เป็น Tab ที่ 4
     sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5 = st.tabs([
@@ -113,6 +122,17 @@ def render(df, var_meta):
         
         # Positive Label Selectors
         def get_pos_label_settings(df, col_name):
+            """
+            Produce sorted unique string values for a column and a default index preferring '1'.
+            
+            Parameters:
+                df (pandas.DataFrame): DataFrame containing the column.
+                col_name (str): Name of the column to inspect.
+            
+            Returns:
+                unique_vals (list[str]): Sorted list of the column's unique non-null values as strings.
+                default_idx (int): Index within `unique_vals` of the value `'1'` if present, otherwise 0.
+            """
             unique_vals = [str(x) for x in df[col_name].dropna().unique()]
             unique_vals.sort()
             default_idx = 0

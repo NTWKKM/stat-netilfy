@@ -8,7 +8,27 @@ import streamlit as st # 🟢 1. IMPORT STREAMLIT
 @st.cache_data(show_spinner=False)
 def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_pos=None): # 👈 แก้บรรทัดนี้
     """
-    (SYNCED WITH diag_test.py) - คำนวณ Chi-square
+    Compute and format a contingency table and association statistics between two categorical columns.
+    
+    Parameters:
+        df (pd.DataFrame): Source data frame containing the columns to analyze.
+        col1 (str): Name of the row (exposure) column.
+        col2 (str): Name of the column (outcome) column.
+        method (str, optional): Test selection string; contains "Fisher" to use Fisher's exact test for 2x2 tables,
+            contains "Yates" to apply Yates' continuity correction for chi-square in 2x2 tables, otherwise uses Pearson-style chi-square. Defaults to 'Pearson (Standard)'.
+        v1_pos (str|int, optional): Label or string representation of a row value to move to the first row position in the displayed table.
+        v2_pos (str|int, optional): Label or string representation of a column value to move to the first column position in the displayed table.
+    
+    Returns:
+        tuple: (display_tab, stats_res, msg, risk_df)
+            - display_tab (pd.DataFrame): Formatted table of counts with row percentages as strings "count (pct%)", indexed by col1 with a 'Total' row/column.
+            - stats_res (dict or None): Dictionary summarizing the test performed and key statistics (e.g., Test name, Statistic or OR, P-value, Degrees of Freedom, N). None if test could not be computed.
+            - msg (str): Human-readable summary of the chosen test and results, or an error/warning message when applicable.
+            - risk_df (pd.DataFrame or None): For 2x2 tables, a table of risk metrics (Risk in exposed/unexposed, RR, RD, NNT, OR). None when not applicable or on calculation error.
+    
+    Notes:
+        - If either column name is not present in df, the function returns (None, None, "Columns not found", None).
+        - Fisher's exact test is only performed when the contingency table is 2x2; otherwise an explanatory error message is returned in `msg`.
     """
     if col1 not in df.columns or col2 not in df.columns: 
         return None, None, "Columns not found", None
@@ -27,6 +47,16 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     base_row_labels = [row for row in all_row_labels if row != 'Total']
 
     def get_original_label(label_str, df_labels):
+        """
+        Map a string representation of a label back to the original label object from a collection.
+        
+        Parameters:
+            label_str (str): String representation to match against the labels.
+            df_labels (iterable): Collection of labels to search; each label is compared using str(label).
+        
+        Returns:
+            The matching label from `df_labels` whose string form equals `label_str`, or `label_str` if no match is found.
+        """
         for lbl in df_labels:
             if str(lbl) == label_str:
                 return lbl
@@ -41,6 +71,15 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             final_col_order_base.insert(0, v2_pos_original)
     else:
         def custom_sort(label):
+            """
+            Return a sorting key by converting the input to a float when possible.
+            
+            Parameters:
+                label: A value intended as a sort key; may be numeric or non-numeric.
+            
+            Returns:
+                A float if `label` can be converted to float, otherwise the string form of `label`.
+            """
             try: return float(label)
             except (ValueError, TypeError): return str(label)
         final_col_order_base.sort(key=custom_sort, reverse=True)
@@ -55,6 +94,15 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             final_row_order_base.insert(0, v1_pos_original)
     else:
         def custom_sort(label):
+            """
+            Return a sorting key by converting the input to a float when possible.
+            
+            Parameters:
+                label: A value intended as a sort key; may be numeric or non-numeric.
+            
+            Returns:
+                A float if `label` can be converted to float, otherwise the string form of `label`.
+            """
             try: return float(label)
             except (ValueError, TypeError): return str(label)
         final_row_order_base.sort(key=custom_sort, reverse=True)
@@ -142,6 +190,20 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
 
 @st.cache_data(show_spinner=False) # 🟢 2. ADD CACHE
 def calculate_correlation(df, col1, col2, method='pearson'):
+    """
+    Compute the correlation between two DataFrame columns and return summary metrics plus a scatter plot.
+    
+    The function requires that both columns exist in the DataFrame and be numeric (or convertible to numeric). It computes either Pearson (linear) or Spearman (monotonic) correlation, returns the coefficient, p-value, sample size, and a Matplotlib figure showing the scatter and an optional fitted regression line for Pearson.
+    
+    Parameters:
+        method (str): 'pearson' to compute Pearson correlation (linear); any other value computes Spearman correlation (monotonic).
+    
+    Returns:
+        tuple: (metrics, error, figure)
+            - metrics (dict): {"Method": str, "Coefficient": float, "P-value": float, "N": int}
+            - error (str or None): Error message when columns are missing or non-numeric; otherwise None.
+            - figure (matplotlib.figure.Figure): Scatter plot of the two variables with axis labels and title.
+    """
     if col1 not in df.columns or col2 not in df.columns: return None, "Columns not found", None
     data = df[[col1, col2]].dropna()
     try:
@@ -158,6 +220,24 @@ def calculate_correlation(df, col1, col2, method='pearson'):
 
 def generate_report(title, elements):
     # (คงเดิม)
+    """
+    Generate a complete HTML report containing headings, text, tables, contingency tables, and embedded plots.
+    
+    Parameters:
+        title (str): The report title displayed at the top of the document.
+        elements (list[dict]): Ordered list of elements to include in the report. Each element must include:
+            - type (str): One of 'text', 'table', 'contingency_table', or 'plot'.
+            - data: Content for the element:
+                * 'text': a string.
+                * 'table': a pandas DataFrame (rendered via DataFrame.to_html()).
+                * 'contingency_table': a pandas DataFrame where the index name is used as the exposure label and columns are outcomes; values are rendered into a custom HTML table.
+                * 'plot': a matplotlib.figure.Figure, which will be embedded as a PNG image.
+            - header (str, optional): Section header displayed above the element.
+            - outcome_col (str, optional, contingency_table only): Label to display above the outcome columns (defaults to 'Outcome').
+        
+    Returns:
+        str: A complete HTML document (string) styled and ready for display or saving.
+    """
     css_style = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; margin: 0; color: #333; }

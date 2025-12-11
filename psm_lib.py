@@ -10,8 +10,22 @@ import io, base64
 # --- 1. Propensity Score Calculation ---
 def calculate_ps(df, treatment_col, covariate_cols):
     """
-    คำนวณ PS โดยใช้ Logistic Regression
-    Input: df ต้องมีการจัดการ Missing Value และ Encoding มาแล้ว
+    Compute propensity scores and their logit using logistic regression.
+    
+    Drops rows with missing values in the treatment or covariate columns, fits a logistic regression model predicting the treatment from the specified covariates, and returns the original rows augmented with `ps_score` (predicted probability of treatment) and `ps_logit` (logit of `ps_score`).
+    
+    Parameters:
+        df (pandas.DataFrame): Input dataframe already preprocessed for missing values and encoding.
+        treatment_col (str): Name of the binary treatment indicator column (expected numeric 0/1).
+        covariate_cols (list[str]): List of column names to use as covariates in the propensity model.
+    
+    Returns:
+        tuple:
+            data (pandas.DataFrame): A copy of the input rows used for modeling with `ps_score` and `ps_logit` columns appended.
+            clf (sklearn.linear_model.LogisticRegression): The trained logistic regression model.
+    
+    Raises:
+        ValueError: If the treatment column is not numeric.
     """
     # Drop NA ในคอลัมน์ที่เกี่ยวข้อง
     data = df.dropna(subset=[treatment_col] + covariate_cols).copy()
@@ -40,7 +54,20 @@ def calculate_ps(df, treatment_col, covariate_cols):
 # --- 2. Matching Algorithm ---
 def perform_matching(df, treatment_col, ps_col='ps_logit', caliper=0.2):
     """
-    จับคู่ 1:1 แบบ Greedy
+    Perform 1:1 greedy nearest-neighbor matching using a propensity score column with a caliper.
+    
+    Parameters:
+        df (pandas.DataFrame): DataFrame containing the treatment indicator and propensity score column.
+        treatment_col (str): Name of the binary treatment column (values 0 and 1).
+        ps_col (str): Name of the propensity score (or logit) column used for matching. Defaults to 'ps_logit'.
+        caliper (float): Multiplier for caliper width expressed as caliper * std(ps_col). Controls allowable distance for matches.
+    
+    Returns:
+        tuple:
+            - pandas.DataFrame or None: If successful, a DataFrame containing matched treated and control rows with an added
+              `match_id` column pairing each treated unit with its matched control. If matching fails, `None`.
+            - str: A message describing the result. On success, reports the number of matched pairs. On failure, contains an
+              explanatory error message (e.g., empty treated/control group or no matches within caliper).
     """
     # แยกกลุ่ม (ต้องเป็น 0 กับ 1 เท่านั้น)
     treated = df[df[treatment_col] == 1].copy()
@@ -106,6 +133,17 @@ def perform_matching(df, treatment_col, ps_col='ps_logit', caliper=0.2):
 
 # --- 3. SMD Calculation ---
 def calculate_smd(df, treatment_col, covariate_cols):
+    """
+    Compute standardized mean differences (SMD) for numeric covariates between treated and control groups.
+    
+    Parameters:
+        df (pandas.DataFrame): Input table containing the treatment indicator and covariates.
+        treatment_col (str): Name of the binary treatment column where 1 indicates treated and 0 indicates control.
+        covariate_cols (Iterable[str]): Sequence of covariate column names to evaluate.
+    
+    Returns:
+        pandas.DataFrame: A DataFrame with columns `Variable` and `SMD`. `SMD` is the absolute difference in group means divided by the pooled standard deviation for each numeric covariate. Non-numeric covariates are skipped; covariates with zero variance in either group produce an SMD of 0.
+    """
     smd_data = []
     treated = df[df[treatment_col] == 1]
     control = df[df[treatment_col] == 0]
@@ -130,6 +168,16 @@ def calculate_smd(df, treatment_col, covariate_cols):
 
 # --- 4. Plotting & Report ---
 def plot_love_plot(smd_pre, smd_post):
+    """
+    Create a Love plot comparing covariate standardized mean differences before and after matching.
+    
+    Parameters:
+        smd_pre (pd.DataFrame): DataFrame containing pre-match SMDs with columns 'Variable' and 'SMD'.
+        smd_post (pd.DataFrame): DataFrame containing post-match SMDs with columns 'Variable' and 'SMD'.
+    
+    Returns:
+        fig (matplotlib.figure.Figure): Matplotlib Figure with SMD on the x-axis and covariates on the y-axis, showing pre- and post-match points and a reference line at SMD = 0.1.
+    """
     smd_pre = smd_pre.copy(); smd_pre['Stage'] = 'Unmatched'
     smd_post = smd_post.copy(); smd_post['Stage'] = 'Matched'
     
@@ -145,6 +193,18 @@ def plot_love_plot(smd_pre, smd_post):
     return fig
 
 def generate_psm_report(title, elements):
+    """
+    Generate a standalone HTML report string from a sequence of report elements.
+    
+    Parameters:
+        title (str): The report title displayed as a top-level heading.
+        elements (list): Ordered list of elements to include. Each element is a dict with:
+            - type (str): One of 'text', 'table', or 'plot'.
+            - data: For 'text', a string; for 'table', a pandas DataFrame; for 'plot', a matplotlib Figure.
+    
+    Returns:
+        html (str): A complete HTML document as a string. Tables are rendered as HTML tables and plots are embedded inline as base64-encoded PNG images.
+    """
     css = """<style>body{font-family:'Segoe UI';padding:20px;} table{border-collapse:collapse;width:100%;} th,td{border:1px solid #ddd;padding:8px;text-align:center;} th{background:#f2f2f2;}</style>"""
     html = f"<html><head>{css}</head><body><h2>{title}</h2>"
     for el in elements:

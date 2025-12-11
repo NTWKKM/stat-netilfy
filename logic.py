@@ -15,6 +15,15 @@ except ImportError:
 warnings.filterwarnings("ignore")
 
 def clean_numeric_value(val):
+    """
+    Normalize an input to a numeric float suitable for analysis.
+    
+    Parameters:
+        val: The value to convert; may be a number, numeric string, or other object.
+    
+    Returns:
+        A float parsed from `val` after trimming whitespace and removing '>', '<', and commas, or `numpy.nan` if `val` is missing or cannot be parsed as a number.
+    """
     if pd.isna(val): return np.nan
     s = str(val).strip()
     s = s.replace('>', '').replace('<', '').replace(',', '')
@@ -25,8 +34,19 @@ def clean_numeric_value(val):
 
 def run_binary_logit(y, X, method='default'):
     """
-    Run Binary Logistic Regression.
-    Supports: 'default' (Newton-Raphson), 'bfgs', and 'firth' (Penalized Likelihood).
+    Fit a binary logistic regression model using the specified estimation method.
+    
+    Parameters:
+        y (array-like): Binary outcome vector (0/1) aligned with X.
+        X (DataFrame or array-like): Predictor variables; a constant term will be added automatically.
+        method (str): Estimation method: 'default' (statsmodels default optimizer), 'bfgs' (statsmodels BFGS), or 'firth' (penalized likelihood via firthlogist).
+    
+    Returns:
+        tuple: (params, conf_int, pvalues, status)
+            - params (pd.Series or None): Estimated coefficients indexed by column name when successful.
+            - conf_int (pd.DataFrame or None): 95% confidence intervals with two columns [0, 1] indexed by coefficient name when available.
+            - pvalues (pd.Series or None): Coefficient p-values indexed by coefficient name when available.
+            - status (str): "OK" on success; otherwise an error message or a message indicating missing firthlogist dependency.
     """
     try:
         # เตรียมข้อมูล (Statsmodels ต้องการ Constant เสมอ)
@@ -61,6 +81,18 @@ def run_binary_logit(y, X, method='default'):
         return None, None, None, str(e)
 
 def get_label(col_name, var_meta):
+    """
+    Create an HTML label for a variable using its column name and optional metadata.
+    
+    If col_name contains an underscore, the portion after the first underscore is treated as the original variable name; otherwise the full col_name is used. If var_meta provides a 'label' for that original name, the label text is taken from metadata; otherwise the original name is used as the descriptive label.
+    
+    Parameters:
+        col_name (str): The dataframe column name, possibly prefixed (e.g., "sheet_varname").
+        var_meta (dict | None): Optional mapping from original variable names to metadata dictionaries; if present and contains a 'label' entry, that value is used as the descriptive label.
+    
+    Returns:
+        str: An HTML fragment with the original variable name in bold and the descriptive label in muted smaller text.
+    """
     parts = col_name.split('_', 1)
     orig_name = parts[1] if len(parts) > 1 else col_name
     
@@ -75,6 +107,20 @@ def get_label(col_name, var_meta):
 # 🟢 NOTE: ต้องเพิ่ม method ลงใน argument เพื่อให้ cache แยกกันตาม method ที่เลือก
 @st.cache_data(show_spinner=False)
 def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
+    """
+    Generate an HTML report comparing a binary outcome against each variable in a DataFrame and perform univariate and multivariate logistic analyses.
+    
+    The function computes descriptive statistics for each variable (categorical or continuous), performs appropriate group comparison tests (chi-square for categorical, Mann–Whitney U for continuous), fits univariate logistic models to estimate crude odds ratios, screens variables by p-value (<0.20) for multivariate modeling, fits a multivariate logistic model on screened variables when feasible, and assembles the results into an HTML table with optional adjusted odds ratios. The logistic fitting method can be selected or auto-chosen based on library availability.
+    
+    Parameters:
+        outcome_name (str): Column name of the binary outcome in `df`.
+        df (pandas.DataFrame): Input dataset containing the outcome and predictor columns.
+        var_meta (dict, optional): Optional metadata for variables (labels, type overrides, value mapping). Keys may be full column names or short names derived from column names.
+        method (str, optional): Logistic fitting method; one of 'auto' (default), 'firth', or 'bfgs'. 'auto' selects Firth when available, otherwise BFGS.
+    
+    Returns:
+        str: An HTML fragment containing the outcome summary and a results table with descriptive statistics, test names and p-values, crude ORs with 95% CIs, and adjusted ORs (when multivariate modeling was performed).
+    """
     if outcome_name not in df.columns:
         return f"<div class='alert'>⚠️ Outcome '{outcome_name}' not found.</div>"
     
@@ -153,6 +199,16 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 if str(lvl).endswith('.0'): lvl_str = str(int(float(lvl)))
                 
                 def count_val(series, v_str):
+                     """
+                     Count how many entries in a Series match a target string after normalizing numeric-like values.
+                     
+                     Parameters:
+                         series (pandas.Series): Series whose entries will be compared. Each value is converted to a string before comparison.
+                         v_str (str): Target string to match against normalized entry strings.
+                     
+                     Returns:
+                         int: Number of entries equal to `v_str` after normalization. Numeric-like strings with at most one decimal point have a single occurrence of ".0" removed before comparison (e.g., "1.0" -> "1").
+                     """
                      return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
 
                 c_all = count_val(X_raw, lvl_str)
@@ -335,6 +391,20 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
 
 # 🟢 UPDATE: เพิ่ม method='auto' ใน parameter
 def process_data_and_generate_html(df, target_outcome, var_meta=None, method='auto'):
+    """
+    Assembles a complete HTML report for a binary outcome analysis and returns it as a string.
+    
+    Builds page-level HTML (including CSS styles and header), invokes analyze_outcome to produce the analysis content for the given outcome and dataset, appends a footer, and returns the assembled HTML document.
+    
+    Parameters:
+        df (pandas.DataFrame): Input dataset containing the outcome and predictor columns.
+        target_outcome (str): Column name in `df` identifying the binary outcome to analyze.
+        var_meta (dict, optional): Optional variable metadata used by the analysis (labels, type overrides). Omit or pass None if not available.
+        method (str, optional): Regression method preference passed to analyze_outcome. Supported values are 'auto' (default, selects Firth if available, otherwise standard), 'firth' (use Firth logistic regression if available), and 'bfgs' (standard logistic regression with BFGS optimizer).
+    
+    Returns:
+        html (str): Complete HTML document containing the analysis report.
+    """
     css_style = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; }

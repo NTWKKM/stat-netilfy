@@ -5,6 +5,15 @@ import psm_lib
 import matplotlib.pyplot as plt
 
 def render(df, var_meta):
+    """
+    Render a Streamlit-based user interface to run Propensity Score Matching (PSM) on a dataframe.
+    
+    Displays controls for selecting treatment, outcome, and covariates; prepares and encodes data as needed; runs propensity score estimation and 1:1 nearest-neighbor matching with a configurable caliper; evaluates balance (SMD) before and after matching; shows a Love plot, matched dataset preview and downloads, a simple outcome comparison, and generates a downloadable HTML report. Validation and error messages are shown in the Streamlit UI.
+    
+    Parameters:
+        df (pandas.DataFrame): Source dataset to analyze. Columns are presented for treatment, outcome, and covariate selection.
+        var_meta (dict): Optional variable metadata used by the UI (e.g., display names or types); may be unused depending on UI state.
+    """
     st.subheader("⚖️ Propensity Score Matching (PSM)")
     st.info("""
     **💡 Concept:** Matches patients in the Treatment group with similar patients in the Control group using **Propensity Scores**.

@@ -4,6 +4,15 @@ import survival_lib
 import matplotlib.pyplot as plt
 
 def render(df, var_meta):
+    """
+    Render the Survival Analysis user interface and orchestrate Kaplan–Meier, Nelson–Aalen, Landmark, and Cox regression workflows.
+    
+    Displays controls for selecting time/event columns and optional grouping, provides three tabs (Survival Curves, Landmark Analysis, Cox Regression), runs analyses on user action, shows plots and result tables, performs input validation, checks Cox proportional hazards assumptions, and produces downloadable HTML reports for each analysis.
+    
+    Parameters:
+        df (pandas.DataFrame): Input dataset containing time-to-event data and predictors. Must include a time column (numeric) and an event indicator column (numeric, 1=event) for certain analyses; column auto-detection is applied but users can select alternatives.
+        var_meta (Mapping | None): Optional variable metadata used for UI labeling or future extensions (not required for core functionality).
+    """
     st.subheader("5. Survival Analysis")
     st.info("""
 **💡 Guide:**
