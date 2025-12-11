@@ -267,8 +267,8 @@ def render(df, var_meta):
             else:
                 st.button("📥 Download Report", disabled=True, key='ph_icc_diag')
                 
-    # --- Descriptive (ย้ายมาเป็น sub_tab4) ---
-    with sub_tab4:
+    # --- Descriptive (ย้ายมาเป็น sub_tab5) ---
+    with sub_tab5:
         st.markdown("##### Descriptive Statistics")
         st.info("""
             **💡 Guide:** Summarizes the distribution of a single variable.
