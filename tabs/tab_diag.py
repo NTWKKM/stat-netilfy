@@ -4,11 +4,12 @@ import diag_test # ✅ ใช้ diag_test ตัวเดียว
 
 def render(df, var_meta):
     st.subheader("2. Diagnostic Test & Statistics")
-    # 🟢 UPDATE: เพิ่ม Tab "Agreement (Kappa)" เป็น Tab ที่ 3
-    sub_tab1, sub_tab2, sub_tab3, sub_tab4 = st.tabs([
+   # 🟢 UPDATE: เพิ่ม Tab "Reliability (ICC)" เป็น Tab ที่ 4
+    sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5 = st.tabs([
         "📈 ROC Curve & AUC", 
         "🎲 Chi-Square & Risk-RR,OR,NNT (Categorical)", 
         "🤝 Agreement (Kappa)", 
+        "📏 Reliability (ICC)", # 🟢 NEW TAB
         "📊 Descriptive"
     ])
     all_cols = df.columns.tolist()
@@ -227,6 +228,45 @@ def render(df, var_meta):
             else:
                 st.button("📥 Download Report", disabled=True, key='ph_kappa_diag')
 
+    # --- 🟢 NEW: Reliability (ICC) ---
+    with sub_tab4:
+        st.markdown("##### Reliability Analysis (Intraclass Correlation Coefficient - ICC)")
+        st.info("""
+            **💡 Guide:** Evaluates the reliability/agreement between 2 or more raters/methods for **Numeric/Continuous** variables.
+            * **ICC(2,1) Absolute Agreement:** Use when you care if the absolute scores are the same (e.g., Method A vs Method B).
+            * **ICC(3,1) Consistency:** Use when you care if the ranking is consistent, even if absolute scores differ (e.g., systematic bias).
+        """)
+        
+        # Auto-select columns with 'measurement' or 'rater' or 'machine'
+        default_icc_cols = [c for c in all_cols if any(k in c.lower() for k in ['measure', 'machine', 'rater', 'score', 'read'])]
+        if len(default_icc_cols) < 2: default_icc_cols = all_cols[:2] if len(all_cols) >=2 else []
+        
+        icc_cols = st.multiselect("Select Variables (Raters/Methods):", all_cols, default=default_icc_cols, key='icc_vars_diag')
+        
+        icc_run, icc_dl = st.columns([1, 1])
+        if 'html_output_icc' not in st.session_state: st.session_state.html_output_icc = None
+        
+        if icc_run.button("📏 Calculate ICC", key='btn_icc_run'):
+            res_df, err, anova_df = diag_test.calculate_icc(df, icc_cols)
+            
+            if err:
+                st.error(err)
+            else:
+                rep_elements = [
+                    {'type': 'text', 'data': f"<b>ICC Analysis:</b> {', '.join(icc_cols)}"},
+                    {'type': 'table', 'header': 'ICC Results (Single Measures)', 'data': res_df},
+                    {'type': 'table', 'header': 'ANOVA Table (Reference)', 'data': anova_df}
+                ]
+                html = diag_test.generate_report(f"ICC Analysis", rep_elements)
+                st.session_state.html_output_icc = html
+                st.components.v1.html(html, height=400, scrolling=True)
+                
+        with icc_dl:
+            if st.session_state.html_output_icc:
+                st.download_button("📥 Download Report", st.session_state.html_output_icc, "icc_report.html", "text/html", key='dl_icc_diag')
+            else:
+                st.button("📥 Download Report", disabled=True, key='ph_icc_diag')
+                
     # --- Descriptive (ย้ายมาเป็น sub_tab4) ---
     with sub_tab4:
         st.markdown("##### Descriptive Statistics")
