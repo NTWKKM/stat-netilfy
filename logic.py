@@ -241,7 +241,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 else: 
                     res['p_comp'] = np.nan
                     res['test_name'] = "-"
-            except: 
+            except (ValueError, np.linalg.LinAlgError) as e:
                 res['p_comp'] = np.nan
                 res['test_name'] = "-"
             
