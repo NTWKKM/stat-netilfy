@@ -74,22 +74,14 @@ def render(df, var_meta):
     # ==========================
     # TAB 2: Landmark Analysis
     # ==========================
-    with tab_landmark:
-        c1, c2 = st.columns(2)
-        # Auto-detect
-        time_idx = next((i for i, c in enumerate(all_cols) if 'time' in c.lower() or 'dur' in c.lower()), 0)
-        event_idx = next((i for i, c in enumerate(all_cols) if 'event' in c.lower() or 'dead' in c.lower()), min(1, len(all_cols)-1))
-
-        col_time = c1.selectbox("⏳ Time Variable:", all_cols, index=time_idx, key='lm_time')
-        col_event = c2.selectbox("💀 Event Variable (1=Event):", [c for c in all_cols if c != col_time], key='lm_event')
-        
+    with tab_landmark:   
         # Landmark Slider
         max_t = df[col_time].dropna().max() if not df.empty and pd.api.types.is_numeric_dtype(df[col_time]) and df[col_time].notna().any() else 100.0
-        landmark_t = st.slider(f"Select Landmark Time ({col_time}):", 0.0, float(max_t), float(max_t) * 0.1, key='lm_slider')
+        landmark_t = st.slider(f"Select Landmark Time ({col_time}):", 0.0, float(max_t), float(max_t) * 0.1, key='lm_slider_sur')
         
-        col_group = st.selectbox("Compare Group (Optional):", ["None"] + all_cols, key='lm_group')
+        col_group = st.selectbox("Compare Group (Optional):", ["None"] + all_cols, key='lm_group_sur')
 
-        if st.button("Run Landmark Analysis", key='btn_lm'):
+        if st.button("Run Landmark Analysis", key='btn_lm_sur'):
             if not pd.api.types.is_numeric_dtype(df[col_time]) or not pd.api.types.is_numeric_dtype(df[col_event]):
                 st.error(f"Time column ('{col_time}') and Event column ('{col_event}') must be numeric.")
                 return
