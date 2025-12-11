@@ -161,22 +161,32 @@ def fit_cox_ph(df, time_col, event_col, covariates):
         # 🟢 เพิ่ม: Return None ให้ครบ 4 ตัว
         return None, None, None, str(e)
 
-# --- 🟢 4. New: Assumption Check ---
+# --- 🟢 4. New: Assumption Check (แก้ไขให้รับหลายกราฟ) ---
 def check_cph_assumptions(cph, data):
     """
-    ตรวจสอบ Assumption และดักจับข้อความ Advice
+    ตรวจสอบ Assumption และดักจับข้อความ Advice + กราฟทั้งหมด
     """
     try:
         f = io.StringIO()
+        
+        # 1. จำ ID ของกราฟที่มีอยู่ก่อนเริ่มวาด
+        old_figs = plt.get_fignums()
+        
         with contextlib.redirect_stdout(f):
-            # Lifelines จะ print advice และวาดกราฟลงใน plt ปัจจุบัน
+            # Lifelines จะวาดกราฟออกมา (อาจจะหลายรูป)
             cph.check_assumptions(data, p_value_threshold=0.05, show_plots=True)
         
         advice_text = f.getvalue()
-        fig = plt.gcf() # ดึงกราฟที่เพิ่งวาด
-        return advice_text, fig
+        
+        # 2. หา ID ของกราฟที่ "งอกใหม่" (ที่มีในปัจจุบัน แต่ไม่มีใน old_figs)
+        new_figs_nums = [n for n in plt.get_fignums() if n not in old_figs]
+        
+        # 3. ดึง Object กราฟออกมาเป็น List
+        figs = [plt.figure(n) for n in new_figs_nums]
+        
+        return advice_text, figs # ✅ ส่งคืนเป็น List [fig1, fig2, ...]
     except Exception as e:
-        return f"Error checking assumptions: {str(e)}", None
+        return f"Error checking assumptions: {str(e)}", []
 
 # --- 5. Generate Report ---
 def generate_report_survival(title, elements):
