@@ -33,7 +33,7 @@ def render(df, var_meta):
                               default=default_covs,
                               key='psm_cov')
 
-    # --- 2. Data Preparation (Fixing the Error) ---
+    # --- 2. Data Preparation ---
     # ตรวจสอบว่า Treatment เป็น 0/1 หรือไม่ ถ้าไม่ใช่ต้องแปลง
     df_analysis = df.copy()
     unique_treat = df_analysis[treat_col].dropna().unique()
@@ -67,7 +67,7 @@ def render(df, var_meta):
         if cat_covs:
             df_analysis = pd.get_dummies(df_analysis, columns=cat_covs, drop_first=True)
             
-        # ระบุคอลัมน์ Covariates ใหม่หลังจากแปลงแล้ว (เอาเฉพาะที่เป็นตัวเลข และไม่ใช่ treatment/outcome)
+        # ระบุคอลัมน์ Covariates ใหม่หลังจากแปลงแล้ว
         numeric_cols = df_analysis.select_dtypes(include=np.number).columns.tolist()
         final_cov_cols = [c for c in numeric_cols if c not in [treat_col, outcome_col, final_treat_col]]
     else:
@@ -79,13 +79,12 @@ def render(df, var_meta):
     
     # --- 3. Run Analysis ---
     if st.button("🚀 Run Matching", key='btn_psm'):
-        if not final_cov_cols: # ใช้ final_cov_cols แทน cov_cols เพื่อความชัวร์
+        if not final_cov_cols:
             st.error("Please select at least one covariate.")
         else:
             try:
                 # A. Calculate PS
                 with st.spinner("Calculating Propensity Scores..."):
-                    # ส่ง df_analysis ที่แปลงเป็นตัวเลขแล้วเข้าไป
                     df_ps, model = psm_lib.calculate_ps(df_analysis, final_treat_col, final_cov_cols)
                 
                 # B. Perform Matching
@@ -112,8 +111,11 @@ def render(df, var_meta):
                         c_tab.markdown("**SMD Table:**")
                         smd_merge = pd.merge(smd_pre, smd_post, on='Variable', suffixes=('_Pre', '_Post'))
                         
-                        # 🟢 FIX: ลบ .background_gradient(...) ออกเพื่อแก้ Error ColormapRegistry
-                        c_tab.dataframe(smd_merge.style.format("{:.4f}"))
+                        # 🟢 FIX: ระบุคอลัมน์ที่จะ Format ให้ชัดเจน เพื่อไม่ให้ Error กับคอลัมน์ Variable ที่เป็น String
+                        c_tab.dataframe(smd_merge.style.format({
+                            'SMD_Pre': '{:.4f}', 
+                            'SMD_Post': '{:.4f}'
+                        }))
                         
                         c_tab.caption("*SMD < 0.1 indicates good balance.*")
 
