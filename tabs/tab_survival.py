@@ -107,8 +107,16 @@ def render(df, var_meta):
                 
                 st.pyplot(fig)
                 st.dataframe(stats)
-                report_html = survival_lib.generate_report_survival(f"NA: {col_time}", elements)
-                    st.download_button("📥 Download Report (NA)", report_html, "lm_report.html", "text/html")
+                # 🟢 FIX: สร้าง List 'elements' สำหรับ Report
+                elements = [
+                    {'type':'header','data':f'Landmark Analysis (t >= {landmark_t})'},
+                    {'type':'plot','data':fig},
+                    {'type':'table','data':stats}
+                ]
+                
+                # 🟢 FIX: ใช้ title และ label ที่ถูกต้อง
+                report_html = survival_lib.generate_report_survival(f"Landmark Analysis: {col_time} (t >= {landmark_t})", elements)
+                st.download_button("📥 Download Report (Landmark)", report_html, "lm_report.html", "text/html")
 
     # ==========================
     # TAB 3: Cox Regression
