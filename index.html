@@ -82,8 +82,17 @@
 
     <script>
       stlite.mount({
-        requirements: ["pandas", "scipy", "statsmodels", "openpyxl", "scikit-learn", "matplotlib", "lifelines==0.27.8","firthlogist","streamlit>=1.24.0"],
-        entrypoint: "app.py",
+    requirements: [
+        "streamlit", 
+        "pandas", 
+        "numpy", 
+        "matplotlib", 
+        "lifelines", 
+        "scipy",
+        "scikit-learn",  // 🟢 เพิ่มตัวนี้ (สำหรับ PSM LogisticRegression/NearestNeighbors)
+        "seaborn"        // 🟢 เพิ่มตัวนี้ (สำหรับกราฟ Love Plot)
+    ],
+    entrypoint: "app.py",
         files: {
           "app.py": { url: "./app.py" },
           "logic.py": { url: "./logic.py" },
