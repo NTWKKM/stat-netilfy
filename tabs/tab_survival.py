@@ -77,68 +77,67 @@ def render(df, var_meta):
     with tab_cox:
         covariates = st.multiselect("Select Covariates (Predictors):", [c for c in all_cols if c not in [col_time, col_event]], key='surv_cox_vars')
         
-        # State Management (เพื่อไม่ให้ผลหายเวลากด Checkbox)
+        # State Management (ยังคงไว้เผื่อ Download Button)
         if 'cox_res' not in st.session_state: st.session_state.cox_res = None
-        if 'cox_model_data' not in st.session_state: st.session_state.cox_model_data = None
-        
-        if st.button("Run Cox Model", key='btn_run_cox'):
+        if 'cox_html' not in st.session_state: st.session_state.cox_html = None
+
+        if st.button("🚀 Run Cox Model & Check Assumptions", key='btn_run_cox'):
             if not covariates:
                 st.error("Please select at least one covariate.")
             else:
-                # 🟢 UPDATE: รับค่า 4 ตัว (cph, res_df, data, err) ตาม survival_lib.py ตัวใหม่
-                cph, res, model_data, err = survival_lib.fit_cox_ph(df, col_time, col_event, covariates)
-                
-                if err:
-                    st.error(f"Error: {err}")
-                    st.session_state.cox_res = None
-                    st.session_state.cox_model_data = None
-                else:
-                    st.session_state.cox_res = res
-                    st.session_state.cox_model_data = (cph, model_data) # เก็บ cph และ data ไว้เช็ค assumption
-                    st.success("Model Fitted Successfully!")
-
-        # แสดงผลลัพธ์ (ดึงจาก Session State)
-        if st.session_state.cox_res is not None:
-            res = st.session_state.cox_res
-            st.dataframe(res.style.format("{:.4f}"))
-            
-            st.markdown("---")
-            st.markdown("##### 🔍 Assumption Check")
-            
-            # Checkbox เพื่อความสะอาดของหน้าจอ
-            check_assump = st.checkbox("Show Proportional Hazards Assumption Check (Schoenfeld Residuals)")
-            
-            if check_assump and st.session_state.cox_model_data:
-                cph, data = st.session_state.cox_model_data
-                
                 try:
-                    with st.spinner("Checking assumptions..."):
-                        # 🟢 เรียกฟังก์ชัน (จะได้ figs_assump เป็น List)
-                        txt_report, figs_assump = survival_lib.check_cph_assumptions(cph, data)
+                    with st.spinner("Fitting Cox Model and Checking Assumptions..."):
+                        # 1. Run Cox Model
+                        cph, res, model_data, err = survival_lib.fit_cox_ph(df, col_time, col_event, covariates)
                         
-                        st.text_area("Assumption Report & Advice:", value=txt_report, height=150)
-                        
-                        # 🟢 วนลูปโชว์กราฟทุกรูป (ถ้ามีหลายตัวแปร)
-                        if figs_assump:
-                            for i, fig in enumerate(figs_assump):
-                                st.pyplot(fig)
-                                # ไม่ต้อง plt.close() ที่นี่ เดี๋ยว Report พัง
-                        
-                        # Prepare Report Elements
-                        elements = [
-                            {'type':'header','data':'Cox Proportional Hazards'},
-                            {'type':'table','data':res},
-                            {'type':'header','data':'Assumption Check (Schoenfeld Residuals)'},
-                            {'type':'text','data':f"<pre>{txt_report}</pre>"}
-                        ]
-                        
-                        # 🟢 เอา List กราฟใส่ลง Report ให้ครบ
-                        if figs_assump:
-                             for fig in figs_assump:
-                                 elements.append({'type':'plot','data':fig})
-                        
-                        report_html = survival_lib.generate_report_survival(f"Cox: {col_time}", elements)
-                        st.download_button("📥 Download Report (Cox)", report_html, "cox_report.html", "text/html")
-                        
+                        if err:
+                            st.error(f"Error: {err}")
+                            st.session_state.cox_res = None
+                            st.session_state.cox_html = None
+                        else:
+                            # 2. Check Assumptions (Auto Run)
+                            txt_report, figs_assump = survival_lib.check_cph_assumptions(cph, model_data)
+                            
+                            st.session_state.cox_res = res
+                            st.success("Analysis Complete!")
+                            
+                            # --- Display Results ---
+                            st.dataframe(res.style.format("{:.4f}"))
+                            
+                            st.markdown("---")
+                            st.markdown("##### 🔍 Proportional Hazards Assumption Check")
+                            
+                            # Show Text Report
+                            if txt_report:
+                                with st.expander("View Assumption Advice (Text)", expanded=False):
+                                    st.text(txt_report)
+                            
+                            # Show Plots (วนลูปโชว์ทุกรูป)
+                            if figs_assump:
+                                st.write("**Schoenfeld Residuals Plots:**")
+                                for fig in figs_assump:
+                                    st.pyplot(fig)
+                                    # ไม่ต้อง plt.close() ที่นี่
+                            else:
+                                st.info("No assumption plots generated (maybe model is valid or too simple).")
+
+                            # --- Generate Report for Download ---
+                            elements = [
+                                {'type':'header','data':'Cox Proportional Hazards'},
+                                {'type':'table','data':res},
+                                {'type':'header','data':'Assumption Check (Schoenfeld Residuals)'},
+                                {'type':'text','data':f"<pre>{txt_report}</pre>"}
+                            ]
+                            if figs_assump:
+                                 for fig in figs_assump:
+                                     elements.append({'type':'plot','data':fig})
+                            
+                            report_html = survival_lib.generate_report_survival(f"Cox: {col_time}", elements)
+                            st.session_state.cox_html = report_html
+
                 except Exception as e:
-                    st.warning(f"Could not plot assumptions: {e}")
+                    st.error(f"An error occurred: {e}")
+
+        # Show Download Button (if result exists)
+        if st.session_state.cox_html:
+             st.download_button("📥 Download Full Report (Cox)", st.session_state.cox_html, "cox_report.html", "text/html")
