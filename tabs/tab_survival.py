@@ -113,14 +113,16 @@ def render(df, var_meta):
                 
                 try:
                     with st.spinner("Checking assumptions..."):
-                        # 🟢 เรียกใช้ฟังก์ชันจาก lib (ง่ายกว่าและได้ Text Advice ด้วย)
-                        txt_report, fig_assump = survival_lib.check_cph_assumptions(cph, data)
+                        # 🟢 เรียกฟังก์ชัน (จะได้ figs_assump เป็น List)
+                        txt_report, figs_assump = survival_lib.check_cph_assumptions(cph, data)
                         
                         st.text_area("Assumption Report & Advice:", value=txt_report, height=150)
                         
-                        if fig_assump:
-                            st.pyplot(fig_assump)
-                            # ไม่ต้อง plt.close ที่นี่ เพราะเดี๋ยวส่งไปทำ report
+                        # 🟢 วนลูปโชว์กราฟทุกรูป (ถ้ามีหลายตัวแปร)
+                        if figs_assump:
+                            for i, fig in enumerate(figs_assump):
+                                st.pyplot(fig)
+                                # ไม่ต้อง plt.close() ที่นี่ เดี๋ยว Report พัง
                         
                         # Prepare Report Elements
                         elements = [
@@ -129,8 +131,11 @@ def render(df, var_meta):
                             {'type':'header','data':'Assumption Check (Schoenfeld Residuals)'},
                             {'type':'text','data':f"<pre>{txt_report}</pre>"}
                         ]
-                        if fig_assump:
-                             elements.append({'type':'plot','data':fig_assump})
+                        
+                        # 🟢 เอา List กราฟใส่ลง Report ให้ครบ
+                        if figs_assump:
+                             for fig in figs_assump:
+                                 elements.append({'type':'plot','data':fig})
                         
                         report_html = survival_lib.generate_report_survival(f"Cox: {col_time}", elements)
                         st.download_button("📥 Download Report (Cox)", report_html, "cox_report.html", "text/html")
