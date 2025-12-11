@@ -23,7 +23,7 @@ def render(df, var_meta):
     col_event = c2.selectbox("💀 Event Variable (1=Event):", all_cols, index=event_idx, key='surv_event')
     
     # Tabs
-    tab_curves, tab_cox = st.tabs(["📉 Survival Curves (KM/NA)", "📊 Cox Regression"])
+    tab_curves, tab_landmark, tab_cox = st.tabs(["📉 Survival Curves (KM/NA)", "📍 Landmark Analysis", "📊 Cox Regression"])
     
     # ==========================
     # TAB 1: Curves (KM & Nelson-Aalen)
@@ -72,7 +72,52 @@ def render(df, var_meta):
                 st.error(f"Error: {e}")
 
     # ==========================
-    # TAB 2: Cox Regression
+    # TAB 2: Landmark Analysis
+    # ==========================
+    with tab_landmark:
+        c1, c2 = st.columns(2)
+        # Auto-detect
+        time_idx = next((i for i, c in enumerate(all_cols) if 'time' in c.lower() or 'dur' in c.lower()), 0)
+        event_idx = next((i for i, c in enumerate(all_cols) if 'event' in c.lower() or 'dead' in c.lower()), min(1, len(all_cols)-1))
+
+        col_time = c1.selectbox("⏳ Time Variable:", all_cols, index=time_idx, key='lm_time')
+        col_event = c2.selectbox("💀 Event Variable (1=Event):", [c for c in all_cols if c != col_time], key='lm_event')
+        
+        # Landmark Slider
+        max_t = df[col_time].dropna().max() if not df.empty and pd.api.types.is_numeric_dtype(df[col_time]) and df[col_time].notna().any() else 100.0
+        landmark_t = st.slider(f"Select Landmark Time ({col_time}):", 0.0, float(max_t), float(max_t) * 0.1, key='lm_slider')
+        
+        col_group = st.selectbox("Compare Group (Optional):", ["None"] + all_cols, key='lm_group')
+
+        if st.button("Run Landmark Analysis", key='btn_lm'):
+            if not pd.api.types.is_numeric_dtype(df[col_time]) or not pd.api.types.is_numeric_dtype(df[col_event]):
+                st.error(f"Time column ('{col_time}') and Event column ('{col_event}') must be numeric.")
+                return
+
+            # 🟢 Filter Data (หัวใจของ Landmark)
+            mask = df[col_time] >= landmark_t
+            df_lm = df[mask].copy()
+            
+            n_excl = len(df) - len(df_lm)
+            st.success(f"**Included:** {len(df_lm)} patients. (**Excluded:** {n_excl} early events/censored)")
+            
+            if len(df_lm) < 5:
+                st.error("Sample size too small after filtering.")
+            else:
+                grp = None if col_group == "None" else col_group
+                fig, stats = survival_lib.fit_km_logrank(df_lm, col_time, col_event, grp)
+                
+                # วาดเส้น Landmark ลงไปในกราฟ
+                ax = fig.gca()
+                ax.axvline(landmark_t, color='red', linestyle='--', label=f'Landmark t={landmark_t}')
+                ax.legend()
+                ax.set_title(f"Landmark Analysis (Survival given t >= {landmark_t})")
+                
+                st.pyplot(fig)
+                st.dataframe(stats)
+
+    # ==========================
+    # TAB 3: Cox Regression
     # ==========================
     with tab_cox:
         covariates = st.multiselect("Select Covariates (Predictors):", [c for c in all_cols if c not in [col_time, col_event]], key='surv_cox_vars')
