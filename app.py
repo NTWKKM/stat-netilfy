@@ -28,7 +28,7 @@ components.html("""
 # --- 3. IMPORTS (ย้ายมาไว้ตรงนี้) ---
 # ถ้า Import พัง user จะเห็น Error สีแดงบนหน้าเว็บ แทนที่จะเห็นหน้าจอโหลดค้าง
 try:
-    from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival, tab_psm
+    from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival, tab_psm, tab_adv_survival
 except Exception as e:
     st.error(f"Critical Error importing modules: {e}")
     st.stop()
