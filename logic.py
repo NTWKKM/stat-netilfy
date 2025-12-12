@@ -142,7 +142,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     if method == 'auto':
         preferred_method = 'firth' if HAS_FIRTH else 'bfgs'
     elif method == 'firth':
-        preferred_method = 'firth'
+        preferred_method = 'firth' if HAS_FIRTH else 'bfgs'
     elif method == 'bfgs':
         preferred_method = 'bfgs'
 
