@@ -310,7 +310,7 @@ def calculate_icc(df, cols):
     # 3. Calculate ICCs
     # ICC(3,1) Consistency: Fixed raters, Single measure
     # Formula: (MSR - MSE) / (MSR + (k-1)MSE)
-    cc3_1 = (MSrow - MSres) / denom_icc3
+    icc3_1 = (MSrow - MSres) / denom_icc3
     
     # ICC(2,1) Absolute Agreement: Random raters, Single measure
     # Formula: (MSR - MSE) / (MSR + (k-1)MSE + (k/n)(MSC - MSE))
