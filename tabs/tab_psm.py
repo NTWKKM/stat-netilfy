@@ -84,10 +84,10 @@ def render(df, _var_meta):
         cat_covs = [c for c in cov_cols if df_analysis[c].dtype == 'object']
         if cat_covs:
             df_analysis = pd.get_dummies(df_analysis, columns=cat_covs, drop_first=True)
-            
-        # ระบุคอลัมน์ Covariates ใหม่หลังจากแปลงแล้ว
-        numeric_cols = df_analysis.select_dtypes(include=np.number).columns.tolist()
-        final_cov_cols = [c for c in numeric_cols if c not in [treat_col, outcome_col, final_treat_col]]
+        # Track new dummy column names    
+        new_cols = [c for c in df_analysis.columns if c not in df.columns]
+        # Replace categorical covs with their dummy versions
+        final_cov_cols = [c for c in cov_cols if c not in cat_covs] + new_cols
     else:
         final_cov_cols = []
 
