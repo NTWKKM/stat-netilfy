@@ -204,7 +204,7 @@ def render(df, var_meta=None):  # var_meta reserved for future use
          """)
         
         # 🟢 เพิ่ม Logic การเลือกอัตโนมัติ (Auto-select)
-        all_cols = df.columns.tolist()
+        # all_cols already defined at module scope
         
         # 1. Logic หาคอลัมน์ที่น่าจะเป็น Rater A
         kv1_default_idx = 0
