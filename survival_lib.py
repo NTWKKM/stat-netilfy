@@ -235,7 +235,7 @@ def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariates)
     
     # 3. ตรวจสอบเบื้องต้น (เช่น start < stop)
     if data.empty:
-        return None, None, "Error: Data is empty after selecting columns and dropping NAs."
+        return None, None, None, "Error: Data is empty after selecting columns and dropping NAs."
          
     if (data[start_col] >= data[stop_col]).any():
         return None, None, None, "Error: Found rows where Start Time >= Stop Time."
