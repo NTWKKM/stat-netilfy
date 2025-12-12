@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
+import html
 from lifelines import KaplanMeierFitter, CoxPHFitter, NelsonAalenFitter, CoxTimeVaryingFitter
 from lifelines.statistics import logrank_test, multivariate_logrank_test
 import io
@@ -253,6 +254,7 @@ def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariates)
         return None, None, None, f"Model Failed: {str(e)}"
 
 # --- 5. Check Assumptions ---
+# --- 5. Check Assumptions ---
 def check_cph_assumptions(cph, data):
     """
     Check proportional hazards assumptions for a fitted Cox model and capture the textual diagnostics and any generated diagnostic plots.
@@ -265,6 +267,10 @@ def check_cph_assumptions(cph, data):
         tuple:
             advice_text (str): Textual diagnostic output produced by lifelines' check_assumptions (or an error message if the check failed).
             figs (list[matplotlib.figure.Figure]): List of matplotlib Figure objects created by the diagnostic checks; empty if none or on error.
+            
+    Note:
+        This function returns Matplotlib figures. The caller is responsible for closing them 
+        (e.g., using plt.close(fig)) after use to avoid memory leaks.
     """
     try:
         f = io.StringIO()
@@ -311,24 +317,27 @@ def generate_report_survival(title, elements):
     </style>
     """
     
-    html = f"<!DOCTYPE html><html><head>{css_style}</head><body>"
-    html += f"<div class='report-container'><h2>{title}</h2>"
+    # แก้ไข 1: ใช้ html.escape กับ title
+    html_doc = f"<!DOCTYPE html><html><head>{css_style}</head><body>"
+    html_doc += f"<div class='report-container'><h2>{html.escape(title)}</h2>"
     
     for el in elements:
         if el['type'] == 'text':
-            html += f"<p>{el['data']}</p>"
+            # แก้ไข 2: ใช้ html.escape กับ text content
+            html_doc += f"<p>{html.escape(str(el['data']))}</p>"
         elif el['type'] == 'header':
-             html += f"<h4>{el['data']}</h4>"
+            # แก้ไข 3: ใช้ html.escape และแก้ Indentation ให้ตรงกับบรรทัดอื่น
+            html_doc += f"<h4>{html.escape(str(el['data']))}</h4>"
         elif el['type'] == 'table':
-            html += el['data'].to_html(classes='table')
+            html_doc += el['data'].to_html(classes='table')
         elif el['type'] == 'plot':
             buf = io.BytesIO()
             el['data'].savefig(buf, format='png', bbox_inches='tight')
             plt.close(el['data'])
             uri = base64.b64encode(buf.getvalue()).decode('utf-8')
-            html += f'<img src="data:image/png;base64,{uri}" style="max-width:100%;"/>'
+            html_doc += f'<img src="data:image/png;base64,{uri}" style="max-width:100%;"/>'
             
-    html += """<div class='report-footer'>
+    html_doc += """<div class='report-footer'>
     &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM n Donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
     </div></body></html>"""
-    return html
+    return html_doc
