@@ -38,7 +38,9 @@ def render(df, _var_meta):
     
     # Covariates Selection
     cov_candidates = [c for c in all_cols if c not in [treat_col, outcome_col]]
-    default_covs = [c for c in cov_candidates if any(x in c.lower() for x in ['age', 'sex', 'bmi', 'score', 'hyper'])]
+    # [แก้ไข 3] เอา 'score' ออกจาก default เพื่อเลี่ยง Risk_Score ที่ทำให้เกิด Perfect Separation
+    default_covs = [c for c in cov_candidates if any(x in c.lower() for x in ['age', 'sex', 'bmi', 'hyper'])]
+    
     cov_cols = st.multiselect("📊 Covariates (Confounders):", cov_candidates, 
                               default=default_covs,
                               key='psm_cov')
@@ -93,7 +95,8 @@ def render(df, _var_meta):
 
     # PSM Settings
     with st.expander("⚙️ Advanced Settings"):
-        caliper = st.slider("Caliper Width (SD of Logit):", 0.05, 1.0, 0.2, 0.05)
+        # [แก้ไข 4] ปรับค่าเริ่มต้น Caliper เป็น 0.5 เพื่อให้ Match ง่ายขึ้น
+        caliper = st.slider("Caliper Width (SD of Logit):", 0.05, 1.0, 0.5, 0.05)
     
     # --- 3. Run Analysis ---
     if st.button("🚀 Run Matching", key='btn_psm'):
