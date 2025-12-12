@@ -61,6 +61,7 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
     data = clean_survival_data(df, time_col, event_col, [])
     if group_col:
         data[group_col] = df.loc[data.index, group_col]
+        data = data.dropna(subset=[group_col])
     
     kmf = KaplanMeierFitter()
     fig, ax = plt.subplots(figsize=(8, 5))
@@ -69,7 +70,7 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
     
     if group_col:
         # เปรียบเทียบระหว่างกลุ่ม
-        groups = sorted(data[group_col].unique())
+        groups = sorted(data[group_col].unique(), key=lambda x: str(x))
         T_list, E_list = [], []
         
         for g in groups:
