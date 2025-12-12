@@ -83,10 +83,12 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             final_row_order_base.insert(0, v1_pos_original)
     else:
         def custom_sort(label):
-            try: return float(label)
-            except (ValueError, TypeError): return str(label)
-        final_row_order_base.sort(key=custom_sort, reverse=True)
-    final_row_order = final_row_order_base + ['Total']
+            try:
+                # numeric labels first, then non‑numeric; both sortable
+                return (0, float(label))
+            except (ValueError, TypeError):
+                return (1, str(label))
+        final_col_order_base.sort(key=custom_sort, reverse=True)
 
     # Reindex
     tab_raw = tab_raw.reindex(index=final_row_order, columns=final_col_order)
@@ -299,18 +301,25 @@ def calculate_icc(df, cols):
     MSrow = SSrow / df_row
     MScol = SScol / df_col
     MSres = SSres / df_res
-    
+
+     # Guard against zero denominators (no variance)
+    denom_icc3 = MSrow + (k - 1) * MSres
+    denom_icc2 = MSrow + (k - 1) * MSres + (k / n) * (MScol - MSres)
+    if denom_icc3 == 0 or denom_icc2 == 0:
+        return None, "Insufficient variance to compute ICC (denominator = 0).", None
     # 3. Calculate ICCs
     # ICC(3,1) Consistency: Fixed raters, Single measure
     # Formula: (MSR - MSE) / (MSR + (k-1)MSE)
-    icc3_1 = (MSrow - MSres) / (MSrow + (k - 1) * MSres)
+    cc3_1 = (MSrow - MSres) / denom_icc3
     
     # ICC(2,1) Absolute Agreement: Random raters, Single measure
     # Formula: (MSR - MSE) / (MSR + (k-1)MSE + (k/n)(MSC - MSE))
-    icc2_1 = (MSrow - MSres) / (MSrow + (k - 1) * MSres + (k / n) * (MScol - MSres))
+    icc2_1 = (MSrow - MSres) / denom_icc2
     
     # Interpretation (Koo & Li, 2016)
     def interpret_icc(v):
+        # Treat NaN/inf as undefined rather than "Excellent"
+        if not np.isfinite(v): return "Undefined"
         if v < 0.5: return "Poor"
         elif v < 0.75: return "Moderate"
         elif v < 0.9: return "Good"
