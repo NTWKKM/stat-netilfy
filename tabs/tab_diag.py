@@ -234,7 +234,8 @@ def render(df, var_meta=None):  # var_meta reserved for future use
         kv2 = k2.selectbox("Rater/Method 2:", all_cols, index=kv2_default_idx, key='kappa_v2_diag')
         
         k_run, k_dl = st.columns([1, 1])
-        if 'html_output_kappa' not in st.session_state: st.session_state.html_output_kappa = None
+        if 'html_output_kappa' not in st.session_state:
+            st.session_state.html_output_kappa = None
         
         if k_run.button("🤝 Calculate Kappa", key='btn_kappa_run'):
             res_df, err, conf_mat = diag_test.calculate_kappa(df, kv1, kv2)
