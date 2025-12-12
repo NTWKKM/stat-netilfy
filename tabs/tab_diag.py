@@ -317,4 +317,5 @@ def render(df, var_meta=None):  # var_meta reserved for future use
         with dl_col:
             if st.session_state.html_output_desc:
                 st.download_button("📥 Download Report", st.session_state.html_output_desc, "desc.html", "text/html", key='dl_desc_diag')
-            else: st.button("📥 Download Report", disabled=True, key='ph_desc_diag')
+            else:
+                st.button("📥 Download Report", disabled=True, key='ph_chi_diag')
