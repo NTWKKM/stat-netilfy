@@ -189,7 +189,7 @@ def render(df, var_meta=None):  # var_meta reserved for future use
                 st.download_button("📥 Download Report", st.session_state.html_output_chi, "chi2_diag.html", "text/html", key='dl_chi_diag')
             else: st.button("📥 Download Report", disabled=True, key='ph_chi_diag')
        
-       # --- 🟢 NEW: Agreement (Kappa) ---
+    # --- 🟢 NEW: Agreement (Kappa) ---
     with sub_tab3:
         st.markdown("##### Agreement Analysis (Cohen's Kappa)")
         st.info("""
