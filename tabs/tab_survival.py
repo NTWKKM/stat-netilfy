@@ -7,12 +7,6 @@ import html
 def render(df, _var_meta):
     """
     Render an interactive Streamlit UI for survival analysis including Kaplan-Meier, Nelson-Aalen, landmark analysis, and Cox regression workflows.
-    
-    Builds a three-tab interface that lets users select time and event columns (with automatic detection), compare groups, run Kaplan-Meier or Nelson-Aalen estimations, perform landmark filtering and analysis at a chosen timepoint, fit a Cox proportional hazards model with covariate selection, check proportional-hazards assumptions, display results and plots, and generate downloadable HTML reports for each analysis.
-    
-    Parameters:
-        df (pandas.DataFrame): Input dataset containing time-to-event and event indicator columns along with candidate covariates.
-        _var_meta (dict-like): Optional variable metadata used by UI or reporting (column labels, types, descriptions); may be unused for some flows but supplied for report generation or future extensions.
     """
     st.subheader("5. Survival Analysis")
     st.info("""
@@ -21,13 +15,21 @@ def render(df, _var_meta):
 * **Hazard Ratio (HR):** >1 Increased Hazard (Risk), <1 Decreased Hazard (Protective).
 """)
     
-   # Global Selectors
+    # [จุดสำคัญ] ต้องประกาศ all_cols ตรงนี้ก่อนนำไปใช้คำนวณข้างล่าง
+    all_cols = df.columns.tolist()
+    
+    if len(all_cols) < 2:
+        st.error("Dataset must contain at least 2 columns (time and event).")
+        return
+        
+    # Global Selectors
     c1, c2 = st.columns(2)
     
-    # [แก้ไข 1] Auto-detect logic: ให้ความสำคัญกับ Time_Stop หรือ stop ก่อน
+    # Auto-detect logic: ให้ความสำคัญกับ Time_Stop หรือ stop ก่อน
     time_idx = 0
     # เรียงลำดับความสำคัญ keywords: 'stop' > 'time' > 'dur'
     for k in ['stop', 'time', 'dur']:
+        # บรรทัดนี้จะไม่ Error แล้วเพราะ all_cols ถูกประกาศไว้ด้านบนแล้ว
         found = next((i for i, c in enumerate(all_cols) if k in c.lower()), None)
         if found is not None:
             time_idx = found
@@ -93,12 +95,14 @@ def render(df, _var_meta):
     with tab_landmark:   
         # Calculate Max Time
         max_t = df[col_time].dropna().max() if not df.empty and pd.api.types.is_numeric_dtype(df[col_time]) and df[col_time].notna().any() else 100.0
+        
+        # ป้องกัน Error หาก max_t เป็น 0 (เช่น กรณีเลือก Time_Start)
         if max_t <= 0: max_t = 1.0 
         
         st.write(f"**Select Landmark Time ({col_time})**")
         
-        # [แก้ไข 2] Landmark Interactive Input (Slider + Number Box Sync)
-        # Initialize Session State สำหรับ Landmark Value
+        # Landmark Interactive Input (Slider + Number Box Sync)
+        # Initialize Session State
         if 'landmark_val' not in st.session_state:
             st.session_state.landmark_val = float(max_t) * 0.1
 
@@ -128,7 +132,7 @@ def render(df, _var_meta):
                 key='lm_number_widget',
                 value=st.session_state.landmark_val,
                 on_change=update_from_number,
-                step=1.0, # Step 1.0 เพื่อให้พิมพ์ง่ายขึ้น
+                step=1.0, 
                 label_visibility="collapsed"
             )
             
@@ -173,14 +177,14 @@ def render(df, _var_meta):
                 report_html = survival_lib.generate_report_survival(f"Landmark Analysis: {col_time} (t >= {landmark_t})", elements)
                 st.download_button("📥 Download Report (Landmark)", report_html, "lm_report.html", "text/html")
                 plt.close(fig)
-                
+    
     # ==========================
     # TAB 3: Cox Regression
     # ==========================
     with tab_cox:
         covariates = st.multiselect("Select Covariates (Predictors):", [c for c in all_cols if c not in [col_time, col_event]], key='surv_cox_vars')
         
-        # State Management (ยังคงไว้เผื่อ Download Button)
+        # State Management
         if 'cox_res' not in st.session_state:
             st.session_state.cox_res = None
         if 'cox_html' not in st.session_state:
