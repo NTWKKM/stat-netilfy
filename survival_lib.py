@@ -145,6 +145,7 @@ def fit_nelson_aalen(df, time_col, event_col, group_col=None):
     data = clean_survival_data(df, time_col, event_col, [])
     if group_col:
         data[group_col] = df.loc[data.index, group_col]
+        data = data.dropna(subset=[group_col])
     naf = NelsonAalenFitter()
     fig, ax = plt.subplots(figsize=(8, 5))
     stats_res = {}
