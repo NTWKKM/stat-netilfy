@@ -142,62 +142,78 @@ def render(df, _var_meta):
             st.session_state.cox_html = None
 
         if st.button("🚀 Run Cox Model & Check Assumptions", key='btn_run_cox'):
-            if not covariates:
-                st.error("Please select at least one covariate.")
-            else:
-                try:
-                    with st.spinner("Fitting Cox Model and Checking Assumptions..."):
-                        # 1. Run Cox Model
-                        cph, res, model_data, err = survival_lib.fit_cox_ph(df, col_time, col_event, covariates)
-                        
-                        if err:
-                            st.error(f"Error: {err}")
-                            st.session_state.cox_res = None
-                            st.session_state.cox_html = None
-                        else:
-                            # 2. Check Assumptions (Auto Run)
-                            txt_report, figs_assump = survival_lib.check_cph_assumptions(cph, model_data)
-                            
-                            st.session_state.cox_res = res
-                            st.success("Analysis Complete!")
-                            
-                            # --- Display Results ---
-                            st.dataframe(res.style.format("{:.4f}"))
-                            
-                            st.markdown("##### 🔍 Proportional Hazards Assumption Check")
-                            
-                            # Show Text Report
-                            if txt_report:
-                                with st.expander("View Assumption Advice (Text)", expanded=False):
-                                    st.text(txt_report)
-                            
-                            # Show Plots (วนลูปโชว์ทุกรูป)
-                            if figs_assump:
-                                st.write("**Schoenfeld Residuals Plots:**")
-                                for fig in figs_assump:
-                                    st.pyplot(fig)
-                                    plt.close(fig)
-                            else:
-                                st.info("No assumption plots generated (maybe model is valid or too simple).")
-
-                            # --- Generate Report for Download ---
-                            elements = [
-                                {'type':'header','data':'Cox Proportional Hazards'},
-                                {'type':'table','data':res},
-                                {'type':'header','data':'Assumption Check (Schoenfeld Residuals)'},
-                                {'type':'text','data':f"<pre>{html.escape(txt_report)}</pre>"}
-                            ]
-                            if figs_assump:
-                                 for fig in figs_assump:
-                                     elements.append({'type':'plot','data':fig})
-                            
-                            report_html = survival_lib.generate_report_survival(f"Cox: {col_time}", elements)
-                            st.session_state.cox_html = report_html
-
-                except Exception as e:
-                    st.error(f"An error occurred: {e}")
+    if not covariates:
+        st.error("Please select at least one covariate.")
+    else:
+        try:
+            with st.spinner("Fitting Cox Model and Checking Assumptions..."):
+                # 1. Run Cox Model
+                cph, res, model_data, err = survival_lib.fit_cox_ph(df, col_time, col_event, covariates)
+                
+                if err:
+                    st.error(f"Error: {err}")
                     st.session_state.cox_res = None
                     st.session_state.cox_html = None
+                else:
+                    # 2. Check Assumptions (Auto Run)
+                    txt_report, figs_assump = survival_lib.check_cph_assumptions(cph, model_data)
+                    
+                    st.session_state.cox_res = res
+                    st.success("Analysis Complete!")
+                    
+                    # --- Display Results ---
+                    st.dataframe(res.style.format("{:.4f}"))
+                    
+                    st.markdown("##### 🔍 Proportional Hazards Assumption Check")
+                    
+                    # Show Text Report
+                    if txt_report:
+                        with st.expander("View Assumption Advice (Text)", expanded=False):
+                            st.text(txt_report)
+                    
+                    # Show Plots
+                    if figs_assump:
+                        st.write("**Schoenfeld Residuals Plots:**")
+                        for fig in figs_assump:
+                            st.pyplot(fig)
+                            plt.close(fig)
+                    else:
+                        st.info("No assumption plots generated (maybe model is valid or too simple).")
+
+                    # --- Generate Report for Download ---
+                    elements = [
+                        {'type':'header','data':'Cox Proportional Hazards'},
+                        {'type':'table','data':res},
+                        {'type':'header','data':'Assumption Check (Schoenfeld Residuals)'},
+                        {'type':'text','data':f"<pre>{html.escape(txt_report)}</pre>"}
+                    ]
+                    if figs_assump:
+                         for fig in figs_assump:
+                             elements.append({'type':'plot','data':fig})
+                    
+                    report_html = survival_lib.generate_report_survival(f"Cox: {col_time}", elements)
+                    st.session_state.cox_html = report_html
+
+        except (ValueError, TypeError) as e:
+            st.error(f"Data validation error: {e}")
+            st.session_state.cox_res = None
+            st.session_state.cox_html = None
+        except KeyError as e:
+            st.error(f"Missing required column: {e}")
+            st.session_state.cox_res = None
+            st.session_state.cox_html = None
+        except (RuntimeError, AttributeError) as e:
+            st.error(f"Model fitting error: {e}")
+            st.session_state.cox_res = None
+            st.session_state.cox_html = None
+        except Exception as e:
+            # Log unexpected exceptions for debugging
+            import traceback
+            st.error(f"An unexpected error occurred: {e}")
+            with st.expander("🐛 Debug Info (click to expand)"):
+                st.code(traceback.format_exc())
+            st.session_state.cox_res = None
+            st.session_state.cox_html = None
 
         # Show Download Button (if result exists)
         if st.session_state.cox_html:
