@@ -4,12 +4,6 @@ import numpy as np
 import time
 import streamlit.components.v1 as components 
 
-import streamlit as st
-import pandas as pd
-import numpy as np
-import time
-import streamlit.components.v1 as components 
-
 # ==========================================
 # 1. ย้าย CONFIG และ LOADING SCREEN KILLER มาไว้บนสุด
 # ==========================================
@@ -56,59 +50,78 @@ st.sidebar.header("1. Data Management")
 # Example Data Generator
 if st.sidebar.button("📄 Load Example Data"):
     np.random.seed(42)
-    n = 300 # 🟢 ปรับเพิ่ม n เล็กน้อยเพื่อให้ PSM เห็นผลชัดขึ้น
+    n = 500 # 🟢 เพิ่ม N เป็น 500 เพื่อให้ p-value significant ง่ายขึ้น
     
-    # 🟢 1. Predictors (สร้างตัวแปรพื้นฐานก่อน เพื่อใช้กำหนด Bias)
-    age = np.random.normal(60, 10, n).astype(int)
-    sex = np.random.choice([0, 1], n)
-    bmi = np.random.normal(27, 4, n).round(1)
+    # --- 1. Baseline Characteristics (Predictors) ---
+    # Age: Normal Dist
+    age = np.random.normal(60, 12, n).astype(int)
     
-    # 🟢 2. Confounder: Hypertension (ขึ้นอยู่กับ Age และ BMI)
-    prob_hyp = 1 / (1 + np.exp(-( -3 + 0.05*age + 0.1*bmi )))
-    hypertension = np.random.binomial(1, prob_hyp)
+    # Sex: 0/1 (Balanced)
+    sex = np.random.binomial(1, 0.5, n)
+    
+    # BMI: Normal Dist
+    bmi = np.random.normal(25, 4, n).round(1)
+    
+    # Hypertension (Confounder): สัมพันธ์กับ Age และ BMI อย่างชัดเจน (Logistic)
+    # logit = -10 + 0.1*Age + 0.1*BMI
+    p_hyp = 1 / (1 + np.exp(-( -10 + 0.1*age + 0.15*bmi )))
+    hypertension = np.random.binomial(1, p_hyp)
 
-    # 🟢 3. Group Variable (Treatment Selection Bias สำหรับ PSM)
-    # คนที่อายุเยอะและมีความดัน มีโอกาสได้ยาใหม่ (Group 1) มากกว่า -> เกิด Selection Bias
-    prob_treat = 1 / (1 + np.exp(-( -2 + 0.04*age + 1.5*hypertension )))
-    group = np.random.binomial(1, prob_treat) 
-
-    # 4. Risk_Score (Continuous, significantly different between groups)
-    # Group 0 (Standard) has higher score
-    risk_score_base = np.where(group == 0, 6 + np.random.normal(0, 1.5), 4 + np.random.normal(0, 1.5))
-    risk_score = risk_score_base + 0.05 * age 
+    # --- 2. Treatment Assignment (Selection Bias for PSM) ---
+    # กำหนดให้ Group สัมพันธ์กับทุกตัวแปร (Age, Sex, BMI, HT) เพื่อให้ Table 1 Significant (Imbalanced)
+    # และเพื่อให้ PSM มีหน้าที่ในการแก้ Bias นี้
+    logit_treat = -3 + 0.05*age + 0.5*sex + 0.1*bmi + 1.2*hypertension
+    p_treat = 1 / (1 + np.exp(-logit_treat))
+    group = np.random.binomial(1, p_treat) 
+    
+    # --- 3. Outcome & Risk Score ---
+    # Risk Score: สร้างให้ต่างกันชัดเจนระหว่างกลุ่ม (T-test Sig)
+    # Group 1 (New Drug) ควรจะมี Risk Score ต่ำกว่า Group 0 (Standard) หรือกลับกัน
+    base_score = np.where(group == 1, 3.5, 6.0) # Mean ต่างกันเยอะ
+    risk_score = base_score + np.random.normal(0, 1.5, n) + 0.02*age
     risk_score = risk_score.round(2)
     
-    # 5. Outcome_Disease (Binary)
-    log_p = 1 / (1 + np.exp(-(-4 + 0.8 * risk_score - 1.2 * group))) 
-    outcome_disease = np.random.binomial(1, log_p)
+    # Outcome Disease (Binary): สัมพันธ์กับ Risk Score และ Group อย่างชัดเจน (Logistic/Chi2 Sig)
+    # ใส่ effect ของ Hypertension เข้าไปด้วยเพื่อให้ Chi-Square (HT vs Outcome) significant
+    logit_outcome = -4 + 0.8*risk_score - 1.5*group + 1.0*hypertension
+    p_outcome = 1 / (1 + np.exp(-logit_outcome))
+    outcome_disease = np.random.binomial(1, p_outcome)
     
-    # 6. Correlation Variable: Inflammation_Marker
-    inflammation_marker = 5 + 0.8 * bmi + np.random.normal(0, 1.0, n)
+    # --- 4. Correlation Variable ---
+    # Inflammation Marker: สัมพันธ์กับ BMI แบบ Linear (Pearson r สูง)
+    inflammation_marker = 10 + 1.5 * bmi + np.random.normal(0, 5, n)
     inflammation_marker = inflammation_marker.round(1)
 
-    # 7. Survival Variables (Time and Event)
-    scale_param = np.where(group == 0, 150, 400)
+    # --- 5. Survival Analysis ---
+    # Time: Group 1 อยู่ได้นานกว่า Group 0 ชัดเจน (Log-rank Sig)
+    # Scale (Mean survival time): Group 0=200 days, Group 1=500 days
+    scale_param = np.where(group == 0, 200, 500)
     time_days = np.random.exponential(scale=scale_param, size=n)
-    time_days = time_days.clip(min=1, max=1000).astype(int) 
+    time_days = time_days.clip(min=1, max=1800).astype(int)
     
-    event_prob_base = np.where(group == 0, 0.8, 0.4)
-    event_prob = event_prob_base - 0.0003 * time_days
-    event_prob = event_prob.clip(min=0.1, max=0.9) 
-    event_death = np.random.binomial(1, event_prob)
+    # Event: สัมพันธ์กับ Time (ยิ่งนานยิ่งตายน้อยลง? หรือตัด Censored)
+    # ให้ Group 0 ตายเยอะกว่า (Event rate สูง)
+    p_event = np.where(group == 0, 0.7, 0.3) 
+    event_death = np.random.binomial(1, p_event)
     
-    # 8. Agreement Variables (Cohen's Kappa)
-    diag_dr_a = np.random.binomial(1, 0.3, n)
+    # For Time-Dependent Cox (Structure only)
+    time_start = np.zeros(n, dtype=int)
+    time_stop = time_days # ใช้เวลาตายเป็นจุดสิ้นสุด
+    
+    # --- 6. Reliability & Agreement ---
+    # Cohen's Kappa: Dr A vs Dr B (High Agreement)
+    diag_dr_a = np.random.binomial(1, 0.4, n)
     diag_dr_b = diag_dr_a.copy()
-    num_mismatch = int(0.12 * n) 
-    mismatch_idx = np.random.choice(n, num_mismatch, replace=False)
-    diag_dr_b[mismatch_idx] = 1 - diag_dr_b[mismatch_idx] 
+    # Flip 5% of data to create minor disagreement (High Kappa)
+    mismatch_idx = np.random.choice(n, int(0.05*n), replace=False)
+    diag_dr_b[mismatch_idx] = 1 - diag_dr_b[mismatch_idx]
+    
+    # ICC: Machine 1 vs Machine 2 (High Correlation)
+    sbp_m1 = np.random.normal(130, 15, n).round(0)
+    sbp_m2 = sbp_m1 + np.random.normal(0, 2, n) # Noise น้อยมาก
+    sbp_m2 = sbp_m2.round(0)
 
-    # 9. Reliability Variables (ICC)
-    sbp_machine_1 = np.random.normal(120, 15, n).round(0)
-    sbp_machine_2 = sbp_machine_1 + np.random.normal(2, 3, n) 
-    sbp_machine_2 = sbp_machine_2.round(0)
-
-    # Create DataFrame and Metadata
+    # Create DataFrame
     data = {
         'ID': range(1, n+1),
         'Group_Treatment': np.where(group == 0, 'Standard Care', 'New Drug'), 
@@ -118,13 +131,16 @@ if st.sidebar.button("📄 Load Example Data"):
         'Hypertension': hypertension, 
         'Risk_Score': risk_score, 
         'Inflammation_Marker': inflammation_marker, 
-        'Outcome_Disease': outcome_disease, 
-        'Time_Days': time_days, 
+        'Outcome_Disease': outcome_disease,
+        # Survival Cols
+        'Time_Start': time_start, # เพิ่มเพื่อรองรับ Time Cox Tab
+        'Time_Stop': time_stop,
         'Event_Death': event_death,
+        # Diag/Rel Cols
         'Diagnosis_Dr_A': diag_dr_a,
         'Diagnosis_Dr_B': diag_dr_b,
-        'SBP_Machine_1': sbp_machine_1,
-        'SBP_Machine_2': sbp_machine_2
+        'SBP_Machine_1': sbp_m1,
+        'SBP_Machine_2': sbp_m2
     }
     
     st.session_state.df = pd.DataFrame(data)
@@ -211,8 +227,7 @@ if st.session_state.df is not None:
     with t4: tab_logit.render(df_clean, st.session_state.var_meta)
     with t5: tab_survival.render(df_clean, st.session_state.var_meta)
     with t6: tab_psm.render(df_clean, st.session_state.var_meta)
-    with t7:
-        tab_adv_survival.render(df_clean, st.session_state.var_meta)
+    with t7: tab_adv_survival.render(df_clean, st.session_state.var_meta)
         
 else:
     st.info("👈 Please load example data or upload a file to start.")
@@ -251,3 +266,4 @@ st.markdown("""
     &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit; font-weight:bold;">NTWKKM n Donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
 </div>
 """, unsafe_allow_html=True)
+}
