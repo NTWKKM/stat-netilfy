@@ -221,13 +221,20 @@ if st.session_state.df is not None:
         custom_na = st.session_state.get('custom_na_list', [])
         df_clean = tab_data.get_clean_data(st.session_state.df, custom_na)
 
-    with t1: tab_table1.render(df_clean, st.session_state.var_meta)
-    with t2: tab_diag.render(df_clean, st.session_state.var_meta)
-    with t3: tab_corr.render(df_clean)
-    with t4: tab_logit.render(df_clean, st.session_state.var_meta)
-    with t5: tab_survival.render(df_clean, st.session_state.var_meta)
-    with t6: tab_psm.render(df_clean, st.session_state.var_meta)
-    with t7: tab_adv_survival.render(df_clean, st.session_state.var_meta)
+    with t1:
+        tab_table1.render(df_clean, st.session_state.var_meta)
+    with t2:
+        tab_diag.render(df_clean, st.session_state.var_meta)
+    with t3:
+        tab_corr.render(df_clean)
+    with t4:
+        tab_logit.render(df_clean, st.session_state.var_meta)
+    with t5:
+        tab_survival.render(df_clean, st.session_state.var_meta)
+    with t6:
+        tab_psm.render(df_clean, st.session_state.var_meta)
+    with t7:
+        tab_adv_survival.render(df_clean, st.session_state.var_meta)
         
 else:
     st.info("👈 Please load example data or upload a file to start.")
