@@ -57,8 +57,7 @@ def render(df, _var_meta):
                 if "Kaplan-Meier" in plot_type:
                     # Run KM
                     fig, stats_df = survival_lib.fit_km_logrank(df, col_time, col_event, grp)
-                    st.pyplot(fig)
-                    plt.close(fig) 
+                    st.pyplot(fig) 
                     
                     st.markdown("##### Log-Rank / Statistics")
                     st.dataframe(stats_df)
@@ -71,7 +70,6 @@ def render(df, _var_meta):
                     # Run Nelson-Aalen
                     fig, stats_df = survival_lib.fit_nelson_aalen(df, col_time, col_event, grp)
                     st.pyplot(fig)
-                    plt.close(fig) 
                     
                     st.markdown("##### Summary Statistics (N / Events)")
                     st.dataframe(stats_df)
