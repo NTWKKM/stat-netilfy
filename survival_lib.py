@@ -291,6 +291,9 @@ def check_cph_assumptions(cph, data):
         figs = [plt.figure(n) for n in new_figs_nums]
         
         return advice_text, figs
+        
+    except (KeyboardInterrupt, SystemExit): # <--- 🟢 เพิ่มการ Re-raise
+        raise
     except Exception as e:
         return f"Error checking assumptions: {str(e)}", []
 
