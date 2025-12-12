@@ -209,6 +209,7 @@ if st.session_state.df is not None:
     with t4: tab_logit.render(df_clean, st.session_state.var_meta)
     with t5: tab_survival.render(df_clean, st.session_state.var_meta)
     with t6: tab_psm.render(df_clean, st.session_state.var_meta)
+    with t7: tab_adv_survival.render(df_clean, st.session_state.var_meta)
     
     # 🟢 FIX 3: แก้ไขการเรียกใช้ฟังก์ชันให้ส่ง argument ครบ 2 ตัว
     with t7: 
