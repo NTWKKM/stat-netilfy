@@ -22,8 +22,9 @@ def render(df, _var_meta):
     
     all_cols = df.columns.tolist()
     if len(all_cols) < 2:
-    st.error("Dataset must contain at least 2 columns (time and event).")
-    return
+        st.error("Dataset must contain at least 2 columns (time and event).")
+        return
+        
     # Global Selectors
     c1, c2 = st.columns(2)
     # Auto-detect logic
