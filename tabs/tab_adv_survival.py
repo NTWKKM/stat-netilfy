@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import survival_lib
 
-# 🟢 FIX 1: ต้องรับ var_meta เพื่อให้สอดคล้องกับ app.py และโครงสร้างโปรเจกต์
 def render(df, _var_meta):
     """
     Render a Streamlit UI for fitting a time-dependent (start-stop) Cox proportional hazards model.
@@ -11,15 +10,14 @@ def render(df, _var_meta):
     
     Parameters:
         df (pandas.DataFrame): Input dataset in long (start-stop) format containing ID, start, stop, event, and covariate columns.
-        _var_meta (Any): Optional variable metadata (not required by the UI; provided for compatibility with the tabs API).
+        var_meta (Any): Optional variable metadata (not required by the UI; provided for compatibility with the tabs API).
     """
     st.subheader("⏳ Advanced Survival Analysis")
     st.info("""
-**Modules:**
-* **Time-Dependent Cox:** For variables that change over time (Requires Long-Format Data: Start-Stop).
-""")
+    **Modules:**
+    * **Time-Dependent Cox:** For variables that change over time (Requires Long-Format Data: Start-Stop).
+    """)
 
-    # 🟢 FIX 2: กำหนดค่า all_cols ที่หายไป
     all_cols = df.columns.tolist() 
 
     # ==========================
@@ -30,7 +28,6 @@ def render(df, _var_meta):
     c1, c2, c3, c4 = st.columns(4)
     id_col = c1.selectbox("🆔 ID Column:", all_cols, key='td_id')
     
-    # เพื่อความง่ายในการเลือก: ใช้ all_cols ใน selectbox แรก, และใช้ logic กรองใน list comprehensions
     start_col = c2.selectbox("▶️ Start Time:", [c for c in all_cols if c != id_col], key='td_start')
     stop_col = c3.selectbox("⏹️ Stop Time:", [c for c in all_cols if c not in [id_col, start_col]], key='td_stop')
     event_col = c4.selectbox("💀 Event (at Stop):", [c for c in all_cols if c not in [id_col, start_col, stop_col]], key='td_event')
@@ -58,3 +55,35 @@ def render(df, _var_meta):
                     st.success("Model Converged!")
                     st.dataframe(res.style.format("{:.4f}"))
                     st.caption("Interpretation: HR > 1 indicates increased risk.")
+                    
+                    # Generate HTML report
+                    report_elements = [
+                        ("header", "Time-Dependent Cox Regression Results"),
+                        ("text", f"**Model Configuration:**"),
+                        ("text", f"- ID Column: {id_col}"),
+                        ("text", f"- Start Time: {start_col}"),
+                        ("text", f"- Stop Time: {stop_col}"),
+                        ("text", f"- Event: {event_col}"),
+                        ("text", f"- Covariates: {', '.join(covs)}"),
+                        ("header2", "Model Results"),
+                        ("table", res),
+                        ("text", "**Interpretation:** Hazard Ratio (HR) > 1 indicates increased risk; HR < 1 indicates decreased risk. P-values < 0.05 suggest statistical significance.")
+                    ]
+                    
+                    html_report = survival_lib.generate_report_survival(
+                        "Time-Dependent Cox Regression Analysis",
+                        report_elements
+                    )
+                    
+                    # Store in session state
+                    st.session_state["html_output_adv_survival"] = html_report
+    
+    # Download button (appears when report exists)
+    if "html_output_adv_survival" in st.session_state and st.session_state["html_output_adv_survival"]:
+        st.download_button(
+            label="📥 Download Full Report (HTML)",
+            data=st.session_state["html_output_adv_survival"],
+            file_name="adv_survival_report.html",
+            mime="text/html",
+            key="download_adv_survival"
+        )
