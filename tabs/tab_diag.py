@@ -131,7 +131,7 @@ def render(df, var_meta=None):  # var_meta reserved for future use
         )
         
         # Positive Label Selectors
-        def get_pos_label_settings(df, col_name):
+        def get_pos_label_settings(df: pd.DataFrame, col_name: str) -> tuple[list[str], int]:
             """
             Compute candidate positive-label values for a column and determine a default selection index.
             
@@ -162,7 +162,8 @@ def render(df, var_meta=None):  # var_meta reserved for future use
         st.caption("Select Positive Label for Risk/Odds Ratio calculation (default is '1'):")
         
         run_col, dl_col = st.columns([1, 1])
-        if 'html_output_chi' not in st.session_state: st.session_state.html_output_chi = None
+        if 'html_output_chi' not in st.session_state: 
+            st.session_state.html_output_chi = None
 
         if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run_diag'): # ✅ Key ไม่ซ้ำ
             tab, stats, msg, risk_df = diag_test.calculate_chi2(
@@ -279,7 +280,8 @@ def render(df, var_meta=None):  # var_meta reserved for future use
         icc_cols = st.multiselect("Select Variables (Raters/Methods):", all_cols, default=default_icc_cols, key='icc_vars_diag')
         
         icc_run, icc_dl = st.columns([1, 1])
-        if 'html_output_icc' not in st.session_state: st.session_state.html_output_icc = None
+        if 'html_output_icc' not in st.session_state: 
+            st.session_state.html_output_icc = None
         
         if icc_run.button("📏 Calculate ICC", key='btn_icc_run'):
             res_df, err, anova_df = diag_test.calculate_icc(df, icc_cols)
