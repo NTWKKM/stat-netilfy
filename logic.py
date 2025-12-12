@@ -67,7 +67,10 @@ def run_binary_logit(y, X, method='default'):
             fl.fit(X_const, y)
             
             # แปลงผลลัพธ์ให้ตรงกับ Format เดิม (Series/DataFrame)
-            params = pd.Series(fl.coef_, index=X_const.columns)
+            coef = np.asarray(fl.coef_).reshape(-1)
+            if coef.shape[0] != len(X_const.columns):
+                return None, None, None, "Firth output shape mismatch (coef_ vs design matrix)."
+            params = pd.Series(coef, index=X_const.columns)
             pvalues = pd.Series(getattr(fl, "pvals_", np.full(len(X_const.columns), np.nan)), index=X_const.columns)
             ci = getattr(fl, "ci_", None)
             conf_int = (
@@ -125,8 +128,8 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     Parameters:
         outcome_name (str): Column name of the binary outcome in `df`.
         df (pandas.DataFrame): Input dataset containing `outcome_name` and candidate predictors.
-        var_meta (dict, optional): Variable metadata that can supply display labels, mapping for categorical values, or force a variable `type` ('Categorical' or 'Continuous'). Keys may be full column names or the original variable name portion after the first underscore.
-        method (str, optional): Regression method to use; one of 'auto', 'firth', or 'bfgs'. 'auto' selects Firth's penalized likelihood when available, otherwise BFGS-based logistic regression.
+        var_meta (dict, optional): Variable metadata...
+        method (str, optional): Regression method to use; one of 'auto', 'firth', 'bfgs', or 'default'. 'auto' selects Firth's penalized likelihood when available, otherwise BFGS-based logistic regression. 'default' uses statsmodels' standard optimizer.
     
     Returns:
         str: An HTML fragment containing a table of variables with descriptive statistics, crude odds ratios (and p-values), and adjusted odds ratios where multivariable modelling was performed. If `outcome_name` is not found in `df`, returns an HTML alert div indicating the missing outcome.
@@ -142,6 +145,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     results_db = {} 
     sorted_cols = sorted(df.columns)
 
+    # 2. แก้ไข Logic การเลือก Method ในฟังก์ชัน analyze_outcome (ประมาณบรรทัด 148)
     # 🟢 Logic การเลือก Method ตามที่ User สั่ง
     preferred_method = 'bfgs' # Default fallback
     
@@ -151,6 +155,8 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         preferred_method = 'firth' if HAS_FIRTH else 'bfgs'
     elif method == 'bfgs':
         preferred_method = 'bfgs'
+    elif method == 'default':  # <--- 🟢 เพิ่มบรรทัดนี้
+        preferred_method = 'default'
 
     for col in sorted_cols:
         if col == outcome_name: continue
