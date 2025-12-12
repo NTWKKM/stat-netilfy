@@ -266,4 +266,3 @@ st.markdown("""
     &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit; font-weight:bold;">NTWKKM n Donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
 </div>
 """, unsafe_allow_html=True)
-}
