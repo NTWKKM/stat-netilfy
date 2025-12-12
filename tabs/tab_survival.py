@@ -264,4 +264,4 @@ def render(df, _var_meta):
 
         # Show Download Button (if result exists)
         if st.session_state.cox_html:
-             st.download_button("📥 Download Full Report (Cox)", st.session_state.cox_html, "cox_report.html", "text/html")
+            st.download_button("📥 Download Full Report (Cox)", st.session_state.cox_html, "cox_report.html", "text/html")
