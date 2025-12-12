@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import NearestNeighbors
 import seaborn as sns
-import streamlit as st
 import io, base64
 
 # --- 1. Propensity Score Calculation ---
