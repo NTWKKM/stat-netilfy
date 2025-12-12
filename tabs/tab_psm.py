@@ -4,7 +4,7 @@ import numpy as np
 import psm_lib
 import matplotlib.pyplot as plt
 
-def render(df, var_meta):
+def render(df, _var_meta):
     """
     Render an interactive Streamlit interface to configure and run propensity score matching (PSM) and present balance diagnostics, matched data, outcome comparisons, and an exportable report.
     
