@@ -250,7 +250,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 else: 
                     res['p_comp'] = np.nan
                     res['test_name'] = "-"
-            except (ValueError, np.linalg.LinAlgError) as e:
+            except (ValueError, np.linalg.LinAlgError):
                 res['p_comp'] = np.nan
                 res['test_name'] = "-"
             
@@ -268,7 +268,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 u, p = stats.mannwhitneyu(pd.to_numeric(X_neg, errors='coerce').dropna(), pd.to_numeric(X_pos, errors='coerce').dropna())
                 res['p_comp'] = p
                 res['test_name'] = "Mann-Whitney U"
-            except (ValueError, TypeError) as e: 
+            except (ValueError, TypeError): 
                 res['p_comp'] = np.nan
                 res['test_name'] = "-"
 
