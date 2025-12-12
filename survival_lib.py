@@ -259,7 +259,6 @@ def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariates)
         return None, None, None, f"Model Failed: {str(e)}"
 
 # --- 5. Check Assumptions ---
-# --- 5. Check Assumptions ---
 def check_cph_assumptions(cph, data):
     """
     Check proportional hazards assumptions for a fitted Cox model and capture the textual diagnostics and any generated diagnostic plots.
@@ -330,6 +329,10 @@ def generate_report_survival(title, elements):
         if el['type'] == 'text':
             # แก้ไข 2: ใช้ html.escape กับ text content
             html_doc += f"<p>{html.escape(str(el['data']))}</p>"
+        # 🟢 เพิ่มส่วนนี้: รองรับ Preformatted Text
+        elif el['type'] == 'preformatted':
+            # escape เฉพาะเนื้อหาข้างใน แต่ครอบด้วย <pre> ที่ไม่ถูก escape
+            html_doc += f"<pre style='white-space: pre-wrap; background-color: #f8f9fa; padding: 10px; border-radius: 4px; border: 1px solid #e9ecef;'>{html.escape(str(el['data']))}</pre>"
         elif el['type'] == 'header':
             # แก้ไข 3: ใช้ html.escape และแก้ Indentation ให้ตรงกับบรรทัดอื่น
             html_doc += f"<h4>{html.escape(str(el['data']))}</h4>"
