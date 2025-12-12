@@ -18,7 +18,10 @@ def render(df, _var_meta):
     * **Time-Dependent Cox:** For variables that change over time (Requires Long-Format Data: Start-Stop).
     """)
 
-    all_cols = df.columns.tolist() 
+    all_cols = df.columns.tolist()
+    if not all_cols:
+        st.error("Dataset has no columns to analyze.")
+        return
 
     # ==========================
     # 2. Time-Dependent Cox
@@ -80,10 +83,11 @@ def render(df, _var_meta):
                     st.session_state["html_output_adv_survival"] = html_report
     
     # [แก้ไข] ปรับการเช็ค session state ให้สั้นลง (ตามคำแนะนำ Nitpick)
-    if st.session_state.get("html_output_adv_survival"):
+    html_output = st.session_state.get("html_output_adv_survival")
+    if html_output:
         st.download_button(
             label="📥 Download Full Report (HTML)",
-            data=st.session_state["html_output_adv_survival"],
+            data=html_output,  # ใช้ตัวแปรที่ดึงมาแล้ว
             file_name="adv_survival_report.html",
             mime="text/html",
             key="download_adv_survival"
