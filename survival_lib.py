@@ -232,7 +232,11 @@ def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariates)
     
     # 2. จัดการข้อมูล (ควรตรวจสอบว่า df มี NaN หรือไม่ก่อน drop)
     data = df[cols].copy()
-    data = data.dropna()
+    # Coerce numeric columns required by lifelines; keep id as-is
+    numeric_cols = [event_col, start_col, stop_col, *covariates]
+    for c in numeric_cols:
+        data[c] = pd.to_numeric(data[c], errors="coerce")
+    data = data.dropna(subset=numeric_cols + [id_col])
     
     # 3. ตรวจสอบเบื้องต้น (เช่น start < stop)
     if data.empty:
