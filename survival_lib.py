@@ -85,14 +85,18 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
                 T_list.append(T)
                 E_list.append(E)
             
-        # Log-Rank Test (ถ้ามี 2 กลุ่มขึ้นไป)
+         # Log-Rank Test (ถ้ามี 2 กลุ่มขึ้นไป)
         if len(T_list) >= 2:
             if len(T_list) == 2:
+                # Pairwise log-rank test for 2 groups
                 lr_result = logrank_test(T_list[0], T_list[1], event_observed_A=E_list[0], event_observed_B=E_list[1])
                 stats_res['Log-Rank p-value'] = lr_result.p_value
                 ax.set_title(f"KM Curve: {group_col} (p = {lr_result.p_value:.4f})")
             else:
-                ax.set_title(f"KM Curve: {group_col}")
+                # Multivariate log-rank test for 3+ groups
+                lr_result = multivariate_logrank_test(data[time_col], data[group_col], data[event_col])
+                stats_res['Log-Rank p-value'] = lr_result.p_value
+                ax.set_title(f"KM Curve: {group_col} (p = {lr_result.p_value:.4f})")
         else:
              ax.set_title(f"KM Curve: {group_col}")
              
@@ -211,6 +215,7 @@ def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariates)
         tuple:
             - fitted_model (CoxTimeVaryingFitter or None): The fitted CoxTimeVaryingFitter on success, otherwise None.
             - summary_df (pd.DataFrame or None): A summary table with columns ['Coef', 'HR', 'Lower 95%', 'Upper 95%', 'P-value'] on success, otherwise None.
+            - data (pd.DataFrame or None): The cleaned input DataFrame used for fitting on success, otherwise None.
             - error (str or None): None on success; otherwise an error message describing the failure. Possible error messages include:
                 - "Error: Data is empty after selecting columns and dropping NAs." when no rows remain after selecting required columns and dropping missing values.
                 - "Error: Found rows where Start Time >= Stop Time." when any interval has start greater than or equal to stop.
