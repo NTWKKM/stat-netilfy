@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import diag_test # ✅ ใช้ diag_test ตัวเดียว
 
-def render(df, var_meta):
+def render(df, var_meta=None):  # var_meta reserved for future use
     """
     Render Streamlit UI panels for diagnostic tests and statistics.
     
