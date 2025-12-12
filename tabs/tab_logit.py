@@ -90,6 +90,7 @@ def render(df, var_meta):
         horizontal=True,
         # 🟢 ใช้ """ (Triple Quotes) เพื่อเขียนหลายบรรทัด
         help="""
+        - **Auto:** Automatically selects the most suitable method based on data characteristics and availability.
         - **Standard:** Usual Logistic Regression.
         - **Firth:** Reduces bias and handles separation (Recommended for small sample size/rare events).
         """
