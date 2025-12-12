@@ -4,7 +4,8 @@ import scipy.stats as stats
 from sklearn.metrics import roc_curve, roc_auc_score, cohen_kappa_score # 🟢 Import เพิ่ม
 import matplotlib.pyplot as plt
 import io, base64
-import streamlit as st 
+import streamlit as st
+import html as _html
 
 # ... (ฟังก์ชัน calculate_descriptive และ calculate_chi2 ของเดิม เก็บไว้เหมือนเดิม) ...
 
@@ -235,14 +236,21 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
         return None, "Error: Binary outcome required.", None, None
 
     y_true = np.where(y_true_raw.astype(str) == pos_label_user, 1, 0)
+    n1 = int((y_true == 1).sum())
+    n0 = int((y_true == 0).sum())
+    if n1 == 0 or n0 == 0:
+        return None, "Error: Need both classes after dropping NA scores.", None, None
     fpr, tpr, thresholds = roc_curve(y_true, y_score)
     auc_val = roc_auc_score(y_true, y_score)
-    n1 = sum(y_true == 1); n0 = sum(y_true == 0)
     
     if method == 'delong': ci_lower, ci_upper, se = auc_ci_delong(y_true, y_score.values); m_name = "DeLong"
     else: ci_lower, ci_upper, se = auc_ci_hanley_mcneil(auc_val, n1, n0); m_name = "Hanley"
     
-    p_val_auc = stats.norm.sf(abs((auc_val - 0.5)/se))*2 if se > 0 else 0.0
+    p_val_auc = (
+        stats.norm.sf(abs((auc_val - 0.5) / se)) * 2
+        if (se is not None and np.isfinite(se) and se > 0)
+        else np.nan
+    )
     j_scores = tpr - fpr; best_idx = np.argmax(j_scores)
     
     stats_res = {
@@ -392,15 +400,16 @@ def generate_report(title, elements):
             html_tab += "</tr>"
             html_tab += "<tr>"
             html_tab += f"<th class='th-exposure'>{exp_name}</th>"
-            for label in col_labels: html_tab += f"<th>{label}</th>"
+            for label in col_labels:
+                html_tab += f"<th>{_html.escape(str(label))}</th>"
             html_tab += "</tr></thead>"
             html_tab += "<tbody>"
             for idx_label in row_labels:
                 html_tab += "<tr>"
-                html_tab += f"<td class='td-label'>{idx_label}</td>"
+                html_tab += f"<td class='td-label'>{_html.escape(str(idx_label))}</td>"
                 for col_label in col_labels:
                     val = data.loc[idx_label, col_label]
-                    html_tab += f"<td>{val}</td>"
+                    html_tab += f"<td>{_html.escape(str(val))}</td>"
                 html_tab += "</tr>"
             html_tab += "</tbody></table>"
             html += html_tab
