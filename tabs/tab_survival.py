@@ -90,6 +90,11 @@ def render(df, _var_meta):
     with tab_landmark:   
         # Landmark Slider
         max_t = df[col_time].dropna().max() if not df.empty and pd.api.types.is_numeric_dtype(df[col_time]) and df[col_time].notna().any() else 100.0
+        
+        # [แก้ไข] ป้องกัน Error Slider หากค่า Max Time เป็น 0 (เช่น กรณีเลือก Time_Start)
+        if max_t <= 0: 
+            max_t = 1.0 
+
         landmark_t = st.slider(f"Select Landmark Time ({col_time}):", 0.0, float(max_t), float(max_t) * 0.1, key='lm_slider_sur')
         
         col_group = st.selectbox("Compare Group (Optional):", ["None", *all_cols], key='lm_group_sur')
