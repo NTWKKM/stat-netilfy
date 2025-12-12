@@ -377,9 +377,16 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     
     # Update Footer Note
     if preferred_method == 'firth':
-        method_note = "Firth's Penalized Likelihood (User Selected)"
+        # 🟢 แก้ไข: แยกแยะระหว่าง Auto กับ User Selected
+        suffix = "(Auto-detected)" if method == 'auto' else "(User Selected)"
+        method_note = f"Firth's Penalized Likelihood {suffix}"
+        
     elif preferred_method == 'bfgs':
         method_note = "Standard Binary Logistic Regression (MLE)"
+    
+    elif preferred_method == 'default':
+        method_note = "Standard Binary Logistic Regression (Default Optimizer)"
+        
     else:
         method_note = "Binary Logistic Regression"
 
