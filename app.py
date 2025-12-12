@@ -5,24 +5,36 @@ import time
 import streamlit.components.v1 as components 
 
 # ==========================================
-# 1. ย้าย CONFIG และ LOADING SCREEN KILLER มาไว้บนสุด
+# 1. CONFIG & LOADING SCREEN KILLER (Must be First)
 # ==========================================
-st.set_page_config(page_title="Medical Stat Tool", layout="wide", menu_items={
+st.set_page_config(
+    page_title="Medical Stat Tool", 
+    layout="wide", 
+    menu_items={
         'Get Help': 'https://ntwkkm.github.io/infos/stat_manual.html',
-        'Report a bug': "https://www.extremelycoolapp.com/bug",
-    })
+        # 🟢 แก้จุดที่ 1: เปลี่ยนลิงก์เป็น GitHub Issues ของคุณ (หรือลบบรรทัดนี้ทิ้งถ้ายังไม่มี)
+        'Report a bug': "https://github.com/NTWKKM/stat-netilfy/issues", 
+    }
+)
 
 st.title("🏥 Medical Statistical Tool")
 
-# สั่งปิด Loading Screen ทันที เพื่อให้ถ้ามี Error ด้านล่าง เราจะยังเห็นข้อความ Error ได้
+# 🟢 แก้จุดที่ 2: ใช้ try-catch เพื่อความปลอดภัย (Safe Loader Removal)
 components.html("""
 <script>
-    var loader = window.parent.document.getElementById('loading-screen');
-    if (loader) {
-        loader.style.opacity = '0';
-        setTimeout(function() {
-            loader.style.display = 'none';
-        }, 500);
+    try {
+        var loader = window.parent && window.parent.document
+            ? window.parent.document.getElementById('loading-screen')
+            : null;
+        if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(function() {
+                loader.style.display = 'none';
+            }, 500);
+        }
+    } catch (e) {
+        // no-op (ถ้ามี error ก็ปล่อยผ่าน เว็บจะไม่พัง)
+        console.log("Loader removal error: " + e);
     }
 </script>
 """, height=0)
