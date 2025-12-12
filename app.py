@@ -39,8 +39,10 @@ components.html("""
 try:
     # พยายาม import ไฟล์ ถ้าไฟล์ไหนมีปัญหามันจะแจ้งเตือนให้เห็นบนหน้าจอแทนการหมุนค้าง
     from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival, tab_psm, tab_adv_survival
+except (KeyboardInterrupt, SystemExit):
+    raise
 except Exception as e:
-    st.error(f"Critical Error importing modules: {e}")
+    st.exception(e)
     st.stop()
 
 # --- INITIALIZE STATE ---
