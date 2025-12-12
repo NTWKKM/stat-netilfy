@@ -150,7 +150,7 @@ def fit_nelson_aalen(df, time_col, event_col, group_col=None):
     stats_res = {}
     
     if group_col:
-        groups = sorted(data[group_col].unique())
+        groups = sorted(data[group_col].unique(), key=lambda x: str(x))
         for g in groups:
             mask = data[group_col] == g
             group_data = data.loc[mask]
