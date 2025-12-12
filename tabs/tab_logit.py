@@ -7,7 +7,7 @@ def check_perfect_separation(df, target_col):
     """
     Identify predictor columns that may cause perfect separation with the specified target.
     
-    Checks predictors (excluding the target) that have fewer than 10 unique values and flags any whose contingency table with the target contains a zero cell, which may indicate perfect separation in a logistic model. If the target cannot be interpreted as numeric with at least two unique values, or an error occurs, an empty list is returned.
+    Checks predictors (excluding the target) that have fewer than 10 unique values and flags any whose contingency table with the target contains a zero cell, which may indicate perfect separation in a logistic model. If the target cannot be interpreted as numeric with at least two unique values, an empty list is returned; errors in per-predictor contingency tables are ignored.
     
     Parameters:
         df (pandas.DataFrame): Input dataset containing predictors and the target column.
