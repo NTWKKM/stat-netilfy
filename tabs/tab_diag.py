@@ -29,7 +29,10 @@ def render(df, var_meta=None):  # var_meta reserved for future use
         "📊 Descriptive"
     ])
     all_cols = df.columns.tolist()
-
+    if not all_cols:
+        st.error("Dataset has no columns to analyze.")
+        return
+        
     # --- ROC ---
     with sub_tab1:
         st.markdown("##### ROC Curve Analysis")
@@ -173,8 +176,9 @@ def render(df, var_meta=None):  # var_meta reserved for future use
                 rep_elements = [
                     {'type': 'text', 'data': f"<b>Result:</b> {msg}"},
                     {'type': 'contingency_table', 'header': 'Contingency Table', 'data': tab, 'outcome_col': v2},
-                    {'type': 'table', 'header': 'Statistics', 'data': pd.DataFrame([stats]).T}
                 ]
+                if stats is not None:
+                    rep_elements.append({'type': 'table', 'header': 'Statistics', 'data': pd.DataFrame([stats]).T})
                 if risk_df is not None:
                     rep_elements.append({'type': 'table', 'header': 'Risk & Effect Measures (2x2 Table)', 'data': risk_df})
                 
