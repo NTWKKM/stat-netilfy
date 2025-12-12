@@ -102,8 +102,8 @@ def get_label(col_name, var_meta):
     
     label = orig_name 
     if var_meta and orig_name in var_meta:
-         if 'label' in var_meta[orig_name]:
-             label = var_meta[orig_name]['label']
+    if 'label' in var_meta[orig_name]:        # ← 4 spaces (not 5)
+        label = var_meta[orig_name]['label']  # ← 8 spaces (not 9)
              
     return f"<b>{orig_name}</b><br><span style='color:#666; font-size:0.9em'>{label}</span>"
 
