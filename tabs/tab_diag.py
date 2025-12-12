@@ -227,7 +227,8 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         with dl_col:
             if st.session_state.html_output_chi:
                 st.download_button("📥 Download Report", st.session_state.html_output_chi, "chi2_diag.html", "text/html", key='dl_chi_diag')
-            else: st.button("📥 Download Report", disabled=True, key='ph_chi_diag')
+            else: 
+                st.button("📥 Download Report", disabled=True, key='ph_chi_diag')
        
     # --- 🟢 NEW: Agreement (Kappa) ---
     with sub_tab3:
