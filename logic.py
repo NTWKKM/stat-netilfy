@@ -218,7 +218,8 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                      return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
 
                 c_all = count_val(X_raw, lvl_str)
-                if c_all == 0: c_all = (X_raw == lvl).sum()
+                if c_all == 0:
+                    c_all = (X_raw == lvl).sum()
                 
                 p_all = (c_all/n_used)*100 if n_used else 0
                 c_n = count_val(X_neg, lvl_str)
