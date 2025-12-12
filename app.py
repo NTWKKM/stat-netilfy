@@ -16,16 +16,12 @@ st.title("🏥 Medical Statistical Tool")
 
 # สั่งปิด Loading Screen ทันที เพื่อให้ถ้ามี Error ด้านล่าง เราจะยังเห็นข้อความ Error ได้
 components.html("""
-try {
-        var loader = window.parent.document.getElementById('loading-screen');
-        if (loader) {
-            loader.style.opacity = '0';
-            setTimeout(function() {
-                loader.style.display = 'none';
-            }, 500);
-        }
-    } catch (e) {
-        // no-op
+var loader = window.parent.document.getElementById('loading-screen');
+    if (loader) {
+        loader.style.opacity = '0';
+        setTimeout(function() {
+            loader.style.display = 'none';
+        }, 500);
     }
 """, height=0)
 
