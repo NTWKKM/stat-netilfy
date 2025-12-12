@@ -27,7 +27,7 @@ def calculate_ps(df, treatment_col, covariate_cols):
         ValueError: If the treatment column is not of a numeric dtype.
     """
     # Drop NA ในคอลัมน์ที่เกี่ยวข้อง
-    data = df.dropna(subset=[treatment_col] + covariate_cols).copy()
+    data = df.dropna(subset=[treatment_col, *covariate_cols]).copy()
     
     # X และ y
     X = data[covariate_cols]
