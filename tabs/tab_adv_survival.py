@@ -48,7 +48,7 @@ def render(df, _var_meta):
                 return
 
             with st.spinner("Fitting Model..."):
-                _ctv, res, err = survival_lib.fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covs)
+                _ctv, res, _data, err = survival_lib.fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covs)
                 if err:
                     st.error(f"Error: {err}")
                 else:
