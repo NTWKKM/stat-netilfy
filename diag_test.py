@@ -70,8 +70,10 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             final_col_order_base.insert(0, v2_pos_original)
     else:
         def custom_sort(label):
-            try: return float(label)
-            except (ValueError, TypeError): return str(label)
+            try:
+                return (0, float(label))
+            except (ValueError, TypeError):
+                return (1, str(label))
         final_col_order_base.sort(key=custom_sort, reverse=True)
     final_col_order = final_col_order_base + ['Total'] 
 
