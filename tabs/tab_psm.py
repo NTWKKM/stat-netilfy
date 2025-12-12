@@ -22,7 +22,10 @@ def render(df, _var_meta):
     """)
 
     all_cols = df.columns.tolist()
-
+    if not all_cols:
+        st.error("Dataset has no columns to analyze.")
+        return
+        
     # --- 1. Variable Selection ---
     c1, c2 = st.columns(2)
     
