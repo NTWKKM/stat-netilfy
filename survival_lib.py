@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from lifelines import KaplanMeierFitter, CoxPHFitter, NelsonAalenFitter, CoxTimeVaryingFitter
-from lifelines.statistics import logrank_test
+from lifelines.statistics import logrank_test, multivariate_logrank_test
 import io
 import base64
 import contextlib
@@ -56,7 +56,9 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
             figure (matplotlib.figure.Figure): Matplotlib Figure containing the Kaplan–Meier plot.
             stats_df (pandas.DataFrame): Table of summary statistics (per-group or overall) with rows for each statistic and columns for groups or a single "Value" column.
     """
-    data = clean_survival_data(df, time_col, event_col, [group_col] if group_col else [])
+    data = clean_survival_data(df, time_col, event_col, [])
+    if group_col:
+        data[group_col] = df.loc[data.index, group_col]
     
     kmf = KaplanMeierFitter()
     fig, ax = plt.subplots(figsize=(8, 5))
@@ -98,7 +100,7 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
                 stats_res['Log-Rank p-value'] = lr_result.p_value
                 ax.set_title(f"KM Curve: {group_col} (p = {lr_result.p_value:.4f})")
         else:
-             ax.set_title(f"KM Curve: {group_col}")
+            ax.set_title(f"KM Curve: {group_col}")
              
     else:
         # ดูภาพรวม (ไม่มีกลุ่มเปรียบเทียบ)
@@ -137,7 +139,9 @@ def fit_nelson_aalen(df, time_col, event_col, group_col=None):
             - fig (matplotlib.figure.Figure): Figure containing the Nelson–Aalen cumulative hazard plot.
             - stats_df (pandas.DataFrame): Table of counts and event totals per group (or total counts when no group_col is provided).
     """
-    data = clean_survival_data(df, time_col, event_col, [group_col] if group_col else [])
+    data = clean_survival_data(df, time_col, event_col, [])
+    if group_col:
+        data[group_col] = df.loc[data.index, group_col]
     naf = NelsonAalenFitter()
     fig, ax = plt.subplots(figsize=(8, 5))
     stats_res = {}
@@ -230,10 +234,10 @@ def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariates)
     
     # 3. ตรวจสอบเบื้องต้น (เช่น start < stop)
     if data.empty:
-         return None, None, "Error: Data is empty after selecting columns and dropping NAs."
+        return None, None, "Error: Data is empty after selecting columns and dropping NAs."
          
     if (data[start_col] >= data[stop_col]).any():
-        return None, None, "Error: Found rows where Start Time >= Stop Time."
+        return None, None, None, "Error: Found rows where Start Time >= Stop Time."
 
     ctv = CoxTimeVaryingFitter()
     try:
@@ -243,7 +247,7 @@ def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariates)
         summary_df = ctv.summary[['coef', 'exp(coef)', 'exp(coef) lower 95%', 'exp(coef) upper 95%', 'p']]
         summary_df.columns = ['Coef', 'HR', 'Lower 95%', 'Upper 95%', 'P-value']
         
-    return ctv, summary_df, data, None
+        return ctv, summary_df, data, None
     except Exception as e:
         return None, None, None, f"Model Failed: {str(e)}"
 
