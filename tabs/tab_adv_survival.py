@@ -11,7 +11,7 @@ def render(df, _var_meta):
     
     Parameters:
         df (pandas.DataFrame): Input dataset in long (start-stop) format containing ID, start, stop, event, and covariate columns.
-        var_meta (Any): Optional variable metadata (not required by the UI; provided for compatibility with the tabs API).
+        _var_meta (Any): Optional variable metadata (not required by the UI; provided for compatibility with the tabs API).
     """
     st.subheader("⏳ Advanced Survival Analysis")
     st.info("""
