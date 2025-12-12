@@ -101,9 +101,10 @@ def get_label(col_name, var_meta):
     orig_name = parts[1] if len(parts) > 1 else col_name
     
     label = orig_name 
+    # [แก้ไข] ย่อหน้าบรรทัด 105 และ 106 ให้ถูกต้อง
     if var_meta and orig_name in var_meta:
-    if 'label' in var_meta[orig_name]:        # ← 4 spaces (not 5)
-        label = var_meta[orig_name]['label']  # ← 8 spaces (not 9)
+        if 'label' in var_meta[orig_name]:          # <--- ย่อหน้าเข้ามา 8 spaces
+            label = var_meta[orig_name]['label']    # <--- ย่อหน้าเข้ามา 12 spaces
              
     return f"<b>{orig_name}</b><br><span style='color:#666; font-size:0.9em'>{label}</span>"
 
