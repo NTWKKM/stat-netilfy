@@ -56,18 +56,18 @@ def render(df, _var_meta):
                     st.dataframe(res.style.format("{:.4f}"))
                     st.caption("Interpretation: HR > 1 indicates increased risk.")
                     
-                    # Generate HTML report
+                    # [แก้ไข] เปลี่ยนจาก Tuple เป็น Dictionary และแก้ header2 -> header
                     report_elements = [
-                        ("header", "Time-Dependent Cox Regression Results"),
-                        ("text", f"**Model Configuration:**"),
-                        ("text", f"- ID Column: {id_col}"),
-                        ("text", f"- Start Time: {start_col}"),
-                        ("text", f"- Stop Time: {stop_col}"),
-                        ("text", f"- Event: {event_col}"),
-                        ("text", f"- Covariates: {', '.join(covs)}"),
-                        ("header2", "Model Results"),
-                        ("table", res),
-                        ("text", "**Interpretation:** Hazard Ratio (HR) > 1 indicates increased risk; HR < 1 indicates decreased risk. P-values < 0.05 suggest statistical significance.")
+                        {"type": "header", "data": "Time-Dependent Cox Regression Results"},
+                        {"type": "text", "data": "**Model Configuration:**"},  # ลบ f หน้า string ออก
+                        {"type": "text", "data": f"- ID Column: {id_col}"},
+                        {"type": "text", "data": f"- Start Time: {start_col}"},
+                        {"type": "text", "data": f"- Stop Time: {stop_col}"},
+                        {"type": "text", "data": f"- Event: {event_col}"},
+                        {"type": "text", "data": f"- Covariates: {', '.join(covs)}"},
+                        {"type": "header", "data": "Model Results"},  # แก้ header2 เป็น header
+                        {"type": "table", "data": res},
+                        {"type": "text", "data": "**Interpretation:** Hazard Ratio (HR) > 1 indicates increased risk; HR < 1 indicates decreased risk. P-values < 0.05 suggest statistical significance."}
                     ]
                     
                     html_report = survival_lib.generate_report_survival(
@@ -78,8 +78,8 @@ def render(df, _var_meta):
                     # Store in session state
                     st.session_state["html_output_adv_survival"] = html_report
     
-    # Download button (appears when report exists)
-    if "html_output_adv_survival" in st.session_state and st.session_state["html_output_adv_survival"]:
+    # [แก้ไข] ปรับการเช็ค session state ให้สั้นลง (ตามคำแนะนำ Nitpick)
+    if st.session_state.get("html_output_adv_survival"):
         st.download_button(
             label="📥 Download Full Report (HTML)",
             data=st.session_state["html_output_adv_survival"],
