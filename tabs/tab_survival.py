@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import survival_lib
 import matplotlib.pyplot as plt
+import html
 
 def render(df, _var_meta):
     """
