@@ -177,9 +177,9 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
             )
         
         # 🛑 จุดที่เพิ่ม 1: ถ้าเลือกไม่ได้ (เป็น None) ให้หยุดทำงาน อย่าฝืนคำนวณต่อ
-        if v1_pos_label is None or v2_pos_label is None:
-            st.error("Cannot calculate: One of the selected columns is empty.")
-            st.stop() # หยุด Code ตรงนี้เลย
+        inputs_ok = not (v1_pos_label is None or v2_pos_label is None)
+        if not inputs_ok:
+            st.warning("Chi-Square disabled: one of the selected columns has no non-null values.")
 
         c6.empty()
         st.caption("Select Positive Label for Risk/Odds Ratio calculation (default is '1'):")
@@ -189,15 +189,15 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         if 'html_output_chi' not in st.session_state: 
             st.session_state.html_output_chi = None
 
-        if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run_diag'): # ✅ Key ไม่ซ้ำ
+        if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run_diag', disabled=not inputs_ok):
             
             # --- 🟢 จุดที่ 3 เพิ่มตรงนี้ครับ ---
             # CodeRabbit เตือนว่า selectbox คืนค่าเป็น String (เช่น "1") 
             # แต่ในตารางอาจเป็น Int (เช่น 1) ทำให้เทียบกันไม่ติด
             # เราจึงต้องสร้างตารางจำลอง (df_calc) และแปลงข้อมูลเป็น String ก่อนส่งไปคำนวณ
             df_calc = df.copy()
-            df_calc[v1] = df_calc[v1].astype(str)
-            df_calc[v2] = df_calc[v2].astype(str)
+            df_calc[v1] = df_calc[v1].astype("string")
+            df_calc[v2] = df_calc[v2].astype("string")
             # --------------------------------
 
             # ⚠️ อย่าลืมเปลี่ยน parameter ตัวแรกจาก df เป็น df_calc ด้วยนะครับ
@@ -313,7 +313,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         # Auto-select columns with 'measurement' or 'rater' or 'machine'
         default_icc_cols = [c for c in all_cols if any(k in c.lower() for k in ['measure', 'machine', 'rater', 'score', 'read'])]
         if len(default_icc_cols) < 2:
-            default_icc_cols = all_cols[:2] if len(all_cols) >= 2 else []
+            default_icc_cols = numeric_cols[:2] if len(numeric_cols) >= 2 else []
         
         icc_cols = st.multiselect("Select Variables (Raters/Methods):", all_cols, default=default_icc_cols, key='icc_vars_diag')
         
