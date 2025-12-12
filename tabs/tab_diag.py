@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import diag_test # ✅ ใช้ diag_test ตัวเดียว
 
-def render(df, var_meta=None):  # var_meta reserved for future use
+def render(df, _var_meta=None):  # var_meta reserved for future use
     """
     Render Streamlit UI panels for diagnostic tests and statistics.
     
@@ -20,7 +20,7 @@ def render(df, var_meta=None):  # var_meta reserved for future use
         var_meta (Any): Metadata about variables (unused for visible output selection unless integrated by UI); present for potential future use.
     """
     st.subheader("2. Diagnostic Test & Statistics")
-   # 🟢 UPDATE: เพิ่ม Tab "Reliability (ICC)" เป็น Tab ที่ 4
+    # 🟢 UPDATE: เพิ่ม Tab "Reliability (ICC)" เป็น Tab ที่ 4
     sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5 = st.tabs([
         "📈 ROC Curve & AUC", 
         "🎲 Chi-Square & Risk-RR,OR,NNT (Categorical)", 
@@ -153,21 +153,56 @@ def render(df, var_meta=None):  # var_meta reserved for future use
 
         c4, c5, c6 = st.columns(3)
         v1_uv, v1_default_idx = get_pos_label_settings(df, v1)
-        v1_pos_label = c4.selectbox(f"Positive Label (Row: {v1}):", v1_uv, index=v1_default_idx, key='chi_v1_pos_diag')
+        if not v1_uv:
+            c4.warning(f"No non-null values in {v1}.")
+            v1_pos_label = None
+        else:
+            v1_pos_label = c4.selectbox(
+                f"Positive Label (Row: {v1}):",
+                v1_uv,
+                index=v1_default_idx,
+                key='chi_v1_pos_diag',
+            )
 
         v2_uv, v2_default_idx = get_pos_label_settings(df, v2)
-        v2_pos_label = c5.selectbox(f"Positive Label (Col: {v2}):", v2_uv, index=v2_default_idx, key='chi_v2_pos_diag')
+        if not v2_uv:
+            c5.warning(f"No non-null values in {v2}.")
+            v2_pos_label = None
+        else:
+            v2_pos_label = c5.selectbox(
+                f"Positive Label (Col: {v2}):",
+                v2_uv,
+                index=v2_default_idx,
+                key='chi_v2_pos_diag',
+            )
+        
+        # 🛑 จุดที่เพิ่ม 1: ถ้าเลือกไม่ได้ (เป็น None) ให้หยุดทำงาน อย่าฝืนคำนวณต่อ
+        if v1_pos_label is None or v2_pos_label is None:
+            st.error("Cannot calculate: One of the selected columns is empty.")
+            st.stop() # หยุด Code ตรงนี้เลย
 
         c6.empty()
         st.caption("Select Positive Label for Risk/Odds Ratio calculation (default is '1'):")
         
         run_col, dl_col = st.columns([1, 1])
+        
         if 'html_output_chi' not in st.session_state: 
             st.session_state.html_output_chi = None
 
         if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run_diag'): # ✅ Key ไม่ซ้ำ
+            
+            # --- 🟢 จุดที่ 3 เพิ่มตรงนี้ครับ ---
+            # CodeRabbit เตือนว่า selectbox คืนค่าเป็น String (เช่น "1") 
+            # แต่ในตารางอาจเป็น Int (เช่น 1) ทำให้เทียบกันไม่ติด
+            # เราจึงต้องสร้างตารางจำลอง (df_calc) และแปลงข้อมูลเป็น String ก่อนส่งไปคำนวณ
+            df_calc = df.copy()
+            df_calc[v1] = df_calc[v1].astype(str)
+            df_calc[v2] = df_calc[v2].astype(str)
+            # --------------------------------
+
+            # ⚠️ อย่าลืมเปลี่ยน parameter ตัวแรกจาก df เป็น df_calc ด้วยนะครับ
             tab, stats, msg, risk_df = diag_test.calculate_chi2(
-                df, v1, v2, 
+                df_calc, v1, v2,  # <--- เปลี่ยนตรงนี้เป็น df_calc
                 method=method_choice,
                 v1_pos=v1_pos_label,
                 v2_pos=v2_pos_label
