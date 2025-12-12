@@ -81,6 +81,8 @@ def run_binary_logit(y, X, method='default'):
             
         return model.params, model.conf_int(), model.pvalues, "OK"
         
+    except (KeyboardInterrupt, SystemExit):
+        raise
     except Exception as e:
         return None, None, None, str(e)
 
