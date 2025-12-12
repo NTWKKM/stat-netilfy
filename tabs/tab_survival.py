@@ -183,7 +183,7 @@ def render(df, _var_meta):
                                 {'type':'header','data':'Cox Proportional Hazards'},
                                 {'type':'table','data':res},
                                 {'type':'header','data':'Assumption Check (Schoenfeld Residuals)'},
-                                {'type':'text','data':f"<pre>{txt_report}</pre>"}
+                                {'type':'text','data':f"<pre>{html.escape(txt_report)}</pre>"}
                             ]
                             if figs_assump:
                                  for fig in figs_assump:
@@ -194,6 +194,8 @@ def render(df, _var_meta):
 
                 except Exception as e:
                     st.error(f"An error occurred: {e}")
+                    st.session_state.cox_res = None
+                    st.session_state.cox_html = None
 
         # Show Download Button (if result exists)
         if st.session_state.cox_html:
