@@ -90,7 +90,7 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
                 T_list.append(T)
                 E_list.append(E)
             
-         # Log-Rank Test (ถ้ามี 2 กลุ่มขึ้นไป)
+        # Log-Rank Test (ถ้ามี 2 กลุ่มขึ้นไป)
         if len(T_list) >= 2:
             if len(T_list) == 2:
                 # Pairwise log-rank test for 2 groups
