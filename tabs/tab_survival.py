@@ -128,7 +128,7 @@ def render(df, _var_meta):
                 # 🟢 FIX: ใช้ title และ label ที่ถูกต้อง
                 report_html = survival_lib.generate_report_survival(f"Landmark Analysis: {col_time} (t >= {landmark_t})", elements)
                 st.download_button("📥 Download Report (Landmark)", report_html, "lm_report.html", "text/html")
-
+                plt.close(fig)
     # ==========================
     # TAB 3: Cox Regression
     # ==========================
