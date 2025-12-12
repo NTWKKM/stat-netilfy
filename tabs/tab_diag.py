@@ -199,7 +199,8 @@ def render(df, var_meta=None):  # var_meta reserved for future use
         st.info("""
              **💡 Guide:** Evaluates the **agreement** between two raters or two methods classifying items into categories.
              * **Cohen's Kappa (κ):** Measures agreement adjusting for chance. 
-             * **Interpretation:** * < 0: Poor
+             * **Interpretation:** 
+                 * < 0: Poor
                  * 0.01 - 0.20: Slight
                  * 0.21 - 0.40: Fair
                  * 0.41 - 0.60: Moderate
