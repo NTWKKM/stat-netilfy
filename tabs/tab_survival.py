@@ -21,15 +21,18 @@ def render(df, _var_meta):
 * **Hazard Ratio (HR):** >1 Increased Hazard (Risk), <1 Decreased Hazard (Protective).
 """)
     
-    all_cols = df.columns.tolist()
-    if len(all_cols) < 2:
-        st.error("Dataset must contain at least 2 columns (time and event).")
-        return
-        
-    # Global Selectors
+   # Global Selectors
     c1, c2 = st.columns(2)
-    # Auto-detect logic
-    time_idx = next((i for i, c in enumerate(all_cols) if 'time' in c.lower() or 'dur' in c.lower()), 0)
+    
+    # [แก้ไข 1] Auto-detect logic: ให้ความสำคัญกับ Time_Stop หรือ stop ก่อน
+    time_idx = 0
+    # เรียงลำดับความสำคัญ keywords: 'stop' > 'time' > 'dur'
+    for k in ['stop', 'time', 'dur']:
+        found = next((i for i, c in enumerate(all_cols) if k in c.lower()), None)
+        if found is not None:
+            time_idx = found
+            break
+            
     event_idx = next((i for i, c in enumerate(all_cols) if 'event' in c.lower() or 'status' in c.lower() or 'dead' in c.lower()), min(1, len(all_cols)-1))
     
     col_time = c1.selectbox("⏳ Time Variable:", all_cols, index=time_idx, key='surv_time')
@@ -88,14 +91,49 @@ def render(df, _var_meta):
     # TAB 2: Landmark Analysis
     # ==========================
     with tab_landmark:   
-        # Landmark Slider
+        # Calculate Max Time
         max_t = df[col_time].dropna().max() if not df.empty and pd.api.types.is_numeric_dtype(df[col_time]) and df[col_time].notna().any() else 100.0
+        if max_t <= 0: max_t = 1.0 
         
-        # [แก้ไข] ป้องกัน Error Slider หากค่า Max Time เป็น 0 (เช่น กรณีเลือก Time_Start)
-        if max_t <= 0: 
-            max_t = 1.0 
+        st.write(f"**Select Landmark Time ({col_time})**")
+        
+        # [แก้ไข 2] Landmark Interactive Input (Slider + Number Box Sync)
+        # Initialize Session State สำหรับ Landmark Value
+        if 'landmark_val' not in st.session_state:
+            st.session_state.landmark_val = float(max_t) * 0.1
 
-        landmark_t = st.slider(f"Select Landmark Time ({col_time}):", 0.0, float(max_t), float(max_t) * 0.1, key='lm_slider_sur')
+        # Functions to Sync
+        def update_from_slider():
+            st.session_state.landmark_val = st.session_state.lm_slider_widget
+        def update_from_number():
+            st.session_state.landmark_val = st.session_state.lm_number_widget
+
+        c_slide, c_num = st.columns([3, 1])
+        
+        with c_slide:
+            st.slider(
+                "Use Slider:", 
+                min_value=0.0, 
+                max_value=float(max_t), 
+                key='lm_slider_widget',
+                value=st.session_state.landmark_val,
+                on_change=update_from_slider,
+                label_visibility="collapsed"
+            )
+        with c_num:
+            st.number_input(
+                "Enter Value:", 
+                min_value=0.0, 
+                max_value=float(max_t), 
+                key='lm_number_widget',
+                value=st.session_state.landmark_val,
+                on_change=update_from_number,
+                step=1.0, # Step 1.0 เพื่อให้พิมพ์ง่ายขึ้น
+                label_visibility="collapsed"
+            )
+            
+        landmark_t = st.session_state.landmark_val
+        st.caption(f"Current Landmark: **{landmark_t:.2f}**")
         
         col_group = st.selectbox("Compare Group (Optional):", ["None", *all_cols], key='lm_group_sur')
 
@@ -104,7 +142,7 @@ def render(df, _var_meta):
                 st.error(f"Time column ('{col_time}') and Event column ('{col_event}') must be numeric.")
                 return
 
-            # 🟢 Filter Data (หัวใจของ Landmark)
+            # Filter Data
             mask = df[col_time] >= landmark_t
             df_lm = df[mask].copy()
             
@@ -117,7 +155,7 @@ def render(df, _var_meta):
                 grp = None if col_group == "None" else col_group
                 fig, stats = survival_lib.fit_km_logrank(df_lm, col_time, col_event, grp)
                 
-                # วาดเส้น Landmark ลงไปในกราฟ
+                # Plot Line
                 ax = fig.gca()
                 ax.axvline(landmark_t, color='red', linestyle='--', label=f'Landmark t={landmark_t}')
                 ax.legend()
@@ -125,17 +163,17 @@ def render(df, _var_meta):
                 
                 st.pyplot(fig)
                 st.dataframe(stats)
-                # 🟢 FIX: สร้าง List 'elements' สำหรับ Report
+                
                 elements = [
                     {'type':'header','data':f'Landmark Analysis (t >= {landmark_t})'},
                     {'type':'plot','data':fig},
                     {'type':'table','data':stats}
                 ]
                 
-                # 🟢 FIX: ใช้ title และ label ที่ถูกต้อง
                 report_html = survival_lib.generate_report_survival(f"Landmark Analysis: {col_time} (t >= {landmark_t})", elements)
                 st.download_button("📥 Download Report (Landmark)", report_html, "lm_report.html", "text/html")
                 plt.close(fig)
+                
     # ==========================
     # TAB 3: Cox Regression
     # ==========================
