@@ -88,7 +88,8 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                 return (0, float(label))
             except (ValueError, TypeError):
                 return (1, str(label))
-        final_col_order_base.sort(key=custom_sort, reverse=True)
+        final_row_order_base.sort(key=custom_sort, reverse=True)
+    final_row_order = final_row_order_base + ['Total']
 
     # Reindex
     tab_raw = tab_raw.reindex(index=final_row_order, columns=final_col_order)
