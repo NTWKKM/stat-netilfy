@@ -287,7 +287,7 @@ def render(df, var_meta=None):  # var_meta reserved for future use
                     {'type': 'table', 'header': 'ICC Results (Single Measures)', 'data': res_df},
                     {'type': 'table', 'header': 'ANOVA Table (Reference)', 'data': anova_df}
                 ]
-                html = diag_test.generate_report(f"ICC Analysis", rep_elements)
+                html = diag_test.generate_report("ICC Analysis", rep_elements)
                 st.session_state.html_output_icc = html
                 st.components.v1.html(html, height=400, scrolling=True)
                 
