@@ -15,9 +15,9 @@ def render(df, _var_meta):
     """
     st.subheader("⏳ Advanced Survival Analysis")
     st.info("""
-    **Modules:**
-    * **Time-Dependent Cox:** For variables that change over time (Requires Long-Format Data: Start-Stop).
-    """)
+**Modules:**
+* **Time-Dependent Cox:** For variables that change over time (Requires Long-Format Data: Start-Stop).
+""")
 
     # 🟢 FIX 2: กำหนดค่า all_cols ที่หายไป
     all_cols = df.columns.tolist() 
