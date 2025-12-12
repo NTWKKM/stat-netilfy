@@ -31,7 +31,7 @@ def clean_numeric_value(val):
     s = s.replace('>', '').replace('<', '').replace(',', '')
     try:
         return float(s)
-    except:
+    except (TypeError, ValueError):
         return np.nan
 
 def run_binary_logit(y, X, method='default'):
