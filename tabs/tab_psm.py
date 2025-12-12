@@ -34,7 +34,7 @@ def render(df, var_meta):
             break
             
     treat_col = c1.selectbox("💊 Treatment Variable (Binary):", all_cols, index=treat_idx, key='psm_treat')
-    outcome_col = c2.selectbox("🎯 Outcome Variable (Optional):", ["None"] + all_cols, key='psm_outcome')
+    outcome_col = c2.selectbox("🎯 Outcome Variable (Optional):", ["None", *all_cols], key='psm_outcome')
     
     # Covariates Selection
     cov_candidates = [c for c in all_cols if c not in [treat_col, outcome_col]]
