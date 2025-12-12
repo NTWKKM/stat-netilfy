@@ -191,7 +191,7 @@ def plot_love_plot(smd_pre, smd_post):
     ax.axvline(0.1, color='gray', linestyle='--', alpha=0.5)
     ax.set_title('Covariate Balance (Love Plot)')
     ax.set_xlabel('Standardized Mean Difference (SMD)')
-    ax.grid(True, alpha=0.3)
+    ax.grid(visible=True, alpha=0.3)
     return fig
 
 def generate_psm_report(title, elements):
