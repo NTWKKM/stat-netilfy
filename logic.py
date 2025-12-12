@@ -68,8 +68,13 @@ def run_binary_logit(y, X, method='default'):
             
             # แปลงผลลัพธ์ให้ตรงกับ Format เดิม (Series/DataFrame)
             params = pd.Series(fl.coef_, index=X_const.columns)
-            pvalues = pd.Series(fl.pvals_, index=X_const.columns)
-            conf_int = pd.DataFrame(fl.ci_, index=X_const.columns, columns=[0, 1])
+            pvalues = pd.Series(getattr(fl, "pvals_", np.full(len(X_const.columns), np.nan)), index=X_const.columns)
+            ci = getattr(fl, "ci_", None)
+            conf_int = (
+                pd.DataFrame(ci, index=X_const.columns, columns=[0, 1])
+                if ci is not None
+                else pd.DataFrame(np.nan, index=X_const.columns, columns=[0, 1])
+            )
             
             return params, conf_int, pvalues, "OK"
 
@@ -263,7 +268,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 u, p = stats.mannwhitneyu(pd.to_numeric(X_neg, errors='coerce').dropna(), pd.to_numeric(X_pos, errors='coerce').dropna())
                 res['p_comp'] = p
                 res['test_name'] = "Mann-Whitney U"
-            except: 
+            except (ValueError, TypeError) as e: 
                 res['p_comp'] = np.nan
                 res['test_name'] = "-"
 
