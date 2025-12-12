@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
 from lifelines import KaplanMeierFitter, CoxPHFitter, NelsonAalenFitter, CoxTimeVaryingFitter
 from lifelines.statistics import logrank_test, multivariate_logrank_test
 import io
@@ -38,7 +39,7 @@ def clean_survival_data(df, time_col, event_col, covariates=None):
     return data
 
 # --- 1. Kaplan-Meier & Log-Rank ---
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, hash_funcs={matplotlib.figure.Figure: lambda _: None}) # <--- แก้ไขบรรทัดนี้
 def fit_km_logrank(df, time_col, event_col, group_col=None):
     """
     Fit and plot Kaplan–Meier survival curves and perform log-rank testing for group comparisons.
@@ -123,7 +124,7 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
     return fig, pd.DataFrame(stats_res, index=["Value"]).T
 
 # --- 2. Nelson-Aalen (Cumulative Hazard) ---
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, hash_funcs={matplotlib.figure.Figure: lambda _: None}) # <--- แก้ไขบรรทัดนี้
 def fit_nelson_aalen(df, time_col, event_col, group_col=None):
     """
     Create and plot a Nelson–Aalen cumulative hazard curve, optionally stratified by a grouping column.
@@ -172,7 +173,7 @@ def fit_nelson_aalen(df, time_col, event_col, group_col=None):
     return fig, pd.DataFrame(stats_res, index=["Count"]).T
 
 # --- 3. Cox Proportional Hazards (Standard) ---
-@st.cache_data(show_spinner=False)
+
 def fit_cox_ph(df, time_col, event_col, covariates):
     """
     Fit a time-independent Cox proportional hazards model on numeric, complete-case data.
@@ -202,7 +203,7 @@ def fit_cox_ph(df, time_col, event_col, covariates):
         return None, None, None, str(e)
 
 # --- 🟢 4. Time-Dependent Cox Regression (New!) ---
-@st.cache_data(show_spinner=False)
+
 def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariates):
     """
     Fit a time-varying Cox proportional hazards model using start–stop (long-format) data.
