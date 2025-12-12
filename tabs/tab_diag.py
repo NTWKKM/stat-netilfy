@@ -268,7 +268,8 @@ def render(df, var_meta=None):  # var_meta reserved for future use
         
         # Auto-select columns with 'measurement' or 'rater' or 'machine'
         default_icc_cols = [c for c in all_cols if any(k in c.lower() for k in ['measure', 'machine', 'rater', 'score', 'read'])]
-        if len(default_icc_cols) < 2: default_icc_cols = all_cols[:2] if len(all_cols) >=2 else []
+        if len(default_icc_cols) < 2:
+            default_icc_cols = all_cols[:2] if len(all_cols) >= 2 else []
         
         icc_cols = st.multiselect("Select Variables (Raters/Methods):", all_cols, default=default_icc_cols, key='icc_vars_diag')
         
