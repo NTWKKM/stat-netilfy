@@ -103,7 +103,7 @@ def render(df, _var_meta):
             try:
                 # A. Calculate PS
                 with st.spinner("Calculating Propensity Scores..."):
-                    df_ps, model = psm_lib.calculate_ps(df_analysis, final_treat_col, final_cov_cols)
+                    df_ps, _model = psm_lib.calculate_ps(df_analysis, final_treat_col, final_cov_cols)
                 
                 # B. Perform Matching
                 with st.spinner("Matching Patients..."):
