@@ -17,7 +17,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
     
     Parameters:
         df (pandas.DataFrame): Input dataset containing the variables to analyze; column names are used for UI selections.
-        var_meta (Any): Metadata about variables (unused for visible output selection unless integrated by UI); present for potential future use.
+        _var_meta (Any): Metadata about variables (unused for visible output selection unless integrated by UI); present for potential future use.
     """
     st.subheader("2. Diagnostic Test & Statistics")
     # 🟢 UPDATE: เพิ่ม Tab "Reliability (ICC)" เป็น Tab ที่ 4
@@ -245,7 +245,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
          """)
         
         # 🟢 เพิ่ม Logic การเลือกอัตโนมัติ (Auto-select)
-        # all_cols already defined at module scope
+        # all_cols already defined above in render()
         
         # 1. Logic หาคอลัมน์ที่น่าจะเป็น Rater A
         kv1_default_idx = 0
@@ -306,6 +306,9 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
             * **ICC(2,1) Absolute Agreement:** Use when you care if the absolute scores are the same (e.g., Method A vs Method B).
             * **ICC(3,1) Consistency:** Use when you care if the ranking is consistent, even if absolute scores differ (e.g., systematic bias).
         """)
+        
+        # 🟢 Auto-select เฉพาะ Numeric Columns เพื่อความปลอดภัย
+        numeric_cols = df.select_dtypes(include="number").columns.tolist()
         
         # Auto-select columns with 'measurement' or 'rater' or 'machine'
         default_icc_cols = [c for c in all_cols if any(k in c.lower() for k in ['measure', 'machine', 'rater', 'score', 'read'])]
