@@ -38,7 +38,7 @@ def calculate_ps(df, treatment_col, covariate_cols):
     if not np.issubdtype(y.dtype, np.number):
         raise ValueError(f"Treatment column '{treatment_col}' must be numeric (0/1).")
         
-    clf = LogisticRegression(solver='liblinear', random_state=42)
+    clf = LogisticRegression(solver='liblinear', random_state=42, max_iter=1000)
     clf.fit(X, y)
     
     # Get Probability (Score of class 1)
@@ -106,10 +106,10 @@ def perform_matching(df, treatment_col, ps_col='ps_logit', caliper=0.2):
     matched_pairs = []
     used_control = set()
     
-    for _, row in match_candidates.iterrows():
-        c_idx = row['control_idx']
+    for row in match_candidates.itertuples():
+        c_idx = row.control_idx
         if c_idx not in used_control:
-            matched_pairs.append(row)
+            matched_pairs.append({'treated_idx': row.treated_idx, 'control_idx': c_idx, 'distance': row.distance, 'control_iloc': row.control_iloc})
             used_control.add(c_idx)
     
     matched_df_info = pd.DataFrame(matched_pairs)
