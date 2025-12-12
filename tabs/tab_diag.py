@@ -316,7 +316,8 @@ def render(df, var_meta=None):  # var_meta reserved for future use
                 st.session_state.html_output_desc = html
                 st.components.v1.html(html, height=500, scrolling=True)
         
-       with dl_col:
+        # [แก้ไข] จัด Indentation ให้ตรงกับ if run_col.button ด้านบน (8 spaces)
+        with dl_col:
             if st.session_state.html_output_desc:
                 st.download_button("📥 Download Report", st.session_state.html_output_desc, "desc.html", "text/html", key='dl_desc_diag')
             else:
