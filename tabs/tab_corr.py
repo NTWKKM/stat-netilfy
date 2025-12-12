@@ -80,11 +80,28 @@ def render(df):
         # Selector for V1 Positive Label
         cc4, cc5, cc6 = st.columns(3)
         v1_uv, v1_default_idx = get_pos_label_settings(df, v1)
-        v1_pos_label = cc4.selectbox(f"Positive Label (Row: {v1}):", v1_uv, index=v1_default_idx, key='chi_v1_pos_corr')
+        
+        # 🟢 จุดแก้ 1: ป้องกัน V1 ว่าง
+        if not v1_uv:
+            cc4.warning(f"No non-null values in {v1}.")
+            v1_pos_label = None
+        else:
+            v1_pos_label = cc4.selectbox(f"Positive Label (Row: {v1}):", v1_uv, index=v1_default_idx, key='chi_v1_pos_corr')
 
         # Selector for V2 Positive Label (Outcome)
         v2_uv, v2_default_idx = get_pos_label_settings(df, v2)
-        v2_pos_label = cc5.selectbox(f"Positive Label (Col: {v2}):", v2_uv, index=v2_default_idx, key='chi_v2_pos_corr')
+        
+        # 🟢 จุดแก้ 2: ป้องกัน V2 ว่าง
+        if not v2_uv:
+            cc5.warning(f"No non-null values in {v2}.")
+            v2_pos_label = None
+        else:
+            v2_pos_label = cc5.selectbox(f"Positive Label (Col: {v2}):", v2_uv, index=v2_default_idx, key='chi_v2_pos_corr')
+        
+        # 🛑 จุดเพิ่ม: ถ้าเลือกค่าไม่ได้ ให้หยุดการทำงาน
+        if v1_pos_label is None or v2_pos_label is None:
+            st.error("Cannot calculate: One of the selected columns is empty.")
+            st.stop()
         
         # Add a placeholder column to maintain alignment
         cc6.empty()
@@ -94,10 +111,15 @@ def render(df):
         if 'html_output_corr_cat' not in st.session_state: st.session_state.html_output_corr_cat = None
 
         if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run'):
-            # 🟢 UPDATE: ส่ง method_choice ไปแทน correction_flag
+            # 🟢 จุดแก้ 3: แปลงข้อมูลเป็น String เพื่อให้ Type ตรงกับ Selectbox
+            df_calc = df.copy()
+            df_calc[v1] = df_calc[v1].astype(str)
+            df_calc[v2] = df_calc[v2].astype(str)
+
+            # 🟢 UPDATE: ส่ง df_calc แทน df
             tab, stats, msg, risk_df = correlation.calculate_chi2(
-                df, v1, v2, 
-                method=method_choice, # <--- เปลี่ยนตรงนี้
+                df_calc, v1, v2,   # <--- ใช้ df_calc ที่แปลงแล้ว
+                method=method_choice, 
                 v1_pos=v1_pos_label,
                 v2_pos=v2_pos_label
             )
