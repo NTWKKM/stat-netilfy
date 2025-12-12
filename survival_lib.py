@@ -238,7 +238,7 @@ def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariates)
         summary_df = ctv.summary[['coef', 'exp(coef)', 'exp(coef) lower 95%', 'exp(coef) upper 95%', 'p']]
         summary_df.columns = ['Coef', 'HR', 'Lower 95%', 'Upper 95%', 'P-value']
         
-       return ctv, summary_df, data, None
+    return ctv, summary_df, data, None
     except Exception as e:
         return None, None, None, f"Model Failed: {str(e)}"
 
