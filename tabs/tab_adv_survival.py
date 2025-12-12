@@ -59,15 +59,16 @@ def render(df, _var_meta):
                     # [แก้ไข] เปลี่ยนจาก Tuple เป็น Dictionary และแก้ header2 -> header
                     report_elements = [
                         {"type": "header", "data": "Time-Dependent Cox Regression Results"},
-                        {"type": "text", "data": "**Model Configuration:**"},  # ลบ f หน้า string ออก
-                        {"type": "text", "data": f"- ID Column: {id_col}"},
-                        {"type": "text", "data": f"- Start Time: {start_col}"},
-                        {"type": "text", "data": f"- Stop Time: {stop_col}"},
-                        {"type": "text", "data": f"- Event: {event_col}"},
-                        {"type": "text", "data": f"- Covariates: {', '.join(covs)}"},
+                        {"type": "header", "data": "Model Configuration"},
+                        {"type": "text", "data": f"ID Column: {id_col}"},
+                        {"type": "text", "data": f"Start Time: {start_col}"},
+                        {"type": "text", "data": f"Stop Time: {stop_col}"},
+                        {"type": "text", "data": f"Event: {event_col}"},
+                        {"type": "text", "data": f"Covariates: {', '.join(covs)}"},
                         {"type": "header", "data": "Model Results"},  # แก้ header2 เป็น header
                         {"type": "table", "data": res},
-                        {"type": "text", "data": "**Interpretation:** Hazard Ratio (HR) > 1 indicates increased risk; HR < 1 indicates decreased risk. P-values < 0.05 suggest statistical significance."}
+                        {"type": "header", "data": "Interpretation"},
+                        {"type": "text", "data": "Hazard Ratio (HR) > 1 indicates increased risk; HR < 1 indicates decreased risk. P-values < 0.05 suggest statistical significance."},
                     ]
                     
                     html_report = survival_lib.generate_report_survival(
