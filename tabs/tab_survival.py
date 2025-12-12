@@ -189,7 +189,7 @@ def render(df, _var_meta):
                     ]
                     if figs_assump:
                          for fig in figs_assump:
-                             elements.append({'type':'plot','data':fig})
+                            elements.append({'type':'plot','data':fig})
                     
                     report_html = survival_lib.generate_report_survival(f"Cox: {col_time}", elements)
                     st.session_state.cox_html = report_html
