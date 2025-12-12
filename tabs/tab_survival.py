@@ -232,7 +232,10 @@ def render(df, _var_meta):
                                 {'type':'header','data':'Cox Proportional Hazards'},
                                 {'type':'table','data':res},
                                 {'type':'header','data':'Assumption Check (Schoenfeld Residuals)'},
-                                {'type':'text','data':f"<pre>{html.escape(txt_report)}</pre>"}
+                                
+                                # 🔴 ลบอันเก่า: {'type':'text','data':f"<pre>{html.escape(txt_report)}</pre>"}
+                                # 🟢 ใส่อันใหม่: ส่ง txt_report ดิบๆ ไปให้ lib จัดการ
+                                {'type':'preformatted','data':txt_report}
                             ]
                             if figs_assump:
                                 for fig in figs_assump:
