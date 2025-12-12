@@ -78,9 +78,14 @@ def render(df, var_meta):
             exclude_cols = st.multiselect("Exclude Variables (Optional):", all_cols, key='logit_exclude_opt')
 
     # 🟢 NEW: เพิ่มส่วนเลือก Method (User Selection)
+    method_options = {
+        "Auto (Recommended)": "auto",
+        "Standard (MLE)": "bfgs",
+        "Firth's (Penalized)": "firth",
+    }
     method_choice = st.radio(
         "Regression Method:",
-        ["Auto (Recommended)", "Standard (MLE)", "Firth's (Penalized)"],
+        list(method_options.keys()),
         index=0,
         horizontal=True,
         # 🟢 ใช้ """ (Triple Quotes) เพื่อเขียนหลายบรรทัด
@@ -89,14 +94,8 @@ def render(df, var_meta):
         - **Firth:** Reduces bias and handles separation (Recommended for small sample size/rare events).
         """
     )
-    
     # แปลงตัวเลือกเป็นรหัสที่ logic.py เข้าใจ
-    if "Firth" in method_choice:
-        algo = 'firth'
-    elif "Standard" in method_choice:
-        algo = 'bfgs'
-    else:
-        algo = 'auto'
+    algo = method_options[method_choice]
 
     st.write("") # Spacer
 
