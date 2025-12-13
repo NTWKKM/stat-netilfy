@@ -61,63 +61,55 @@ st.sidebar.header("1. Data Management")
 
 # Example Data Generator
 if st.sidebar.button("📄 Load Example Data"):
-    np.random.seed(999) # Fixed seed เพื่อให้ผลลัพธ์เหมือนเดิมทุกครั้ง
-    n = 600 # เพิ่ม N เป็น 600 เพื่อให้ P-value เห็นผลชัดเจน
+    np.random.seed(999) # Fixed seed เพื่อให้ผลลัพธ์คงที่
+    n = 600 
     
     # --- 1. Demographics & Confounders (Table 1 & PSM) ---
-    # Age: Normal distribution
     age = np.random.normal(55, 12, n).astype(int).clip(20, 90)
-    
-    # Sex: Binary (0=Female, 1=Male)
     sex = np.random.binomial(1, 0.55, n)
-    
-    # BMI: Normal distribution
     bmi = np.random.normal(24, 4, n).round(1)
     
-    # Comorbidity (Binary): สัมพันธ์กับ Age และ BMI (เป็น Confounder)
+    # Comorbidity: สัมพันธ์กับ Age/BMI
     logit_comorb = -5 + 0.05*age + 0.1*bmi
     p_comorb = 1 / (1 + np.exp(-logit_comorb))
     comorbidity = np.random.binomial(1, p_comorb)
 
     # --- 2. Treatment Assignment (Selection Bias for PSM) ---
-    # กำหนดให้คนที่มี Comorbidity หรือ Age มาก มีโอกาสได้ยาใหม่ (Group 1) มากกว่า
-    # สิ่งนี้ทำให้ Baseline Table 1 ไม่เท่ากัน (Bias) -> ต้องแก้ด้วย PSM
+    # กลุ่มที่มีโรคประจำตัว มีโอกาสได้ยาใหม่ (New Drug) มากกว่า -> เกิด Bias
     logit_treat = -2 + 1.5*comorbidity - 0.02*age
     p_treat = 1 / (1 + np.exp(-logit_treat))
     group = np.random.binomial(1, p_treat) 
 
     # --- 3. Outcome & Survival ---
-    # Survival: Group 1 (New Drug) อยู่ได้นานกว่า (Protective Effect)
-    # Hazard Ratio: Group=0.5 (ลดเสี่ยง), Comorbidity=1.5 (เพิ่มเสี่ยง)
+    # Hazard: Group 1 ลดเสี่ยงตาย (0.5x), Comorbidity เพิ่มเสี่ยง (1.5x)
     lambda_base = 0.02
     hazard = lambda_base * np.exp(0.4*comorbidity - 0.8*group)
     surv_time = np.random.exponential(1/hazard)
     
-    # Censoring
     censor_time = np.random.uniform(0, 100, n)
     time_obs = np.minimum(surv_time, censor_time).round(1)
-    event_death = (surv_time <= censor_time).astype(int) # 1=Dead, 0=Censored
+    event_death = (surv_time <= censor_time).astype(int)
 
-    # --- 4. Diagnostic Test (สำคัญ: ปรับให้มี Sens/Spec) ---
-    # Gold Standard: โรคจริง
+    # --- 4. Diagnostic Test (Adjusted: Continuous Rapid Test) ---
+    # Gold Standard: โรคจริง (0=Healthy, 1=Disease)
     gold_std = np.random.binomial(1, 0.3, n) # ความชุก 30%
     
-    # Rapid Test: สร้างให้ตรงกับ Gold Standard ประมาณ 85-90%
-    # ถ้าเป็นโรค (1) ตรวจเจอ (1) 85% (Sensitivity)
-    # ถ้าไม่เป็นโรค (0) ตรวจเจอ (1) 10% (False Positive -> Spec 90%)
-    prob_test = np.where(gold_std==1, 0.85, 0.10)
-    rapid_test = np.random.binomial(1, prob_test)
+    # Rapid Test (Continuous): เช่น ค่าเอนไซม์ หรือ Biomarker
+    # Healthy (0): ค่าต่ำ (Mean=20, SD=10)
+    # Disease (1): ค่าสูง (Mean=60, SD=15)
+    # มีการเหลื่อมกัน (Overlap) เพื่อให้หา Cut-off ที่เหมาะสมได้
+    rapid_test_val = np.where(gold_std==1, 
+                              np.random.normal(60, 15, n), 
+                              np.random.normal(20, 10, n))
+    rapid_test_val = rapid_test_val.round(1)
     
-    # Inter-rater (Kappa): Dr.A vs Dr.B
-    # ให้ Dr.A วินิจฉัยใกล้เคียงความจริง
+    # Inter-rater (Kappa): Dr.A vs Dr.B (Categorical เหมือนเดิม)
     dr_a = np.where(gold_std==1, np.random.binomial(1, 0.9, n), np.random.binomial(1, 0.1, n))
-    # ให้ Dr.B เห็นตรงกับ Dr.A 90% (High Agreement)
     agree_noise = np.random.binomial(1, 0.90, n)
     dr_b = np.where(agree_noise==1, dr_a, 1-dr_a)
 
     # --- 5. Correlation ---
     lab_alb = np.random.normal(3.5, 0.5, n).round(2)
-    # Ca สัมพันธ์กับ Alb
     lab_ca = 2 + 1.5*lab_alb + np.random.normal(0, 0.3, n)
     lab_ca = lab_ca.round(2)
 
@@ -134,32 +126,33 @@ if st.sidebar.button("📄 Load Example Data"):
         'Status_Death': event_death,
         # Diagnostic
         'Gold_Standard': gold_std,
-        'Rapid_Test': rapid_test,
+        'Rapid_Test_Score': rapid_test_val, # เปลี่ยนชื่อให้สื่อว่าเป็น Score
         'Diagnosis_Dr_A': dr_a,
         'Diagnosis_Dr_B': dr_b,
         # Correlation
         'Lab_Albumin': lab_alb,
         'Lab_Calcium': lab_ca,
-        # For Time Cox (Placeholder)
+        # For Time Cox
         'T_Start': np.zeros(n, dtype=int),
         'T_Stop': time_obs
     }
     
     st.session_state.df = pd.DataFrame(data)
     
-    # Set Metadata (ให้แสดงผลสวยๆ อัตโนมัติ)
+    # Set Metadata
+    # ⚠️ หมายเหตุ: ไม่ต้องใส่ Rapid_Test_Score ในนี้ เพื่อให้ระบบ Auto-detect มองว่าเป็น Continuous
     st.session_state.var_meta = {
         'Group_Treatment': {'type':'Categorical', 'map':{0:'Standard Care', 1:'New Drug'}},
         'Sex': {'type':'Categorical', 'map':{0:'Female', 1:'Male'}},
         'Comorbidity': {'type':'Categorical', 'map':{0:'No', 1:'Yes'}},
         'Status_Death': {'type':'Categorical', 'map':{0:'Censored', 1:'Dead'}},
         'Gold_Standard': {'type':'Categorical', 'map':{0:'Healthy', 1:'Disease'}},
-        'Rapid_Test': {'type':'Categorical', 'map':{0:'Negative', 1:'Positive'}},
+        # Rapid_Test_Score ปล่อยให้เป็น Continuous โดยธรรมชาติ
         'Diagnosis_Dr_A': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}},
         'Diagnosis_Dr_B': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}}
     }
     
-    st.sidebar.success(f"Loaded {n} Example Patients! Ready for all tabs.")
+    st.sidebar.success(f"Loaded {n} Example Patients! (Rapid Test is now Continuous)")
     st.rerun()
     
 # File Uploader
