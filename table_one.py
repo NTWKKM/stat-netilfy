@@ -1,6 +1,9 @@
+# table_one.py
 import pandas as pd
 import numpy as np
 from scipy import stats
+# 🟢 NEW: Import statsmodels for Logistic Regression (Continuous OR)
+import statsmodels.api as sm 
 
 def clean_numeric(val):
     if pd.isna(val): return np.nan
@@ -59,29 +62,13 @@ def get_stats_categorical_str(counts, total):
         res.append(f"{cat}: {count} ({pct:.1f}%)")
     return "<br>".join(res)
 
-# --- 🟢 NEW: Calculate OR & 95% CI (One-vs-Rest) ---
-def calculate_or_ci(df, col_name, target_cat, group_col, group1_val):
-    """
-    Calculates OR for (col_name == target_cat) vs (col_name != target_cat)
-    against (group_col == group1_val) vs (group_col != group1_val).
-    """
-    try:
-        # Prepare Binary Vectors (1=Target/Event, 0=Reference)
-        
-        # Row Variable: Is this the specific category? (One vs Rest)
-        # Note: We need to handle mapping if data was mapped before passing here, 
-        # but to be safe, we perform calculation on the *Mapped Series* passed in main loop
-        pass # Logic moved to main loop for efficiency
-    except:
-        return "-"
-    return "-"
-
+# --- 🟢 NEW: Calculate OR & 95% CI (One-vs-Rest) for Categorical ---
 def compute_or_for_row(row_series, cat_val, group_series, g1_val):
     try:
         # Construct 2x2 Table
-        #           Group 1   Group 0
-        # Cat Val      a         b
-        # Not Cat      c         d
+        #            Group 1   Group 0
+        # Cat Val       a         b
+        # Not Cat       c         d
         
         # Cast to strings to ensure safe comparison
         row_bin = (row_series.astype(str) == str(cat_val))
@@ -106,6 +93,47 @@ def compute_or_for_row(row_series, cat_val, group_series, g1_val):
         
         return f"{or_val:.2f} ({lower:.2f}-{upper:.2f})"
     except:
+        return "-"
+
+# --- 🟢 NEW: Calculate OR & 95% CI for Continuous (Logistic Regression) ---
+def calculate_or_continuous_logit(df, feature_col, group_col, group1_val):
+    """
+    Calculates OR using Univariate Logistic Regression.
+    Interpretation: OR per 1 unit increase in feature_col.
+    """
+    try:
+        # Prepare Data
+        # Y = Target (Binary: 1=Group1, 0=Others)
+        y = (df[group_col] == group1_val).astype(int)
+        
+        # X = Feature (Continuous) - Use clean_numeric to handle strings
+        X = df[feature_col].apply(clean_numeric)
+        
+        # Drop NaNs aligned
+        mask = ~np.isnan(X) & ~np.isnan(y)
+        y = y[mask]
+        X = X[mask]
+        
+        if len(y) < 10 or y.nunique() < 2: return "-" # Not enough data
+        
+        # Logistic Regression using statsmodels
+        # Add constant (intercept) manually as statsmodels doesn't add it by default
+        X_const = sm.add_constant(X) 
+        model = sm.Logit(y, X_const)
+        result = model.fit(disp=0) # disp=0 to silence output
+        
+        # Extract OR and CI
+        # params[1] is the coefficient for our variable (index 0 is constant)
+        coef = result.params.iloc[1]
+        conf = result.conf_int().iloc[1]
+        
+        or_val = np.exp(coef)
+        lower = np.exp(conf[0])
+        upper = np.exp(conf[1])
+        
+        return f"{or_val:.2f} ({lower:.2f}-{upper:.2f})"
+    except Exception as e:
+        # print(f"Logit Error: {e}") # Debug if needed
         return "-"
 
 # --- P-value Functions (Unchanged) ---
@@ -201,7 +229,7 @@ def generate_table(df, selected_vars, group_col, var_meta):
     
     # 🟢 Add OR Column Header
     if show_or:
-        html += f"<th>OR (95% CI)<br><span style='font-size:0.8em; font-weight:normal'>(vs Others)</span></th>"
+        html += f"<th>OR (95% CI)<br><span style='font-size:0.8em; font-weight:normal'>(vs Others / Per Unit)</span></th>"
         
     html += "<th>P-value</th>"
     html += "<th>Test Used</th>"
@@ -270,6 +298,9 @@ def generate_table(df, selected_vars, group_col, var_meta):
                         or_res = compute_or_for_row(mapped_full_series, cat, df[group_col], group_1_val)
                         cat_ors.append(f"{or_res}")
                     or_cell_content = "<br>".join(cat_ors)
+                else:
+                    # 🟢 NEW: Continuous Variable OR Calculation
+                    or_cell_content = calculate_or_continuous_logit(df, col, group_col, group_1_val)
                 
                 row_html += f"<td style='text-align: center; white-space: nowrap;'>{or_cell_content}</td>"
 
@@ -291,9 +322,10 @@ def generate_table(df, selected_vars, group_col, var_meta):
         
     html += "</tbody></table>"
     html += """<div class='footer-note'>
-    <b>OR (Odds Ratio):</b> Calculated using One-vs-Rest method for categorical variables (Category X vs All Other Categories). 
-    Reference group is the first column of the grouping variable. Values are OR (95% CI).<br>
-    Data presented as Mean \u00B1 SD or n (%).
+    <b>OR (Odds Ratio):</b> <br>
+    - Categorical: One-vs-Rest method (Category X vs All Other Categories).<br>
+    - Continuous: Univariate Logistic Regression (Odds change per 1 unit increase).<br>
+    Reference group is the first column of the grouping variable. Values are OR (95% CI).
     </div>"""
     html += "</div>"
     
