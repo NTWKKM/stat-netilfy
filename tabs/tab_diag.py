@@ -46,16 +46,32 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         
         rc1, rc2, rc3, rc4 = st.columns(4)
         
-        def_idx = 0
-        for i, c in enumerate(all_cols):
-            if 'gold' in c.lower() or 'outcome' in c.lower(): def_idx = i; break
+        # ---------------------------------------------------------
+        # 🟢 Auto-Select Logic (โค้ดของคุณ + ส่วนขยาย)
+        # ---------------------------------------------------------
         
-        truth = rc1.selectbox("Gold Standard (Binary):", all_cols, index=def_idx, key='roc_truth_diag')
-        
-        score_idx = 0
+        # 1. หา Index สำหรับ Gold Standard (มองหาคำว่า 'gold', 'outcome', 'status')
+        gold_idx = 0
         for i, c in enumerate(all_cols):
-            if 'score' in c.lower(): score_idx = i; break
-        score = rc2.selectbox("Test Score (Continuous):", all_cols, index=score_idx, key='roc_score_diag')
+            c_low = c.lower()
+            if 'gold' in c_low or 'outcome' in c_low or 'status' in c_low:
+                gold_idx = i
+                break
+        
+        # 2. หา Index สำหรับ Test Variable (มองหาคำว่า 'rapid', 'test', 'score')
+        test_idx = 0
+        if len(all_cols) > 1: # เช็คว่ามี column พอให้เลือกไหม
+            for i, c in enumerate(all_cols):
+                c_low = c.lower()
+                # ต้องไม่ซ้ำกับ Gold Standard และมีคำค้นหา
+                if i != gold_idx and ('rapid' in c_low or 'test' in c_low or 'score' in c_low):
+                    test_idx = i
+                    break
+        # ---------------------------------------------------------
+
+        # นำ index ที่หาได้มาใส่ใน selectbox ตรงพารามิเตอร์ `index=...`
+        target_var = rc1.selectbox("1. Gold Standard (Binary):", all_cols, index=gold_idx)
+        test_var = rc2.selectbox("2. Test Variable (Continuous):", all_cols, index=test_idx)
         
         method = rc3.radio("CI Method:", ["DeLong et al.", "Binomial (Hanley)"], key='roc_method_diag')
 
