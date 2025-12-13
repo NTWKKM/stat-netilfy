@@ -3,6 +3,7 @@ import numpy as np
 import scipy.stats as stats
 import statsmodels.api as sm
 import warnings
+import html as _html
 import streamlit as st  # ✅ IMPORT STREAMLIT
 
 # ✅ TRY IMPORT FIRTHLOGIST
@@ -26,7 +27,8 @@ def clean_numeric_value(val):
     Returns:
         numeric_value (float): The parsed float, or `np.nan` when the value is missing or unparseable.
     """
-    if pd.isna(val): return np.nan
+    if pd.isna(val): 
+        return np.nan
     s = str(val).strip()
     s = s.replace('>', '').replace('<', '').replace(',', '')
     try:
@@ -114,7 +116,9 @@ def get_label(col_name, var_meta):
         if 'label' in var_meta[orig_name]:          # <--- ย่อหน้าเข้ามา 8 spaces
             label = var_meta[orig_name]['label']    # <--- ย่อหน้าเข้ามา 12 spaces
              
-    return f"<b>{orig_name}</b><br><span style='color:#666; font-size:0.9em'>{label}</span>"
+    safe_name = _html.escape(str(orig_name))
+    safe_label = _html.escape(str(label))
+    return f"<b>{safe_name}</b><br><span style='color:#666; font-size:0.9em'>{safe_label}</span>"
 
 # ✅ CACHE DATA: ช่วยให้เว็บเร็วขึ้น ไม่ต้องคำนวณใหม่ทุกครั้งที่กดปุ่มอื่น
 # 🟢 NOTE: ต้องเพิ่ม method ลงใน argument เพื่อให้ cache แยกกันตาม method ที่เลือก
