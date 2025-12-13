@@ -61,27 +61,25 @@ st.sidebar.header("1. Data Management")
 
 # Example Data Generator
 if st.sidebar.button("📄 Load Example Data"):
-    np.random.seed(999) # Fixed seed เพื่อให้ผลลัพธ์คงที่
+    np.random.seed(999) # Fixed seed
     n = 600 
     
-    # --- 1. Demographics & Confounders (Table 1 & PSM) ---
+    # --- 1. Demographics & Confounders ---
     age = np.random.normal(55, 12, n).astype(int).clip(20, 90)
     sex = np.random.binomial(1, 0.55, n)
     bmi = np.random.normal(24, 4, n).round(1)
     
-    # Comorbidity: สัมพันธ์กับ Age/BMI
+    # Comorbidity
     logit_comorb = -5 + 0.05*age + 0.1*bmi
     p_comorb = 1 / (1 + np.exp(-logit_comorb))
     comorbidity = np.random.binomial(1, p_comorb)
 
-    # --- 2. Treatment Assignment (Selection Bias for PSM) ---
-    # กลุ่มที่มีโรคประจำตัว มีโอกาสได้ยาใหม่ (New Drug) มากกว่า -> เกิด Bias
+    # --- 2. Treatment Assignment (Selection Bias) ---
     logit_treat = -2 + 1.5*comorbidity - 0.02*age
     p_treat = 1 / (1 + np.exp(-logit_treat))
     group = np.random.binomial(1, p_treat) 
 
     # --- 3. Outcome & Survival ---
-    # Hazard: Group 1 ลดเสี่ยงตาย (0.5x), Comorbidity เพิ่มเสี่ยง (1.5x)
     lambda_base = 0.02
     hazard = lambda_base * np.exp(0.4*comorbidity - 0.8*group)
     surv_time = np.random.exponential(1/hazard)
@@ -90,22 +88,25 @@ if st.sidebar.button("📄 Load Example Data"):
     time_obs = np.minimum(surv_time, censor_time).round(1)
     event_death = (surv_time <= censor_time).astype(int)
 
-    # --- 4. Diagnostic Test (Adjusted: Continuous Rapid Test) ---
-    # Gold Standard: โรคจริง (0=Healthy, 1=Disease)
-    gold_std = np.random.binomial(1, 0.3, n) # ความชุก 30%
+    # --- 4. Diagnostic Test (Adjusted: More Realistic Overlap) ---
+    # Gold Standard: โรคจริง
+    gold_std = np.random.binomial(1, 0.3, n)
     
-    # Rapid Test (Continuous): เช่น ค่าเอนไซม์ หรือ Biomarker
-    # Healthy (0): ค่าต่ำ (Mean=20, SD=10)
-    # Disease (1): ค่าสูง (Mean=60, SD=15)
-    # มีการเหลื่อมกัน (Overlap) เพื่อให้หา Cut-off ที่เหมาะสมได้
+    # Rapid Test Score (Continuous): 
+    # ปรับค่าให้ใกล้กันมากขึ้น (Overlap) เพื่อให้ ROC ไม่ Perfect เกินไป
+    # Healthy (0): Mean=35, SD=10 (ช่วงส่วนใหญ่ 15-55)
+    # Disease (1): Mean=55, SD=15 (ช่วงส่วนใหญ่ 25-85)
+    # จะมีช่วง 25-55 ที่ทับซ้อนกัน ซึ่งเป็น Grey Zone ที่ทำให้ AUC < 1.0
     rapid_test_val = np.where(gold_std==1, 
-                              np.random.normal(60, 15, n), 
-                              np.random.normal(20, 10, n))
-    rapid_test_val = rapid_test_val.round(1)
+                              np.random.normal(55, 15, n), # เดิม 60
+                              np.random.normal(35, 10, n)) # เดิม 20
     
-    # Inter-rater (Kappa): Dr.A vs Dr.B (Categorical เหมือนเดิม)
+    # ป้องกันค่าติดลบ (ถ้าเป็น Lab ทั่วไป) และปัดทศนิยม
+    rapid_test_val = np.maximum(rapid_test_val, 0).round(1)
+    
+    # Inter-rater (Kappa): Dr.A vs Dr.B
     dr_a = np.where(gold_std==1, np.random.binomial(1, 0.9, n), np.random.binomial(1, 0.1, n))
-    agree_noise = np.random.binomial(1, 0.90, n)
+    agree_noise = np.random.binomial(1, 0.85, n) # ลด Agreement ลงนิดหน่อยให้ดู Real
     dr_b = np.where(agree_noise==1, dr_a, 1-dr_a)
 
     # --- 5. Correlation ---
@@ -126,7 +127,7 @@ if st.sidebar.button("📄 Load Example Data"):
         'Status_Death': event_death,
         # Diagnostic
         'Gold_Standard': gold_std,
-        'Rapid_Test_Score': rapid_test_val, # เปลี่ยนชื่อให้สื่อว่าเป็น Score
+        'Rapid_Test_Score': rapid_test_val, 
         'Diagnosis_Dr_A': dr_a,
         'Diagnosis_Dr_B': dr_b,
         # Correlation
@@ -140,19 +141,17 @@ if st.sidebar.button("📄 Load Example Data"):
     st.session_state.df = pd.DataFrame(data)
     
     # Set Metadata
-    # ⚠️ หมายเหตุ: ไม่ต้องใส่ Rapid_Test_Score ในนี้ เพื่อให้ระบบ Auto-detect มองว่าเป็น Continuous
     st.session_state.var_meta = {
         'Group_Treatment': {'type':'Categorical', 'map':{0:'Standard Care', 1:'New Drug'}},
         'Sex': {'type':'Categorical', 'map':{0:'Female', 1:'Male'}},
         'Comorbidity': {'type':'Categorical', 'map':{0:'No', 1:'Yes'}},
         'Status_Death': {'type':'Categorical', 'map':{0:'Censored', 1:'Dead'}},
         'Gold_Standard': {'type':'Categorical', 'map':{0:'Healthy', 1:'Disease'}},
-        # Rapid_Test_Score ปล่อยให้เป็น Continuous โดยธรรมชาติ
         'Diagnosis_Dr_A': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}},
         'Diagnosis_Dr_B': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}}
     }
     
-    st.sidebar.success(f"Loaded {n} Example Patients! (Rapid Test is now Continuous)")
+    st.sidebar.success(f"Loaded {n} Example Patients! (Rapid Test Updated)")
     st.rerun()
     
 # File Uploader
