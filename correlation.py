@@ -6,7 +6,7 @@ import io, base64
 import streamlit as st # 🟢 1. IMPORT STREAMLIT
 
 @st.cache_data(show_spinner=False)
-def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_pos=None): # 👈 แก้บรรทัดนี้
+def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_pos=None):
     """
     Compute a contingency table and perform a Chi-square or Fisher's Exact test between two categorical dataframe columns.
     
@@ -43,23 +43,27 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     base_col_labels = [col for col in all_col_labels if col != 'Total']
     base_row_labels = [row for row in all_row_labels if row != 'Total']
 
+    # 🟢 Helper Functions (ประกาศครั้งเดียว)
     def get_original_label(label_str, df_labels):
         """
         Find the original label from a collection that matches a given string representation.
-        
-        Parameters:
-            label_str (str): The string representation to match.
-            df_labels (iterable): An iterable of labels (of any type) to search.
-        
-        Returns:
-            The label from `df_labels` whose string form equals `label_str`, or `label_str` if no match is found.
         """
         for lbl in df_labels:
             if str(lbl) == label_str:
                 return lbl
         return label_str 
-    
-    # Reorder Cols
+
+    def custom_sort(label):
+        """
+        Produce a sort key for a label by converting numeric-like labels to floats and leaving others as strings.
+        Using tuple (priority, value) to handle mixed types safely.
+        """
+        try:
+            return (0, float(label)) # ให้ตัวเลขมาก่อนเสมอ
+        except (ValueError, TypeError):
+            return (1, str(label))   # ตามด้วยตัวหนังสือ
+
+    # --- Reorder Cols ---
     final_col_order_base = base_col_labels[:]
     if v2_pos is not None: 
         v2_pos_original = get_original_label(v2_pos, base_col_labels)
@@ -67,22 +71,10 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             final_col_order_base.remove(v2_pos_original)
             final_col_order_base.insert(0, v2_pos_original)
     else:
-        def custom_sort(label):
-            """
-            Produce a sort key for a label by converting numeric-like labels to floats and leaving others as strings.
-            
-            Parameters:
-            	label: The value to convert into a sort key; may be numeric, numeric string, or any other object.
-            
-            Returns:
-            	A float if `label` can be converted to a numeric value, otherwise the string representation of `label`.
-            """
-            try: return float(label)
-            except (ValueError, TypeError): return str(label)
         final_col_order_base.sort(key=custom_sort, reverse=True)
     final_col_order = final_col_order_base + ['Total'] 
 
-    # Reorder Rows
+    # --- Reorder Rows ---
     final_row_order_base = base_row_labels[:]
     if v1_pos is not None: 
         v1_pos_original = get_original_label(v1_pos, base_row_labels)
@@ -90,18 +82,6 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             final_row_order_base.remove(v1_pos_original)
             final_row_order_base.insert(0, v1_pos_original)
     else:
-        def custom_sort(label):
-            """
-            Produce a sort key for a label by converting numeric-like labels to floats and leaving others as strings.
-            
-            Parameters:
-            	label: The value to convert into a sort key; may be numeric, numeric string, or any other object.
-            
-            Returns:
-            	A float if `label` can be converted to a numeric value, otherwise the string representation of `label`.
-            """
-            try: return float(label)
-            except (ValueError, TypeError): return str(label)
         final_row_order_base.sort(key=custom_sort, reverse=True)
     final_row_order = final_row_order_base + ['Total']
 
@@ -131,7 +111,6 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     try:
         is_2x2 = (tab_chi2.shape == (2, 2))
         
-        # ✅ ตอนนี้ method จะมีค่าแล้ว ไม่ Error
         if "Fisher" in method:
             if not is_2x2:
                 return display_tab, None, "Error: Fisher's Exact Test requires a 2x2 table.", None
@@ -185,7 +164,7 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     except Exception as e:
         return display_tab, None, str(e), None
 
-@st.cache_data(show_spinner=False) # 🟢 2. ADD CACHE
+@st.cache_data(show_spinner=False)
 def calculate_correlation(df, col1, col2, method='pearson'):
     """
     Compute a correlation between two dataframe columns and produce a scatter plot with an optional linear fit.
@@ -217,7 +196,6 @@ def calculate_correlation(df, col1, col2, method='pearson'):
     return {"Method": name, "Coefficient": corr, "P-value": p, "N": len(data)}, None, fig
 
 def generate_report(title, elements):
-    # (คงเดิม)
     """
     Generate a complete HTML report containing a title and a sequence of report elements.
     
