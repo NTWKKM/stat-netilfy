@@ -415,6 +415,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     else:
         method_note = "Binary Logistic Regression"
 
+    # 🟢 แก้ไขส่วน Return HTML ให้เพิ่ม Note เรื่อง aOR
     return f"""
     <div id='{outcome_name}' class='table-container'>
     <div class='outcome-title'>Outcome: {outcome_name} (Total n={total_n})</div>
@@ -436,6 +437,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     <div class='summary-box'>
         <b>Method:</b> {method_note}. Complete Case Analysis.<br>
         <i>Univariate comparison uses Chi-square test (Categorical) or Mann-Whitney U test (Continuous).</i>
+        <div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee; font-size: 0.9em; color: #666;'>
+            <b>* Note on aOR:</b> Adjusted Odds Ratios are calculated only for variables with a <b>Crude P-value < 0.20</b> 
+            (Screening criteria) and sufficient data quality to prevent overfitting.
+        </div>
     </div>
     </div><br>
     """
