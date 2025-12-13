@@ -286,11 +286,7 @@ def check_cph_assumptions(cph, data):
     Returns:
         tuple:
             advice_text (str): Textual diagnostic output produced by lifelines' check_assumptions (or an error message if the check failed).
-            figs (list[matplotlib.figure.Figure]): List of matplotlib Figure objects created by the diagnostic checks; empty if none or on error.
-            
-    Note:
-        This function returns Matplotlib figures. The caller is responsible for closing them 
-        (e.g., using plt.close(fig)) after use to avoid memory leaks.
+            fig_images (list[bytes]): List of PNG image bytes from diagnostic plots; empty if none or on error. Figures are automatically closed to prevent memory leaks.
     """
     try:
         f = io.StringIO()
