@@ -148,6 +148,8 @@ def render(df, _var_meta):
             # Filter Data
             mask = df[col_time] >= landmark_t
             df_lm = df[mask].copy()
+            # Optional: re-zero time to show survival FROM the landmark
+            df_lm[col_time] = df_lm[col_time] - landmark_t
             
             n_excl = len(df) - len(df_lm)
             st.success(f"**Included:** {len(df_lm)} patients. (**Excluded:** {n_excl} early events/censored)")
@@ -160,9 +162,9 @@ def render(df, _var_meta):
                 
                 # Plot Line
                 ax = fig.gca()
-                ax.axvline(landmark_t, color='red', linestyle='--', label=f'Landmark t={landmark_t}')
+                ax.axvline(0.0, color='red', linestyle='--', label=f'Landmark t={landmark_t}')
                 ax.legend()
-                ax.set_title(f"Landmark Analysis (Survival given t >= {landmark_t})")
+                ax.set_title(f"Landmark Analysis (Survival from landmark t={landmark_t})")
                 
                 st.pyplot(fig)
                 st.dataframe(stats)
