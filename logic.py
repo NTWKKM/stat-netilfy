@@ -344,8 +344,22 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     # --- HTML BUILD ---
     html_rows = []
     current_sheet = ""
-    for col in sorted_cols:
-        if col == outcome_name or col not in results_db: continue
+    
+    # 🟢 1. เตรียมรายชื่อคอลัมน์ที่มีผลลัพธ์
+    valid_cols_for_html = [c for c in sorted_cols if c in results_db]
+
+    # 🟢 2. สร้างฟังก์ชันสำหรับเรียงลำดับ: เรียงตาม Group ก่อน แล้วค่อยเรียงตามชื่อ
+    def sort_key_for_grouping(col_name):
+        # ถ้ามี _ ให้ใช้คำหน้าเป็น Group, ถ้าไม่มีให้เป็น "Variables"
+        group = col_name.split('_')[0] if '_' in col_name else "Variables"
+        return (group, col_name)
+
+    # 🟢 3. ทำการเรียงลำดับใหม่
+    grouped_cols = sorted(valid_cols_for_html, key=sort_key_for_grouping)
+
+    # 🟢 4. Loop สร้าง HTML จากรายการที่เรียงใหม่แล้ว
+    for col in grouped_cols:
+        if col == outcome_name: continue
         res = results_db[col]
         
         sheet = col.split('_')[0] if '_' in col else "Variables"
@@ -388,12 +402,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     
     # Update Footer Note
     if preferred_method == 'firth':
-        # 🟢 แก้ไข: แยกแยะระหว่าง Auto กับ User Selected
         suffix = "(Auto-detected)" if method == 'auto' else "(User Selected)"
         method_note = f"Firth's Penalized Likelihood {suffix}"
 
     elif preferred_method == 'bfgs':
-        # เพิ่มกรณี bfgs ถูกเลือกผ่าน auto ได้เหมือนกัน (ถ้าไม่มี firth)
         suffix = "(Auto-fallback)" if method == 'auto' else "(MLE)"
         method_note = f"Standard Binary Logistic Regression {suffix}"
 
@@ -428,20 +440,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     </div><br>
     """
 
-# 🟢 UPDATE: เพิ่ม method='auto' ใน parameter
 def process_data_and_generate_html(df, target_outcome, var_meta=None, method='auto'):
-    """
-    Builds a complete HTML analysis report for a binary outcome from the provided DataFrame.
-    
-    Parameters:
-    	df (pandas.DataFrame): Source data containing the outcome and predictor columns.
-    	target_outcome (str): Column name of the binary outcome to analyze.
-    	var_meta (dict | None): Optional variable metadata mapping used to override labels or force variable types.
-    	method (str): Regression method to use for modeling; one of 'auto', 'firth', 'bfgs', or 'default'. 'auto' selects a suitable method based on availability.
-    
-    Returns:
-    	html (str): A complete HTML document (string) containing the analysis table, method notes, and footer.
-    """
     css_style = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; }
@@ -468,7 +467,6 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None, method='au
     
     html = f"<!DOCTYPE html><html><head>{css_style}</head><body>"
     html += "<h1>Analysis Report</h1>"
-    # 🟢 ส่งต่อ method ไปยัง analyze_outcome
     html += analyze_outcome(target_outcome, df, var_meta, method=method)
     
     html += """<div class='report-footer'>
