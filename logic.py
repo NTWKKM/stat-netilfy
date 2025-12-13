@@ -127,7 +127,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     """
     Analyze a binary outcome against all other columns in a dataframe and produce an HTML report summarizing univariate and multivariate results.
     
-    Per-column descriptive statistics and univariate comparisons are computed (Chi-square for categorical, Mann–Whitney U for continuous), univariable logistic regression provides crude odds ratios, and a multivariable logistic model is fitted on screened candidate predictors to produce adjusted odds ratios when feasible.
+    Per-column descriptive statistics and univariate comparisons are computed (Chi-square for categorical, Mann-Whitney U for continuous), univariable logistic regression provides crude odds ratios, and a multivariable logistic model is fitted on screened candidate predictors to produce adjusted odds ratios when feasible.
     
     Parameters:
         outcome_name (str): Column name of the binary outcome in `df`.
@@ -275,7 +275,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             res['desc_pos'] = f"{m_p:.2f} ({s_p:.2f})"
             
             try:
-                u, p = stats.mannwhitneyu(pd.to_numeric(X_neg, errors='coerce').dropna(), pd.to_numeric(X_pos, errors='coerce').dropna())
+                _, p = stats.mannwhitneyu(pd.to_numeric(X_neg, errors='coerce').dropna(), pd.to_numeric(X_pos, errors='coerce').dropna())
                 res['p_comp'] = p
                 res['test_name'] = "Mann-Whitney U"
             except (ValueError, TypeError): 
