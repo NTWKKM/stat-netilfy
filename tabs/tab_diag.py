@@ -77,7 +77,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
 
         # Positive Label
         pos_label = None
-        unique_vals = df[truth].dropna().unique()
+        unique_vals = df[target_var].dropna().unique()
         if len(unique_vals) == 2:
             sorted_vals = sorted([str(x) for x in unique_vals])
             default_pos_idx = 0
@@ -93,11 +93,11 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         if run_col.button("📉 Analyze ROC", key='btn_roc_diag'):
             if pos_label and len(unique_vals) == 2:
                 # Call analyze_roc from diag_test
-                res, err, fig, coords_df = diag_test.analyze_roc(df, truth, score, 'delong' if 'DeLong' in method else 'hanley', pos_label_user=pos_label)
+                res, err, fig, coords_df = diag_test.analyze_roc(df, target_var, score, 'delong' if 'DeLong' in method else 'hanley', pos_label_user=pos_label)
                 if err: st.error(err)
                 else:
                     rep = [
-                        {'type':'text', 'data':f"Analysis: <b>{score}</b> vs <b>{truth}</b>"},
+                        {'type':'text', 'data':f"Analysis: <b>{score}</b> vs <b>{target_var}</b>"},
                         {'type':'plot', 'data':fig},
                         {'type':'table', 'header':'Key Statistics', 'data':pd.DataFrame([res]).T},
                         {'type':'table', 'header':'Diagnostic Performance', 'data':coords_df}
