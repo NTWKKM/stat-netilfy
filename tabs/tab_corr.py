@@ -53,7 +53,7 @@ def render(df):
         v1 = cc1.selectbox("Variable 1 (Exposure/Row):", all_cols, index=v1_idx, key='chi1_corr_tab') 
         v2 = cc2.selectbox("Variable 2 (Outcome/Col):", all_cols, index=v2_idx, key='chi2_corr_tab')
         
-        # 🟢 UPDATE: เพิ่ม Fisher's Exact Test และเปลี่ยนชื่อตัวแปรเป็น method_choice
+        # 🟢 UPDATE: เพิ่ม Fisher's Exact Test
         method_choice = cc3.radio(
             "Test Method (for 2x2):", 
             ['Pearson (Standard)', "Yates' correction", "Fisher's Exact Test"], 
@@ -99,9 +99,9 @@ def render(df):
             v2_pos_label = cc5.selectbox(f"Positive Label (Col: {v2}):", v2_uv, index=v2_default_idx, key='chi_v2_pos_corr')
         
         # 🛑 จุดเพิ่ม: ถ้าเลือกค่าไม่ได้ ให้หยุดการทำงาน
-        if v1_pos_label is None or v2_pos_label is None:
-            st.error("Cannot calculate: One of the selected columns is empty.")
-            st.stop()
+        inputs_ok = not (v1_pos_label is None or v2_pos_label is None)
+        if not inputs_ok:
+            st.warning("Chi-Square disabled: one of the selected columns has no non-null values.")
         
         # Add a placeholder column to maintain alignment
         cc6.empty()
@@ -110,11 +110,11 @@ def render(df):
         run_col, dl_col = st.columns([1, 1])
         if 'html_output_corr_cat' not in st.session_state: st.session_state.html_output_corr_cat = None
 
-        if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run'):
+        if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run', disabled=not inputs_ok):
             # 🟢 จุดแก้ 3: แปลงข้อมูลเป็น String เพื่อให้ Type ตรงกับ Selectbox
             df_calc = df.copy()
-            df_calc[v1] = df_calc[v1].astype(str)
-            df_calc[v2] = df_calc[v2].astype(str)
+            df_calc[v1] = df_calc[v1].astype("string")
+            df_calc[v2] = df_calc[v2].astype("string")
 
             # 🟢 UPDATE: ส่ง df_calc แทน df
             tab, stats, msg, risk_df = correlation.calculate_chi2(
