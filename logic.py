@@ -384,10 +384,12 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         # 🟢 แก้ไข: แยกแยะระหว่าง Auto กับ User Selected
         suffix = "(Auto-detected)" if method == 'auto' else "(User Selected)"
         method_note = f"Firth's Penalized Likelihood {suffix}"
-        
+
     elif preferred_method == 'bfgs':
-        method_note = "Standard Binary Logistic Regression (MLE)"
-    
+        # เพิ่มกรณี bfgs ถูกเลือกผ่าน auto ได้เหมือนกัน (ถ้าไม่มี firth)
+        suffix = "(Auto-fallback)" if method == 'auto' else "(MLE)"
+        method_note = f"Standard Binary Logistic Regression {suffix}"
+
     elif preferred_method == 'default':
         method_note = "Standard Binary Logistic Regression (Default Optimizer)"
         
