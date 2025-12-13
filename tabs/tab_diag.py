@@ -48,7 +48,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         
         def_idx = 0
         for i, c in enumerate(all_cols):
-            if 'outcome' in c.lower() or 'gold' in c.lower(): def_idx = i; break
+            if 'gold' in c.lower() or 'outcome' in c.lower(): def_idx = i; break
         
         truth = rc1.selectbox("Gold Standard (Binary):", all_cols, index=def_idx, key='roc_truth_diag')
         
