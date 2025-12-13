@@ -274,6 +274,8 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         # 🟢 FIX BUG: ใช้ index ที่คำนวณได้
         kv1 = k1.selectbox("Rater/Method 1:", all_cols, index=kv1_default_idx, key='kappa_v1_diag')
         kv2 = k2.selectbox("Rater/Method 2:", all_cols, index=kv2_default_idx, key='kappa_v2_diag')
+        if kv1 == kv2:
+            st.warning("Please select two different columns for Kappa.")
         
         k_run, k_dl = st.columns([1, 1])
         if 'html_output_kappa' not in st.session_state:
