@@ -302,11 +302,18 @@ def check_cph_assumptions(cph, data):
         
         advice_text = f.getvalue()
         
-        # ดักจับกราฟที่ถูกสร้างขึ้นใหม่
+        # ดักจับกราฟที่ถูกสร้างขึ้นใหม่ และแปลงเป็น bytes ทันที
         new_figs_nums = [n for n in plt.get_fignums() if n not in old_figs]
-        figs = [plt.figure(n) for n in new_figs_nums]
+        fig_images = []
+        for n in new_figs_nums:
+            fig = plt.figure(n)
+            buf = io.BytesIO()
+            fig.savefig(buf, format='png', bbox_inches='tight')
+            buf.seek(0)
+            fig_images.append(buf.getvalue())
+            plt.close(fig)  # ปิดทันทีเพื่อป้องกัน memory leak
         
-        return advice_text, figs
+        return advice_text, fig_images
         
     except (KeyboardInterrupt, SystemExit): # <--- 🟢 เพิ่มการ Re-raise
         raise
