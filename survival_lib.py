@@ -368,16 +368,11 @@ def generate_report_survival(title, elements):
             plt.close(el['data']) # Close figure after saving
             uri = base64.b64encode(buf.getvalue()).decode('utf-8')
             html_doc += f'<img src="data:image/png;base64,{uri}" style="max-width:100%; margin-top:10px;"/>'
-
         # 🟢 NEW: รองรับ Image ที่เป็น Bytes (ของ Cox Assumption)
         elif el['type'] == 'image':
             # el['data'] คือ bytes อยู่แล้ว ไม่ต้อง savefig
             uri = base64.b64encode(el['data']).decode('utf-8')
             html_doc += f'<img src="data:image/png;base64,{uri}" style="max-width:100%; margin-top:10px;"/>'
-            
-        # 🟢 NEW: รองรับ Preformatted text (ถ้าคุณใช้)
-        elif el['type'] == 'preformatted':
-            html_doc += f"<pre style='white-space: pre-wrap; background-color: #f8f9fa; padding: 10px; border: 1px solid #ddd;'>{html.escape(str(el['data']))}</pre>"
             
     html_doc += """<div class='report-footer'>
     &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM n Donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
