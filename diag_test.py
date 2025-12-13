@@ -39,13 +39,32 @@ def calculate_descriptive(df, col):
 
 @st.cache_data(show_spinner=False)
 def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_pos=None):
-    """(SYNCED) คำนวณ Chi-square/Fisher"""
+    """
+    Compute a contingency table and perform a Chi-square or Fisher's Exact test between two categorical dataframe columns.
+    
+    Constructs crosstabs (counts, totals, and row percentages), optionally reorders rows/columns based on v1_pos/v2_pos, and runs the selected statistical test. For 2x2 tables the function also computes common risk metrics (risk, risk ratio, risk difference, NNT, and odds ratio) when possible.
+    
+    Parameters:
+        df (pandas.DataFrame): Source dataframe containing the columns.
+        col1 (str): Row (exposure) column name to analyze.
+        col2 (str): Column (outcome) column name to analyze.
+        method (str, optional): Test selection string. If it contains "Fisher" the function runs Fisher's Exact Test (requires a 2x2 table). If it contains "Yates" a Yates-corrected chi-square is used; otherwise Pearson chi-square is used. Defaults to 'Pearson (Standard)'.
+        v1_pos (str | int, optional): If provided, that row label is moved to the first position in the displayed table (useful for ordering exposure groups).
+        v2_pos (str | int, optional): If provided, that column label is moved to the first position in the displayed table (useful for ordering outcome categories).
+    
+    Returns:
+        tuple: (display_tab, stats_res, msg, risk_df)
+            display_tab (pandas.DataFrame): Formatted contingency table for display where each cell is "count (percentage%)", including totals.
+            stats_res (dict | None): Test results and metadata (e.g., {"Test": ..., "Statistic": ..., "P-value": ..., "Degrees of Freedom": ..., "N": ...}) or Fisher-specific keys; None on error.
+            msg (str): Human-readable summary of the test result and any warnings (e.g., expected count warnings or Fisher requirement errors).
+            risk_df (pandas.DataFrame | None): For 2x2 tables, a table of risk metrics (Risk in exposed/unexposed, RR, RD, NNT, OR); None when not applicable or on failure.
+    """
     if col1 not in df.columns or col2 not in df.columns: 
         return None, None, "Columns not found", None
     
     data = df[[col1, col2]].dropna()
     
-    # 1. Crosstab
+    # 1. Crosstabs
     tab_chi2 = pd.crosstab(data[col1], data[col2])
     tab_raw = pd.crosstab(data[col1], data[col2], margins=True, margins_name="Total")
     tab_row_pct = pd.crosstab(data[col1], data[col2], normalize='index', margins=True, margins_name="Total") * 100
@@ -56,12 +75,27 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     base_col_labels = [col for col in all_col_labels if col != 'Total']
     base_row_labels = [row for row in all_row_labels if row != 'Total']
 
+    # 🟢 Helper Functions (ประกาศครั้งเดียว)
     def get_original_label(label_str, df_labels):
+        """
+        Find the original label from a collection that matches a given string representation.
+        """
         for lbl in df_labels:
-            if str(lbl) == label_str: return lbl
+            if str(lbl) == label_str:
+                return lbl
         return label_str 
 
-    # Reorder Cols
+    def custom_sort(label):
+        """
+        Produce a sort key for a label by converting numeric-like labels to floats and leaving others as strings.
+        Using tuple (priority, value) to handle mixed types safely.
+        """
+        try:
+            return (0, float(label)) # ให้ตัวเลขมาก่อนเสมอ
+        except (ValueError, TypeError):
+            return (1, str(label))   # ตามด้วยตัวหนังสือ
+
+    # --- Reorder Cols ---
     final_col_order_base = base_col_labels[:]
     if v2_pos is not None: 
         v2_pos_original = get_original_label(v2_pos, base_col_labels)
@@ -69,15 +103,10 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             final_col_order_base.remove(v2_pos_original)
             final_col_order_base.insert(0, v2_pos_original)
     else:
-        def custom_sort(label):
-            try:
-                return (0, float(label))
-            except (ValueError, TypeError):
-                return (1, str(label))
         final_col_order_base.sort(key=custom_sort, reverse=True)
     final_col_order = final_col_order_base + ['Total'] 
 
-    # Reorder Rows
+    # --- Reorder Rows ---
     final_row_order_base = base_row_labels[:]
     if v1_pos is not None: 
         v1_pos_original = get_original_label(v1_pos, base_row_labels)
@@ -85,12 +114,6 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             final_row_order_base.remove(v1_pos_original)
             final_row_order_base.insert(0, v1_pos_original)
     else:
-        def custom_sort(label):
-            try:
-                # numeric labels first, then non‑numeric; both sortable
-                return (0, float(label))
-            except (ValueError, TypeError):
-                return (1, str(label))
         final_row_order_base.sort(key=custom_sort, reverse=True)
     final_row_order = final_row_order_base + ['Total']
 
@@ -116,26 +139,34 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     display_tab = pd.DataFrame(display_data, columns=col_names, index=index_names)
     display_tab.index.name = col1
     
-    # Stats
+    # 3. Stats
     try:
         is_2x2 = (tab_chi2.shape == (2, 2))
         
         if "Fisher" in method:
-            if not is_2x2: return display_tab, None, "Error: Fisher's Exact Test requires a 2x2 table.", None
+            if not is_2x2:
+                return display_tab, None, "Error: Fisher's Exact Test requires a 2x2 table.", None
+            
             odds_ratio, p_value = stats.fisher_exact(tab_chi2)
             method_name = "Fisher's Exact Test"
             msg = f"{method_name}: P-value={p_value:.4f}, OR={odds_ratio:.4f}"
             stats_res = {"Test": method_name, "Statistic (OR)": odds_ratio, "P-value": p_value, "Degrees of Freedom": "-", "N": len(data)}
+            
         else:
             use_correction = True if "Yates" in method else False
             chi2, p, dof, ex = stats.chi2_contingency(tab_chi2, correction=use_correction)
+            
             method_name = "Chi-Square"
-            if is_2x2: method_name += " (with Yates')" if use_correction else " (Pearson)"
+            if is_2x2:
+                method_name += " (with Yates')" if use_correction else " (Pearson)"
+            
             msg = f"{method_name}: Chi2={chi2:.4f}, p={p:.4f}"
             stats_res = {"Test": method_name, "Statistic": chi2, "P-value": p, "Degrees of Freedom": dof, "N": len(data)}
+            
             if (ex < 5).any() and is_2x2 and not use_correction:
                 msg += " ⚠️ Warning: Expected count < 5. Consider using Fisher's Exact Test."
-        
+                
+        # 4. Risk
         risk_df = None
         if is_2x2:
             try:
@@ -144,6 +175,7 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                 c, d = vals[1, 0], vals[1, 1]
                 row_labels = tab_chi2.index.tolist(); col_labels = tab_chi2.columns.tolist()
                 label_exp = str(row_labels[0]); label_unexp = str(row_labels[1]); label_event = str(col_labels[0])
+                
                 risk_exp = a/(a+b) if (a+b)>0 else 0; risk_unexp = c/(c+d) if (c+d)>0 else 0
                 rr = risk_exp/risk_unexp if risk_unexp>0 else np.nan
                 rd = risk_exp - risk_unexp; nnt = abs(1/rd) if rd!=0 else np.inf
@@ -161,7 +193,6 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             except: pass
 
         return display_tab, stats_res, msg, risk_df
-
     except Exception as e:
         return display_tab, None, str(e), None
 
