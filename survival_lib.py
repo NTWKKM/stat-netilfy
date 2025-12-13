@@ -32,20 +32,22 @@ def clean_survival_data(df, time_col, event_col, covariates=None):
     
     # เลือกเฉพาะคอลัมน์ที่ใช้ และแปลงเป็นตัวเลข
     data = df[cols].copy()
+    before = len(data)
     for c in data.columns:
-        data[c] = pd.to_numeric(data[c], errors='coerce')
+        data[c] = pd.to_numeric(data[c], errors="coerce")
         
     # ลบแถวที่มี Missing Value (Complete Case Analysis)
     data = data.dropna()
+    dropped = before - len(data)
+    # Optional: surface this via logging/UI instead of silently ignoring it.
     return data
 
 # --- 1. Kaplan-Meier & Log-Rank ---
-@st.cache_data(show_spinner=False, hash_funcs={matplotlib.figure.Figure: lambda _: None}) # <--- แก้ไขบรรทัดนี้
 def fit_km_logrank(df, time_col, event_col, group_col=None):
     """
     Fit and plot Kaplan–Meier survival curves and perform log-rank testing for group comparisons.
     
-    This function accepts pre-filtered data (suitable for landmark analyses), fits Kaplan–Meier estimators either overall or by group, plots the survival curves, and computes basic summary statistics. If two groups are present, a log-rank test is performed and its p-value is included in the results and plot title.
+    This function accepts pre-filtered data (suitable for landmark analyses), fits Kaplan-Meier estimators either overall or by group, plots the survival curves, and computes basic summary statistics. If 2+ groups are present, a log-rank test is performed (pairwise for 2 groups; multivariate for 3+), and its p-value is included in the results and plot title.
     
     Parameters:
         df (pandas.DataFrame): Input dataset containing time, event, and optional grouping columns.
@@ -126,7 +128,6 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
     return fig, pd.DataFrame(stats_res, index=["Value"]).T
 
 # --- 2. Nelson-Aalen (Cumulative Hazard) ---
-@st.cache_data(show_spinner=False, hash_funcs={matplotlib.figure.Figure: lambda _: None}) # <--- แก้ไขบรรทัดนี้
 def fit_nelson_aalen(df, time_col, event_col, group_col=None):
     """
     Create and plot a Nelson–Aalen cumulative hazard curve, optionally stratified by a grouping column.
@@ -160,6 +161,7 @@ def fit_nelson_aalen(df, time_col, event_col, group_col=None):
                 naf.plot_cumulative_hazard(ax=ax)
                 stats_res[f"{g} (N)"] = len(group_data)
                 stats_res[f"{g} (Events)"] = group_data[event_col].sum()
+            ax.set_title(f"Nelson-Aalen Cumulative Hazard: {group_col}")
     else:
         T = data[time_col]
         E = data[event_col]
@@ -202,6 +204,8 @@ def fit_cox_ph(df, time_col, event_col, covariates):
         summary_df.columns = ['Coef', 'HR', 'Lower 95%', 'Upper 95%', 'P-value']
         
         return cph, summary_df, data, None
+    except (KeyboardInterrupt, SystemExit):
+        raise
     except Exception as e:
         return None, None, None, str(e)
 
