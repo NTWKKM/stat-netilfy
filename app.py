@@ -13,7 +13,7 @@ st.set_page_config(
     menu_items={
         'Get Help': 'https://ntwkkm.github.io/infos/stat_manual.html',
         # 🟢 แก้จุดที่ 1: เปลี่ยนลิงก์เป็น GitHub Issues ของคุณ (หรือลบบรรทัดนี้ทิ้งถ้ายังไม่มี)
-        'Report a bug': "https://github.com/NTWKKM/stat-netilfy/issue", 
+        'Report a bug': "https://github.com/NTWKKM/stat-netilfy/issues", 
     }
 )
 
