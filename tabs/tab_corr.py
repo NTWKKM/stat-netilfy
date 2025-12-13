@@ -3,6 +3,20 @@ import pandas as pd
 import correlation # Import from root
 
 def render(df):
+    """
+    Render the Correlation Analysis UI for both categorical (Chi-Square & risk measures) and continuous (Pearson/Spearman) analyses.
+    
+    Builds two Streamlit sub-tabs:
+    - Categorical: UI for selecting two categorical variables, test method for 2x2 tables (Pearson, Yates, Fisher), positive labels for risk/odds calculations, runs chi-square/risk analysis, displays an interactive HTML report, and enables downloading the report.
+    - Continuous: UI for selecting two numeric variables and correlation method (Pearson or Spearman), runs correlation analysis, displays an interactive HTML report with statistics and a scatter plot, and enables downloading the report.
+    
+    Side effects:
+    - Renders Streamlit controls, info, and results to the active Streamlit app.
+    - Stores generated HTML reports in st.session_state under keys 'html_output_corr_cat' (categorical) and 'html_output_corr_cont' (continuous) to enable downloads.
+    
+    Parameters:
+        df (pandas.DataFrame): Input dataset whose columns populate the variable selectors and whose data are used for the analyses.
+    """
     st.subheader("3. Correlation Analysis")
     
     sub_tab1, sub_tab2 = st.tabs([
@@ -39,10 +53,19 @@ def render(df):
         v1 = cc1.selectbox("Variable 1 (Exposure/Row):", all_cols, index=v1_idx, key='chi1_corr_tab') 
         v2 = cc2.selectbox("Variable 2 (Outcome/Col):", all_cols, index=v2_idx, key='chi2_corr_tab')
         
-        correction_flag = cc3.radio("Correction Method (for 2x2):", 
-                                    ['Pearson (Standard)', "Yates' correction"], 
-                                    index=0, key='chi_corr_method_tab') == "Yates' correction"
-
+        # 🟢 UPDATE: เพิ่ม Fisher's Exact Test
+        method_choice = cc3.radio(
+            "Test Method (for 2x2):", 
+            ['Pearson (Standard)', "Yates' correction", "Fisher's Exact Test"], 
+            index=0, 
+            # สังเกต 2: เปลี่ยน key เป็น _diag เพื่อไม่ให้ซ้ำ
+            key='chi_corr_method_tab',
+            help="""
+                - Pearson: Best for large samples. 
+                - Yates: Conservative correction. 
+                - Fisher: Exact test, MUST use if any expected count < 5."""
+        )
+        
         # 🟢 NEW: Positive Label Selectors
 
         # Helper function to get unique values and set default index (Duplicated for tab_corr)
@@ -57,11 +80,28 @@ def render(df):
         # Selector for V1 Positive Label
         cc4, cc5, cc6 = st.columns(3)
         v1_uv, v1_default_idx = get_pos_label_settings(df, v1)
-        v1_pos_label = cc4.selectbox(f"Positive Label (Row: {v1}):", v1_uv, index=v1_default_idx, key='chi_v1_pos_corr')
+        
+        # 🟢 จุดแก้ 1: ป้องกัน V1 ว่าง
+        if not v1_uv:
+            cc4.warning(f"No non-null values in {v1}.")
+            v1_pos_label = None
+        else:
+            v1_pos_label = cc4.selectbox(f"Positive Label (Row: {v1}):", v1_uv, index=v1_default_idx, key='chi_v1_pos_corr')
 
         # Selector for V2 Positive Label (Outcome)
         v2_uv, v2_default_idx = get_pos_label_settings(df, v2)
-        v2_pos_label = cc5.selectbox(f"Positive Label (Col: {v2}):", v2_uv, index=v2_default_idx, key='chi_v2_pos_corr')
+        
+        # 🟢 จุดแก้ 2: ป้องกัน V2 ว่าง
+        if not v2_uv:
+            cc5.warning(f"No non-null values in {v2}.")
+            v2_pos_label = None
+        else:
+            v2_pos_label = cc5.selectbox(f"Positive Label (Col: {v2}):", v2_uv, index=v2_default_idx, key='chi_v2_pos_corr')
+        
+        # 🛑 จุดเพิ่ม: ถ้าเลือกค่าไม่ได้ ให้หยุดการทำงาน
+        inputs_ok = not (v1_pos_label is None or v2_pos_label is None)
+        if not inputs_ok:
+            st.warning("Chi-Square disabled: one of the selected columns has no non-null values.")
         
         # Add a placeholder column to maintain alignment
         cc6.empty()
@@ -70,13 +110,18 @@ def render(df):
         run_col, dl_col = st.columns([1, 1])
         if 'html_output_corr_cat' not in st.session_state: st.session_state.html_output_corr_cat = None
 
-        if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run'):
-            # 🟢 UPDATE 4: Pass new parameters to calculate_chi2
+        if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run', disabled=not inputs_ok):
+            # 🟢 จุดแก้ 3: แปลงข้อมูลเป็น String เพื่อให้ Type ตรงกับ Selectbox
+            df_calc = df.copy()
+            df_calc[v1] = df_calc[v1].astype("string")
+            df_calc[v2] = df_calc[v2].astype("string")
+
+            # 🟢 UPDATE: ส่ง df_calc แทน df
             tab, stats, msg, risk_df = correlation.calculate_chi2(
-                df, v1, v2, 
-                correction=correction_flag,
-                v1_pos=v1_pos_label, # <--- NEW PARAMETER
-                v2_pos=v2_pos_label  # <--- NEW PARAMETER
+                df_calc, v1, v2,   # <--- ใช้ df_calc ที่แปลงแล้ว
+                method=method_choice, 
+                v1_pos=v1_pos_label,
+                v2_pos=v2_pos_label
             )
             
             if tab is not None:

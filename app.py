@@ -2,31 +2,54 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import time
-import streamlit.components.v1 as components # 🟢 1. ต้อง Import ตัวนี้เพิ่ม
+import streamlit.components.v1 as components 
 
-# Import หน้า Tab ที่แยกไว้ (เพิ่ม tab_survival)
-from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival
-
-# --- CONFIGURATION ---
-st.set_page_config(page_title="Medical Stat Tool", layout="wide",menu_items={
+# ==========================================
+# 1. CONFIG & LOADING SCREEN KILLER (Must be First)
+# ==========================================
+st.set_page_config(
+    page_title="Medical Stat Tool", 
+    layout="wide", 
+    menu_items={
         'Get Help': 'https://ntwkkm.github.io/infos/stat_manual.html',
-        'Report a bug': "https://www.extremelycoolapp.com/bug",
-    })
+        # 🟢 แก้จุดที่ 1: เปลี่ยนลิงก์เป็น GitHub Issues ของคุณ (หรือลบบรรทัดนี้ทิ้งถ้ายังไม่มี)
+        'Report a bug': "https://github.com/NTWKKM/stat-netilfy/issues", 
+    }
+)
+
 st.title("🏥 Medical Statistical Tool")
 
-# 🟢 FIX: วาง components.html ไว้ที่นี่ (หลัง set_page_config และ st.title)
+# 🟢 แก้จุดที่ 2: ใช้ try-catch เพื่อความปลอดภัย (Safe Loader Removal)
 components.html("""
 <script>
-    // window.parent คือการสั่งให้ทะลุ Iframe ของ Component ออกไปที่หน้าหลัก (index.html)
-    var loader = window.parent.document.getElementById('loading-screen');
-    if (loader) {
-        loader.style.opacity = '0'; // สั่งให้จางลง
-        setTimeout(function() {
-            loader.style.display = 'none'; // แล้วซ่อนถาวร
-        }, 500);
+    try {
+        var loader = window.parent && window.parent.document
+            ? window.parent.document.getElementById('loading-screen')
+            : null;
+        if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(function() {
+                loader.style.display = 'none';
+            }, 500);
+        }
+    } catch (e) {
+        // no-op (ถ้ามี error ก็ปล่อยผ่าน เว็บจะไม่พัง)
+        console.log("Loader removal error: " + e);
     }
 </script>
-""", height=0) # height=0 เพื่อไม่ให้กินพื้นที่หน้าจอ
+""", height=0)
+
+# ==========================================
+# 2. ค่อยเริ่ม IMPORT MODULES (จุดเสี่ยง Error)
+# ==========================================
+try:
+    # พยายาม import ไฟล์ ถ้าไฟล์ไหนมีปัญหามันจะแจ้งเตือนให้เห็นบนหน้าจอแทนการหมุนค้าง
+    from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival, tab_psm, tab_adv_survival
+except (KeyboardInterrupt, SystemExit):
+    raise
+except Exception as e:
+    st.exception(e)
+    st.stop()
 
 # --- INITIALIZE STATE ---
 if 'df' not in st.session_state: st.session_state.df = None
@@ -39,61 +62,97 @@ st.sidebar.header("1. Data Management")
 # Example Data Generator
 if st.sidebar.button("📄 Load Example Data"):
     np.random.seed(42)
-    n = 200 # Increased n for better significance
+    n = 500 # 🟢 เพิ่ม N เป็น 500 เพื่อให้ p-value significant ง่ายขึ้น
     
-    # 1. Group Variable (0=Standard Care, 1=New Drug) - Use 0/1 for computation
-    group = np.random.choice([0, 1], n, p=[0.5, 0.5]) 
+    # --- 1. Baseline Characteristics (Predictors) ---
+    # Age: Normal Dist
+    age = np.random.normal(60, 12, n).astype(int)
+    
+    # Sex: 0/1 (Balanced)
+    sex = np.random.binomial(1, 0.5, n)
+    
+    # BMI: Normal Dist
+    bmi = np.random.normal(25, 4, n).round(1)
+    
+    # Hypertension (Confounder): สัมพันธ์กับ Age และ BMI อย่างชัดเจน (Logistic)
+    # logit = -10 + 0.1*Age + 0.1*BMI
+    p_hyp = 1 / (1 + np.exp(-( -10 + 0.1*age + 0.15*bmi )))
+    hypertension = np.random.binomial(1, p_hyp)
 
-    # 2. Predictors (Age, BMI, Sex)
-    age = np.random.normal(60, 10, n).astype(int)
-    sex = np.random.choice([0, 1], n)
-    bmi = np.random.normal(27, 4, n).round(1)
+    # --- 2. Treatment Assignment (Selection Bias for PSM) ---
+    # กำหนดให้ Group สัมพันธ์กับทุกตัวแปร (Age, Sex, BMI, HT) เพื่อให้ Table 1 Significant (Imbalanced)
+    # และเพื่อให้ PSM มีหน้าที่ในการแก้ Bias นี้
+    logit_treat = -3 + 0.05*age + 0.5*sex + 0.1*bmi + 1.2*hypertension
+    p_treat = 1 / (1 + np.exp(-logit_treat))
+    group = np.random.binomial(1, p_treat) 
     
-    # 3. Hypertension (Categorical, significantly different between groups for Table 1)
-    p_hyper = np.where(group == 0, 0.65, 0.3) # Higher prevalence in Standard Care (Group 0)
-    hypertension = np.random.binomial(1, p_hyper)
-    
-    # 4. Risk_Score (Continuous, significantly different between groups, good for Diagnostic/Table 1)
-    # Group 0 (Standard) has higher score, and correlates with age
-    risk_score_base = np.where(group == 0, 6 + np.random.normal(0, 1.5), 4 + np.random.normal(0, 1.5))
-    risk_score = risk_score_base + 0.05 * age # Introduce slight age effect
+    # --- 3. Outcome & Risk Score ---
+    # Risk Score: สร้างให้ต่างกันชัดเจนระหว่างกลุ่ม (T-test Sig)
+    # Group 1 (New Drug) ควรจะมี Risk Score ต่ำกว่า Group 0 (Standard) หรือกลับกัน
+    base_score = np.where(group == 1, 3.5, 6.0) # Mean ต่างกันเยอะ
+    risk_score = base_score + np.random.normal(0, 1.5, n) + 0.02*age
     risk_score = risk_score.round(2)
     
-    # 5. Outcome_Disease (Binary, significant prediction from Risk_Score and Group - Logistic Regression)
-    # Logit: -4 + 0.8 * Risk_Score - 1.2 * Group (Group 1 lowers the risk)
-    log_p = 1 / (1 + np.exp(-(-4 + 0.8 * risk_score - 1.2 * group))) 
-    outcome_disease = np.random.binomial(1, log_p)
+    # Outcome Disease (Binary): สัมพันธ์กับ Risk Score และ Group อย่างชัดเจน (Logistic/Chi2 Sig)
+    # ใส่ effect ของ Hypertension เข้าไปด้วยเพื่อให้ Chi-Square (HT vs Outcome) significant
+    logit_outcome = -4 + 0.8*risk_score - 1.5*group + 1.0*hypertension
+    p_outcome = 1 / (1 + np.exp(-logit_outcome))
+    outcome_disease = np.random.binomial(1, p_outcome)
     
-    # 6. Correlation Variable: Inflammation_Marker (correlated with BMI - Correlation Tab)
-    inflammation_marker = 5 + 0.8 * bmi + np.random.normal(0, 1.0, n)
+    # --- 4. Correlation Variable ---
+    # Inflammation Marker: สัมพันธ์กับ BMI แบบ Linear (Pearson r สูง)
+    inflammation_marker = 10 + 1.5 * bmi + np.random.normal(0, 5, n)
     inflammation_marker = inflammation_marker.round(1)
 
-    # 7. Survival Variables (Time and Event) - Significant difference between groups (Survival Analysis)
-    # Standard Care (0) has shorter survival (scale 150), New Drug (1) has longer survival (scale 400)
-    scale_param = np.where(group == 0, 150, 400)
+    # --- 5. Survival Analysis ---
+    # Time: Group 1 อยู่ได้นานกว่า Group 0 ชัดเจน (Log-rank Sig)
+    # Scale (Mean survival time): Group 0=200 days, Group 1=500 days
+    scale_param = np.where(group == 0, 200, 500)
     time_days = np.random.exponential(scale=scale_param, size=n)
-    time_days = time_days.clip(min=1, max=1000).astype(int) # Max follow-up 1000 days
+    time_days = time_days.clip(min=1, max=1800).astype(int)
     
-    # Event: Probability of event (death) is higher for Group 0 and shorter times
-    event_prob_base = np.where(group == 0, 0.8, 0.4)
-    event_prob = event_prob_base - 0.0003 * time_days
-    event_prob = event_prob.clip(min=0.1, max=0.9) 
-    event_death = np.random.binomial(1, event_prob)
+    # Event: สัมพันธ์กับ Time (ยิ่งนานยิ่งตายน้อยลง? หรือตัด Censored)
+    # ให้ Group 0 ตายเยอะกว่า (Event rate สูง)
+    p_event = np.where(group == 0, 0.7, 0.3) 
+    event_death = np.random.binomial(1, p_event)
     
-    # Create DataFrame and Metadata
+    # For Time-Dependent Cox (Structure only)
+    time_start = np.zeros(n, dtype=int)
+    time_stop = time_days # ใช้เวลาตายเป็นจุดสิ้นสุด
+    
+    # --- 6. Reliability & Agreement ---
+    # Cohen's Kappa: Dr A vs Dr B (High Agreement)
+    diag_dr_a = np.random.binomial(1, 0.4, n)
+    diag_dr_b = diag_dr_a.copy()
+    # Flip 5% of data to create minor disagreement (High Kappa)
+    mismatch_idx = np.random.choice(n, int(0.05*n), replace=False)
+    diag_dr_b[mismatch_idx] = 1 - diag_dr_b[mismatch_idx]
+    
+    # ICC: Machine 1 vs Machine 2 (High Correlation)
+    sbp_m1 = np.random.normal(130, 15, n).round(0)
+    sbp_m2 = sbp_m1 + np.random.normal(0, 2, n) # Noise น้อยมาก
+    sbp_m2 = sbp_m2.round(0)
+
+    # Create DataFrame
     data = {
         'ID': range(1, n+1),
-        # Convert group to string for the DataFrame as in original code
         'Group_Treatment': np.where(group == 0, 'Standard Care', 'New Drug'), 
         'Age': age,
         'Sex': sex,
         'BMI': bmi,
-        'Hypertension': hypertension, # 0/1
-        'Risk_Score': risk_score, # Continuous
-        'Inflammation_Marker': inflammation_marker, # Continuous
-        'Outcome_Disease': outcome_disease, # 0/1
-        'Time_Days': time_days, # Continuous
-        'Event_Death': event_death # 0/1 (Status)
+        'Hypertension': hypertension, 
+        'Risk_Score': risk_score, 
+        'Inflammation_Marker': inflammation_marker, 
+        'Outcome_Disease': outcome_disease,
+        # Survival Cols
+        'Time_Start': time_start, # เพิ่มเพื่อรองรับ Time Cox Tab
+        'Time_Stop': time_stop,
+        'Event_Death': event_death,
+        # Diag/Rel Cols
+        'Diagnosis_Dr_A': diag_dr_a,
+        'Diagnosis_Dr_B': diag_dr_b,
+        'SBP_Machine_1': sbp_m1,
+        'SBP_Machine_2': sbp_m2
     }
     
     st.session_state.df = pd.DataFrame(data)
@@ -101,7 +160,9 @@ if st.sidebar.button("📄 Load Example Data"):
         'Sex': {'type':'Categorical', 'map':{0:'Female', 1:'Male'}},
         'Hypertension': {'type':'Categorical', 'map':{0:'No', 1:'Yes'}},
         'Outcome_Disease': {'type':'Categorical', 'map':{0:'Healthy', 1:'Disease'}},
-        'Event_Death': {'type':'Categorical', 'map':{0:'Censored', 1:'Event (Death)'}} # NEW: สำหรับ Survival Analysis
+        'Event_Death': {'type':'Categorical', 'map':{0:'Censored', 1:'Event (Death)'}},
+        'Diagnosis_Dr_A': {'type':'Categorical', 'map':{0:'Negative', 1:'Positive'}},
+        'Diagnosis_Dr_B': {'type':'Categorical', 'map':{0:'Negative', 1:'Positive'}}
     }
     
     st.sidebar.success(f"Loaded {n} Example Patients!")
@@ -116,15 +177,9 @@ if upl:
         st.sidebar.success("File Uploaded!")
     except Exception as e: st.sidebar.error(f"Error: {e}")
         
-# 🟢 แก้ไข: ลบพารามิเตอร์ icon ออก และใส่ Emoji ในชื่อปุ่มแทน
-# คุณสามารถเลือก Emoji ได้ตามชอบ เช่น "🗑️", "⚠️", "❌", "♻️"
 if st.sidebar.button("⚠️ Reset All Data", type="primary"):
-    # ล้างค่าทุกอย่างใน Session State
     st.session_state.clear()
     st.rerun()
-    # หมายเหตุ: ถ้าใช้ Streamlit เวอร์ชันใหม่ แนะนำให้เปลี่ยนเป็น st.rerun()
-
-# Example Data Generator (โค้ดเดิมต่อจากนี้)
 
 # Variable Settings (Metadata)
 if st.session_state.df is not None:
@@ -158,74 +213,59 @@ if st.session_state.df is not None:
 # 2. MAIN AREA
 # ==========================================
 if st.session_state.df is not None:
-    df = st.session_state.df  # นี่คือ Raw Data (มี 'abc' ปนอยู่)
+    df = st.session_state.df 
 
-    t0, t1, t2, t3, t4, t5 = st.tabs([
+    # 🟢 FIX 2: เพิ่ม Tab t7 สำหรับ Advanced Survival Analysis
+    t0, t1, t2, t3, t4, t5, t6, t7 = st.tabs([
         "📄 Raw Data", 
         "📋 Baseline Table 1", 
         "🔬 Diagnostic Test", 
         "🔗 Correlation",
         "📊 Logistic Regression",
-        "⏳ Survival Analysis"
+        "⏳ Survival Analysis",
+        "⚖️ Propensity Score",
+        "📈 Time Cox Regs" # 🟢 New Tab
     ])
 
     # Call Modules
     with t0:
-        # 🟢 Tab 0: จัดการ Raw Data -> ส่งกลับมาอัปเดต session_state (ยังเป็น Raw)
         st.session_state.df = tab_data.render(df) 
-        
-        # 🟢 Generate Clean Data for Analysis: สร้างข้อมูลสะอาดเตรียมไว้ให้ Tab อื่น
-        # ดึง custom_na_list ที่ตั้งค่าไว้มาใช้ด้วย
         custom_na = st.session_state.get('custom_na_list', [])
         df_clean = tab_data.get_clean_data(st.session_state.df, custom_na)
 
-    # 🟢 Tab 1-5: ใช้ df_clean (ที่แปลง Text ผิดๆ เป็น NaN แล้ว) ในการคำนวณ
-    # ทำให้กราฟไม่พัง และ Raw Data ไม่หาย
     with t1:
         tab_table1.render(df_clean, st.session_state.var_meta)
-
     with t2:
         tab_diag.render(df_clean, st.session_state.var_meta)
-
     with t3:
         tab_corr.render(df_clean)
-
     with t4:
         tab_logit.render(df_clean, st.session_state.var_meta)
-
     with t5:
         tab_survival.render(df_clean, st.session_state.var_meta)
+    with t6:
+        tab_psm.render(df_clean, st.session_state.var_meta)
+    with t7:
+        tab_adv_survival.render(df_clean, st.session_state.var_meta)
         
 else:
     st.info("👈 Please load example data or upload a file to start.")
     st.markdown("""
 ### ✨ All Statistical Features:
-
-1.  **Raw Data Management:**
-    * Load/Import data files (CSV, Excel, etc.).
-    * Performs **automatic data type detection** and preliminary structure checking.
-
-2.  **Baseline Characteristics (Table 1):**
-    * Auto-generated summary table (Mean ± SD / Median IQR, Count %).
-    * **Automated P-value Selection:** Automatically selects the correct statistical test (**t-test, Mann-Whitney U, Chi-square, Fisher's Exact, etc.**) based on variable type and distribution.
-
-3.  **Diagnostic Test & Statistics:**
-    * **ROC Curve Analysis:** Evaluates test performance using AUC and identifies the Optimal Cut-off Point.
-    * **Chi-square & Risk Analysis:** Generates a structured Contingency Table and calculates Risk Ratios and Odds Ratios (OR).
-
-4.  **Continuous Correlation (Pearson/Spearman):**
-    * Measures **Linear** (Pearson) or **Monotonic** (Spearman) association between two continuous variables.
-
-5.  **Binary Logistic Regression:**
-    * Univariate & Multivariate Analysis.
-    * Calculates **Odds Ratio (OR)** and **Adjusted Odds Ratio (AOR)**, controlling for confounding variables.
+1.  **Raw Data Management**
+2.  **Baseline Characteristics (Table 1)**
+3.  **Diagnostic Test & Statistics**
+4.  **Continuous Correlation**
+5.  **Binary Logistic Regression**
+6.  **Survival Analysis**
+7.  **Propensity Score Matching**
+8.  **Time-Dependent Cox Regression (New!)**
     """)
     
 # ==========================================
 # 3. GLOBAL CSS (Cleanup)
 # ==========================================
 
-# 🟢 NEW: Inject CSS to hide the default Streamlit footer (Keep this part)
 st.markdown("""
 <style>
 /* โค้ดสำหรับซ่อน Streamlit footer เดิม (ยังจำเป็นต้องมี) */

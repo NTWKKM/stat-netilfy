@@ -1,10 +1,15 @@
 import pandas as pd
 import numpy as np
 import scipy.stats as stats
-from sklearn.metrics import roc_curve, roc_auc_score
+from sklearn.metrics import roc_curve, roc_auc_score, cohen_kappa_score # 🟢 Import เพิ่ม
 import matplotlib.pyplot as plt
 import io, base64
+import streamlit as st
+import html as _html
 
+# ... (ฟังก์ชัน calculate_descriptive และ calculate_chi2 ของเดิม เก็บไว้เหมือนเดิม) ...
+
+@st.cache_data(show_spinner=False) 
 def calculate_descriptive(df, col):
     """คำนวณสถิติพื้นฐาน"""
     if col not in df.columns: return "Column not found"
@@ -32,131 +37,113 @@ def calculate_descriptive(df, col):
             "Category": counts.index, "Count": counts.values, "Percentage (%)": percent.values
         }).sort_values("Count", ascending=False)
 
-def calculate_chi2(df, col1, col2, correction=True, v1_pos=None, v2_pos=None):
-    """
-    (SYNCED WITH correlation.py)
-    คำนวณ Chi-square พร้อมตาราง 2 ชั้น, Risk Interpretation และการจัดเรียง Label 
-    ตามที่ User กำหนด (v1_pos, v2_pos) หรือตามค่าเริ่มต้น (1 ก่อน 0)
-    """
+@st.cache_data(show_spinner=False)
+def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_pos=None):
+    """(SYNCED) คำนวณ Chi-square/Fisher"""
     if col1 not in df.columns or col2 not in df.columns: 
         return None, None, "Columns not found", None
     
     data = df[[col1, col2]].dropna()
     
-    # 1. สร้างตาราง Crosstab ทั้ง 3 แบบ
+    # 1. Crosstab
     tab_chi2 = pd.crosstab(data[col1], data[col2])
     tab_raw = pd.crosstab(data[col1], data[col2], margins=True, margins_name="Total")
     tab_row_pct = pd.crosstab(data[col1], data[col2], normalize='index', margins=True, margins_name="Total") * 100
     
-    # --- 🟢 START SYNC: REORDERING LOGIC (Using User Positive Labels) ---
+    # --- REORDERING LOGIC ---
     all_col_labels = tab_raw.columns.tolist() 
     all_row_labels = tab_raw.index.tolist()
     base_col_labels = [col for col in all_col_labels if col != 'Total']
     base_row_labels = [row for row in all_row_labels if row != 'Total']
 
-    # Function to get the correct original label object (e.g., int 1) from its string representation ('1')
     def get_original_label(label_str, df_labels):
-        # The labels in df_labels can be int, float, or str. Match by string representation.
         for lbl in df_labels:
-            if str(lbl) == label_str:
-                return lbl
-        # Fallback: should not happen if selected from UI
+            if str(lbl) == label_str: return lbl
         return label_str 
 
-    # --- 1. Reorder Column Labels (Outcome) ---
+    # Reorder Cols
     final_col_order_base = base_col_labels[:]
-    # 🟢 FIX: Check only if v2_pos is provided (prioritize user choice)
     if v2_pos is not None: 
         v2_pos_original = get_original_label(v2_pos, base_col_labels)
-        
         if v2_pos_original in final_col_order_base:
             final_col_order_base.remove(v2_pos_original)
             final_col_order_base.insert(0, v2_pos_original)
-            
-    # ถ้าผู้ใช้ไม่ได้กำหนดค่า หรือค่านั้นไม่ตรงกับข้อมูลในตาราง ให้เรียงอัตโนมัติ
     else:
         def custom_sort(label):
-            try: return float(label)
-            except (ValueError, TypeError): return str(label)
+            try:
+                return (0, float(label))
+            except (ValueError, TypeError):
+                return (1, str(label))
         final_col_order_base.sort(key=custom_sort, reverse=True)
-
     final_col_order = final_col_order_base + ['Total'] 
 
-    # --- 2. Reorder Row Labels (Exposure) ---
+    # Reorder Rows
     final_row_order_base = base_row_labels[:]
-    # 🟢 FIX: Check only if v1_pos is provided (prioritize user choice)
     if v1_pos is not None: 
         v1_pos_original = get_original_label(v1_pos, base_row_labels)
-        
         if v1_pos_original in final_row_order_base:
             final_row_order_base.remove(v1_pos_original)
             final_row_order_base.insert(0, v1_pos_original)
-    
-    # ถ้าผู้ใช้ไม่ได้กำหนดค่า หรือค่านั้นไม่ตรงกับข้อมูลในตาราง ให้เรียงอัตโนมัติ
     else:
         def custom_sort(label):
-            try: return float(label)
-            except (ValueError, TypeError): return str(label)
+            try:
+                # numeric labels first, then non‑numeric; both sortable
+                return (0, float(label))
+            except (ValueError, TypeError):
+                return (1, str(label))
         final_row_order_base.sort(key=custom_sort, reverse=True)
-    
     final_row_order = final_row_order_base + ['Total']
 
-    # 3. Reindex tables
+    # Reindex
     tab_raw = tab_raw.reindex(index=final_row_order, columns=final_col_order)
     tab_row_pct = tab_row_pct.reindex(index=final_row_order, columns=final_col_order)
     tab_chi2 = tab_chi2.reindex(index=final_row_order_base, columns=final_col_order_base)
     
     col_names = final_col_order 
     index_names = final_row_order
-    # --- 🟢 END SYNC: REORDERING LOGIC ---
 
     display_data = []
-    
     for row_name in index_names:
         row_data = []
         for col_name in col_names:
             count = tab_raw.loc[row_name, col_name]
-            
-            # 🟢 FIX: Handle 'Total' column explicitly (KeyError fix)
-            if col_name == 'Total':
-                pct = 100.0
-            else:
-                pct = tab_row_pct.loc[row_name, col_name]
-                
-            # 🟢 FIX: Format only Count (Row%)
+            if col_name == 'Total': pct = 100.0
+            else: pct = tab_row_pct.loc[row_name, col_name]
             cell_content = f"{count} ({pct:.1f}%)"
             row_data.append(cell_content)
-            
         display_data.append(row_data)
     
     display_tab = pd.DataFrame(display_data, columns=col_names, index=index_names)
     display_tab.index.name = col1
     
-    # 3. คำนวณ Chi-square Stats
+    # Stats
     try:
-        chi2, p, dof, ex = stats.chi2_contingency(tab_chi2, correction=correction)
+        is_2x2 = (tab_chi2.shape == (2, 2))
         
-        method_name = "Chi-Square"
-        if tab_chi2.shape == (2, 2):
-            method_name += " (with Yates' Correction)" if correction else " (Pearson Uncorrected)"
-            
-        msg = f"{method_name}: Chi2={chi2:.4f}, p={p:.4f}"
+        if "Fisher" in method:
+            if not is_2x2: return display_tab, None, "Error: Fisher's Exact Test requires a 2x2 table.", None
+            odds_ratio, p_value = stats.fisher_exact(tab_chi2)
+            method_name = "Fisher's Exact Test"
+            msg = f"{method_name}: P-value={p_value:.4f}, OR={odds_ratio:.4f}"
+            stats_res = {"Test": method_name, "Statistic (OR)": odds_ratio, "P-value": p_value, "Degrees of Freedom": "-", "N": len(data)}
+        else:
+            use_correction = True if "Yates" in method else False
+            chi2, p, dof, ex = stats.chi2_contingency(tab_chi2, correction=use_correction)
+            method_name = "Chi-Square"
+            if is_2x2: method_name += " (with Yates')" if use_correction else " (Pearson)"
+            msg = f"{method_name}: Chi2={chi2:.4f}, p={p:.4f}"
+            stats_res = {"Test": method_name, "Statistic": chi2, "P-value": p, "Degrees of Freedom": dof, "N": len(data)}
+            if (ex < 5).any() and is_2x2 and not use_correction:
+                msg += " ⚠️ Warning: Expected count < 5. Consider using Fisher's Exact Test."
         
-        stats_res = {
-            "Test": method_name, "Statistic": chi2, "P-value": p, "Degrees of Freedom": dof, "N": len(data)
-        }
-        
-        # 4. Risk Calculation
         risk_df = None
-        if tab_chi2.shape == (2, 2):
+        if is_2x2:
             try:
                 vals = tab_chi2.values
                 a, b = vals[0, 0], vals[0, 1]
                 c, d = vals[1, 0], vals[1, 1]
-                
                 row_labels = tab_chi2.index.tolist(); col_labels = tab_chi2.columns.tolist()
                 label_exp = str(row_labels[0]); label_unexp = str(row_labels[1]); label_event = str(col_labels[0])
-                
                 risk_exp = a/(a+b) if (a+b)>0 else 0; risk_unexp = c/(c+d) if (c+d)>0 else 0
                 rr = risk_exp/risk_unexp if risk_unexp>0 else np.nan
                 rd = risk_exp - risk_unexp; nnt = abs(1/rd) if rd!=0 else np.inf
@@ -178,8 +165,45 @@ def calculate_chi2(df, col1, col2, correction=True, v1_pos=None, v2_pos=None):
     except Exception as e:
         return display_tab, None, str(e), None
 
-# --- ROC Functions (คงเดิม) ---
+# 🟢 NEW: ฟังก์ชันคำนวณ Kappa
+@st.cache_data(show_spinner=False)
+def calculate_kappa(df, col1, col2):
+    if col1 not in df.columns or col2 not in df.columns:
+        return None, "Columns not found", None
 
+    data = df[[col1, col2]].dropna()
+    if data.empty: return None, "No data after dropping NAs", None
+
+    # แปลงเป็น String เพื่อให้ชัวร์ว่าเป็น Categorical
+    y1 = data[col1].astype(str)
+    y2 = data[col2].astype(str)
+
+    # คำนวณ Kappa
+    try:
+        kappa = cohen_kappa_score(y1, y2)
+        
+        # แปลผล (Landis & Koch, 1977)
+        if kappa < 0: interp = "Poor agreement"
+        elif kappa <= 0.20: interp = "Slight agreement"
+        elif kappa <= 0.40: interp = "Fair agreement"
+        elif kappa <= 0.60: interp = "Moderate agreement"
+        elif kappa <= 0.80: interp = "Substantial agreement"
+        else: interp = "Perfect/Almost perfect agreement"
+
+        res_df = pd.DataFrame({
+            "Statistic": ["Cohen's Kappa", "N (Pairs)", "Interpretation"],
+            "Value": [f"{kappa:.4f}", f"{len(data)}", interp]
+        })
+        
+        # Confusion Matrix
+        conf_matrix = pd.crosstab(y1, y2, rownames=[f"{col1} (Obs 1)"], colnames=[f"{col2} (Obs 2)"])
+        
+    except ValueError as e:
+        return None, str(e), None
+    else:
+        return res_df, None, conf_matrix
+
+# --- ROC Functions (เหมือนเดิม) ---
 def auc_ci_hanley_mcneil(auc, n1, n2):
     q1 = auc / (2 - auc); q2 = 2 * (auc**2) / (1 + auc)
     se_auc = np.sqrt(((auc * (1 - auc)) + (n1 - 1)*(q1 - auc**2) + (n2 - 1)*(q2 - auc**2)) / (n1 * n2))
@@ -203,6 +227,7 @@ def auc_ci_delong(y_true, y_scores):
     se_auc = np.sqrt((s10 / n_pos) + (s01 / n_neg))
     return auc - 1.96*se_auc, auc + 1.96*se_auc, se_auc
 
+@st.cache_data(show_spinner=False)
 def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
     data = df[[truth_col, score_col]].dropna()
     y_true_raw = data[truth_col]
@@ -213,14 +238,21 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
         return None, "Error: Binary outcome required.", None, None
 
     y_true = np.where(y_true_raw.astype(str) == pos_label_user, 1, 0)
+    n1 = int((y_true == 1).sum())
+    n0 = int((y_true == 0).sum())
+    if n1 == 0 or n0 == 0:
+        return None, "Error: Need both classes after dropping NA scores.", None, None
     fpr, tpr, thresholds = roc_curve(y_true, y_score)
     auc_val = roc_auc_score(y_true, y_score)
-    n1 = sum(y_true == 1); n0 = sum(y_true == 0)
     
     if method == 'delong': ci_lower, ci_upper, se = auc_ci_delong(y_true, y_score.values); m_name = "DeLong"
     else: ci_lower, ci_upper, se = auc_ci_hanley_mcneil(auc_val, n1, n0); m_name = "Hanley"
     
-    p_val_auc = stats.norm.sf(abs((auc_val - 0.5)/se))*2 if se > 0 else 0.0
+    p_val_auc = (
+        stats.norm.sf(abs((auc_val - 0.5) / se)) * 2
+        if (se is not None and np.isfinite(se) and se > 0)
+        else np.nan
+    )
     j_scores = tpr - fpr; best_idx = np.argmax(j_scores)
     
     stats_res = {
@@ -238,12 +270,97 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
     coords_df = pd.DataFrame({'Threshold': thresholds, 'Sens': tpr, 'Spec': 1-fpr}).round(4)
     return stats_res, None, fig, coords_df
 
+# 🟢 NEW: ฟังก์ชันคำนวณ ICC (Intraclass Correlation Coefficient)
+@st.cache_data(show_spinner=False)
+def calculate_icc(df, cols):
+    """
+    คำนวณ ICC(2,1) และ ICC(3,1) โดยใช้ Two-way ANOVA Formula
+    Ref: Shrout & Fleiss (1979), Koo & Li (2016)
+    """
+    # 1. Prepare Data
+    if len(cols) < 2: return None, "Please select at least 2 variables (raters/methods).", None
+    data = df[cols].dropna()
+    n, k = data.shape # n=subjects, k=raters
+     
+    if n < 2: return None, "Insufficient data (need at least 2 rows).", None
+    if k < 2: return None, "Insufficient raters (need at least 2 columns).", None
+    
+    # 2. ANOVA Calculations (Manual Calculation using Numpy for Speed & No Dependency)
+    # Grand Mean
+    grand_mean = data.values.mean()
+    
+    # Sum of Squares
+    SStotal = ((data.values - grand_mean)**2).sum()
+    
+    # Between-subjects (Rows)
+    row_means = data.mean(axis=1)
+    SSrow = k * ((row_means - grand_mean)**2).sum()
+    
+    # Between-raters (Cols)
+    col_means = data.mean(axis=0)
+    SScol = n * ((col_means - grand_mean)**2).sum()
+    
+    # Residual (Error)
+    SSres = SStotal - SSrow - SScol
+    
+    # Degrees of Freedom
+    df_row = n - 1
+    df_col = k - 1
+    df_res = df_row * df_col
+    
+    # Mean Squares
+    MSrow = SSrow / df_row
+    MScol = SScol / df_col
+    MSres = SSres / df_res
+
+     # Guard against zero denominators (no variance)
+    denom_icc3 = MSrow + (k - 1) * MSres
+    denom_icc2 = MSrow + (k - 1) * MSres + (k / n) * (MScol - MSres)
+    if denom_icc3 == 0 or denom_icc2 == 0:
+        return None, "Insufficient variance to compute ICC (denominator = 0).", None
+    # 3. Calculate ICCs
+    # ICC(3,1) Consistency: Fixed raters, Single measure
+    # Formula: (MSR - MSE) / (MSR + (k-1)MSE)
+    icc3_1 = (MSrow - MSres) / denom_icc3
+    
+    # ICC(2,1) Absolute Agreement: Random raters, Single measure
+    # Formula: (MSR - MSE) / (MSR + (k-1)MSE + (k/n)(MSC - MSE))
+    icc2_1 = (MSrow - MSres) / denom_icc2
+    
+    # Interpretation (Koo & Li, 2016)
+    def interpret_icc(v):
+        # Treat NaN/inf as undefined rather than "Excellent"
+        if not np.isfinite(v): return "Undefined"
+        if v < 0.5: return "Poor"
+        elif v < 0.75: return "Moderate"
+        elif v < 0.9: return "Good"
+        else: return "Excellent"
+
+    res_df = pd.DataFrame({
+        "Model": ["ICC(2,1) - Absolute Agreement", "ICC(3,1) - Consistency"],
+        "Description": [
+            "Use when raters are random & agreement matters (e.g. 2 different machines)", 
+            "Use when raters are fixed & consistency matters (e.g. ranking consistency)"
+        ],
+        "ICC Value": [icc2_1, icc3_1],
+        "Interpretation": [interpret_icc(icc2_1), interpret_icc(icc3_1)]
+    })
+    
+    # Format Value
+    res_df["ICC Value"] = res_df["ICC Value"].map('{:.4f}'.format)
+    
+    # ANOVA Table (Optional, for debugging or detailed report)
+    anova_df = pd.DataFrame({
+        "Source": ["Between Subjects (Rows)", "Between Raters (Cols)", "Residual (Error)"],
+        "SS": [SSrow, SScol, SSres],
+        "df": [df_row, df_col, df_res],
+        "MS": [MSrow, MScol, MSres]
+    })
+    
+    return res_df, None, anova_df
+    
 def generate_report(title, elements):
-    """
-    (SYNCED WITH correlation.py)
-    สร้าง HTML Report โดย Manual Construction ตาราง Contingency Table 
-    ตาม Layout ที่ User ต้องการ (Header 2 ชั้น, แถวแรกว่างซ้าย)
-    """
+    # (คงเดิม - เพราะมีการปิด plt.close(data) ในนี้อยู่แล้ว)
     css_style = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; margin: 0; color: #333; }
@@ -273,44 +390,31 @@ def generate_report(title, elements):
         elif element_type == 'table': 
             idx = not ('Interpretation' in data.columns)
             html += data.to_html(index=idx, classes='report-table')
-            
         elif element_type == 'contingency_table':
             col_labels = data.columns.tolist() 
             row_labels = data.index.tolist()   
             exp_name = data.index.name         
             out_name = element.get('outcome_col', 'Outcome')
-            
-            # Start Table
             html_tab = "<table>"
-            
-            # --- Header Row 1 ---
             html_tab += "<thead><tr>"
             html_tab += "<th style='background-color: white; border: none;'></th>" 
             html_tab += f"<th colspan='{len(col_labels)}' class='th-outcome'>{out_name}</th>"
             html_tab += "</tr>"
-            
-            # --- Header Row 2 ---
             html_tab += "<tr>"
             html_tab += f"<th class='th-exposure'>{exp_name}</th>"
             for label in col_labels:
-                html_tab += f"<th>{label}</th>"
+                html_tab += f"<th>{_html.escape(str(label))}</th>"
             html_tab += "</tr></thead>"
-            
-            # --- Body (Rows 3-5) ---
             html_tab += "<tbody>"
-            # 🟢 FIX: Iterate over row_labels and col_labels explicitly to ensure ordering
             for idx_label in row_labels:
                 html_tab += "<tr>"
-                html_tab += f"<td class='td-label'>{idx_label}</td>"
-                
+                html_tab += f"<td class='td-label'>{_html.escape(str(idx_label))}</td>"
                 for col_label in col_labels:
-                    val = data.loc[idx_label, col_label] # Fetch value using explicit index/column
-                    html_tab += f"<td>{val}</td>"
+                    val = data.loc[idx_label, col_label]
+                    html_tab += f"<td>{_html.escape(str(val))}</td>"
                 html_tab += "</tr>"
             html_tab += "</tbody></table>"
-            
             html += html_tab
-            
         elif element_type == 'plot':
             buf = io.BytesIO()
             if isinstance(data, plt.Figure):

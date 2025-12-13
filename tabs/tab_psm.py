@@ -1,0 +1,174 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+import psm_lib
+import matplotlib.pyplot as plt
+
+def render(df, _var_meta):
+    """
+    Render an interactive Streamlit interface to configure and run propensity score matching (PSM) and present balance diagnostics, matched data, outcome comparisons, and an exportable report.
+    
+    This function provides UI controls for selecting a binary treatment variable (with optional mapping when non-numeric), an optional outcome, and covariates (including one-hot encoding for categorical covariates), allows adjustment of matching caliper, and executes a full PSM workflow using helpers from `psm_lib` (propensity score estimation, nearest-neighbor matching, standardized mean difference calculation, love-plot generation, and report creation). Results are displayed across tabs (Balance Check, Matched Data, Outcome Analysis) and can be downloaded as CSV or HTML.
+    
+    Parameters:
+        df (pandas.DataFrame): The input dataset used for analysis and UI-driven selection.
+        var_meta (Any): Optional variable metadata or hints for the UI (not required for core functionality).
+    """
+    st.subheader("⚖️ Propensity Score Matching (PSM)")
+    st.info("""
+    **💡 Concept:** Matches patients in the Treatment group with similar patients in the Control group using **Propensity Scores**.
+    * **Goal:** To reduce selection bias and mimic a Randomized Controlled Trial (RCT).
+    * **Algorithm:** Nearest Neighbor 1:1 Matching (Greedy, Without Replacement).
+    """)
+
+    all_cols = df.columns.tolist()
+    if not all_cols:
+        st.error("Dataset has no columns to analyze.")
+        return
+        
+    # --- 1. Variable Selection ---
+    c1, c2 = st.columns(2)
+    
+    # Auto-detect Treatment (Look for binary variables)
+    treat_idx = 0
+    for i, c in enumerate(all_cols):
+        if df[c].nunique() == 2 and ('group' in c.lower() or 'treat' in c.lower()):
+            treat_idx = i
+            break
+            
+    treat_col = c1.selectbox("💊 Treatment Variable (Binary):", all_cols, index=treat_idx, key='psm_treat')
+    outcome_col = c2.selectbox("🎯 Outcome Variable (Optional):", ["None", *all_cols], key='psm_outcome')
+    
+    # Covariates Selection
+    cov_candidates = [c for c in all_cols if c not in [treat_col, outcome_col]]
+    # [แก้ไข 3] เอา 'score' ออกจาก default เพื่อเลี่ยง Risk_Score ที่ทำให้เกิด Perfect Separation
+    default_covs = [c for c in cov_candidates if any(x in c.lower() for x in ['age', 'sex', 'bmi', 'hyper'])]
+    
+    cov_cols = st.multiselect("📊 Covariates (Confounders):", cov_candidates, 
+                              default=default_covs,
+                              key='psm_cov')
+
+    # --- 2. Data Preparation ---
+    # ตรวจสอบว่า Treatment เป็น 0/1 หรือไม่ ถ้าไม่ใช่ต้องแปลง
+    df_analysis = df.copy()
+    unique_treat = df_analysis[treat_col].dropna().unique()
+    
+    # ตรวจสอบว่ามีแค่ 2 กลุ่มจริงไหม
+    if len(unique_treat) != 2:
+        st.warning(f"⚠️ Variable '{treat_col}' must have exactly 2 unique values (Found: {unique_treat}). PSM cannot run.")
+        return
+
+    # เช็คว่าเป็น 0/1 อยู่แล้วหรือไม่
+    is_numeric_binary = set(unique_treat).issubset({0, 1}) or set(unique_treat).issubset({0.0, 1.0})
+    
+    target_val = None
+    final_treat_col = treat_col
+
+    if not is_numeric_binary:
+        # st.markdown("---")
+        st.warning(f"⚠️ Variable '{treat_col}' is text/categorical. Please specify which value is the **Treatment Group**.")
+        
+        # 🟢 ปรับปรุง: ใช้ Columns แบ่งพื้นที่ให้อยู่บรรทัดเดียวกัน
+        c_sel, c_msg = st.columns([2, 1]) 
+        
+        with c_sel:
+            target_val = st.selectbox("Select value for 'Treatment/Case' (will be mapped to 1):", unique_treat, key='psm_target_select')
+        
+        # คำนวณ
+        final_treat_col = f"{treat_col}_encoded"
+        df_analysis[final_treat_col] = np.where(df_analysis[treat_col] == target_val, 1, 0)
+        
+        with c_msg:
+            # ใส่ Spacer นิดหน่อยเพื่อให้ตรงกับ Selectbox
+            st.write("")
+            st.success(f"✅ Mapped: '{target_val}' = 1")
+    
+    # จัดการ Covariates ที่เป็น Text (One-hot Encoding)
+    if cov_cols:
+        # แปลงเฉพาะคอลัมน์ที่เป็น Object (Text)
+        cat_covs = [c for c in cov_cols if df_analysis[c].dtype == 'object']
+        if cat_covs:
+            df_analysis = pd.get_dummies(df_analysis, columns=cat_covs, drop_first=True)
+        # Track new dummy column names    
+        new_cols = [c for c in df_analysis.columns if c not in df.columns]
+        # Replace categorical covs with their dummy versions
+        final_cov_cols = [c for c in cov_cols if c not in cat_covs] + new_cols
+    else:
+        final_cov_cols = []
+
+    # PSM Settings
+    with st.expander("⚙️ Advanced Settings"):
+        # [แก้ไข 4] ปรับค่าเริ่มต้น Caliper เป็น 0.5 เพื่อให้ Match ง่ายขึ้น
+        caliper = st.slider("Caliper Width (SD of Logit):", 0.05, 1.0, 0.5, 0.05)
+    
+    # --- 3. Run Analysis ---
+    if st.button("🚀 Run Matching", key='btn_psm'):
+        if not final_cov_cols:
+            st.error("Please select at least one covariate.")
+        else:
+            try:
+                # A. Calculate PS
+                with st.spinner("Calculating Propensity Scores..."):
+                    df_ps, _model = psm_lib.calculate_ps(df_analysis, final_treat_col, final_cov_cols)
+                
+                # B. Perform Matching
+                with st.spinner("Matching Patients..."):
+                    df_matched, msg = psm_lib.perform_matching(df_ps, final_treat_col, 'ps_logit', caliper)
+                
+                if df_matched is None:
+                    st.error(msg)
+                else:
+                    st.success(f"Matching Complete! {msg}")
+                    
+                    # C. Check Balance (SMD)
+                    smd_pre = psm_lib.calculate_smd(df_ps, final_treat_col, final_cov_cols)
+                    smd_post = psm_lib.calculate_smd(df_matched, final_treat_col, final_cov_cols)
+                    
+                    # Tabs for results
+                    t_res1, t_res2, t_res3 = st.tabs(["📊 Balance Check (Love Plot)", "📋 Matched Data", "📉 Outcome Analysis"])
+                    
+                    with t_res1:
+                        c_plot, c_tab = st.columns([2, 1])
+                        fig_love = psm_lib.plot_love_plot(smd_pre, smd_post)
+                        c_plot.pyplot(fig_love)
+                        
+                        c_tab.markdown("**SMD Table:**")
+                        smd_merge = pd.merge(smd_pre, smd_post, on='Variable', suffixes=('_Pre', '_Post'))
+                        
+                        # Format numeric columns properly
+                        c_tab.dataframe(smd_merge.style.format({
+                            'SMD_Pre': '{:.4f}', 
+                            'SMD_Post': '{:.4f}'
+                        }))
+                        
+                        c_tab.caption("*SMD < 0.1 indicates good balance.*")
+
+                    with t_res2:
+                        st.write(f"Matched Dataset ({len(df_matched)} rows):")
+                        st.dataframe(df_matched.head(50))
+                        
+                        csv = df_matched.to_csv(index=False).encode('utf-8')
+                        st.download_button("📥 Download Matched CSV", csv, "matched_data.csv", "text/csv")
+
+                    with t_res3:
+                        if outcome_col != "None":
+                            st.markdown(f"##### Outcome Comparison: {outcome_col}")
+                            # ใช้ final_treat_col (0/1) ในการ group
+                            res_stats = df_matched.groupby(final_treat_col)[outcome_col].mean()
+                            st.write(res_stats)
+                            
+                            st.info("💡 Note: This is a simple comparison. For statistical significance, use the Hypothesis Testing tab with the 'Matched Dataset'.")
+                        else:
+                            st.write("Select an Outcome variable to see comparison.")
+                            
+                    # Generate Report
+                    elements = [
+                        {'type':'text', 'data': f"PSM Matching Report. Treatment: {treat_col} (Mapped 1={target_val if target_val else '1'})"},
+                        {'type':'table', 'data': smd_merge},
+                        {'type':'plot', 'data': fig_love}
+                    ]
+                    html_rep = psm_lib.generate_psm_report("PSM Analysis", elements)
+                    st.download_button("📥 Download Report HTML", html_rep, "psm_report.html", "text/html")
+                    
+            except Exception as e:
+                st.error(f"Error during PSM ({type(e).__name__}): {e}")
