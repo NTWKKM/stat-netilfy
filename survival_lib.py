@@ -238,11 +238,22 @@ def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariates)
     
     # 2. จัดการข้อมูล (ควรตรวจสอบว่า df มี NaN หรือไม่ก่อน drop)
     data = df[cols].copy()
+    
     # Coerce numeric columns required by lifelines; keep id as-is
     numeric_cols = [event_col, start_col, stop_col, *covariates]
     for c in numeric_cols:
         data[c] = pd.to_numeric(data[c], errors="coerce")
+        
     data = data.dropna(subset=numeric_cols + [id_col])
+    
+    # 🟢 VALIDATION: Event Column (Ensure Binary 0/1)
+    # แปลงค่าที่มากกว่า 0 ให้เป็น 1, ที่เหลือเป็น 0 (Coerce non-zero positives to 1)
+    # วิธีนี้ช่วยจัดการค่าแปลกปลอม เช่น 2, 0.5, หรือ -1 (ถ้ามี) ให้เป็น Binary มาตรฐาน
+    data[event_col] = np.where(data[event_col] > 0, 1, 0)
+
+    # 🟢 SORTING: Deterministic Order
+    # เรียงข้อมูลตาม ID และเวลา เพื่อให้ lifelines ประมวลผลได้ถูกต้องและ Reproducible
+    data = data.sort_values(by=[id_col, start_col, stop_col])
     
     # 3. ตรวจสอบเบื้องต้น (เช่น start < stop)
     if data.empty:
