@@ -156,9 +156,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     results_db = {} 
     sorted_cols = sorted(df.columns)
 
-    # 2. แก้ไข Logic การเลือก Method ในฟังก์ชัน analyze_outcome (ประมาณบรรทัด 148)
-    # 🟢 Logic การเลือก Method ตามที่ User สั่ง
-    preferred_method = 'bfgs' # Default fallback
+    preferred_method = 'bfgs' 
     
     if method == 'auto':
         preferred_method = 'firth' if HAS_FIRTH else 'bfgs'
@@ -166,9 +164,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         preferred_method = 'firth' if HAS_FIRTH else 'bfgs'
     elif method == 'bfgs':
         preferred_method = 'bfgs'
-    elif method == 'default':  # <--- 🟢 เพิ่มบรรทัดนี้
+    elif method == 'default':  
         preferred_method = 'default'
 
+    # --- CALCULATION LOOP ---
     for col in sorted_cols:
         if col == outcome_name: continue
         if df_aligned[col].isnull().all(): continue
@@ -180,10 +179,8 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         X_neg = X_raw[y == 0]
         X_pos = X_raw[y == 1]
         
-        # ชื่อตัวแปร
         orig_name = col.split('_', 1)[1] if len(col.split('_', 1)) > 1 else col
         
-        # --- TYPE DETECTION ---
         unique_vals = X_num.dropna().unique()
         unique_count = len(unique_vals)
         
@@ -192,7 +189,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         if is_binary or unique_count < 5:
             is_categorical = True
             
-        # User Override
         user_setting = {}
         if var_meta and (col in var_meta or orig_name in var_meta):
             key = col if col in var_meta else orig_name
@@ -203,7 +199,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             elif user_setting.get('type') == 'Continuous':
                 is_categorical = False
         
-        # --- DESCRIPTIVE ANALYSIS ---
         if is_categorical:
             n_used = len(X_raw.dropna())
             mapper = user_setting.get('map', {})
@@ -226,19 +221,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 if str(lvl).endswith('.0'): lvl_str = str(int(float(lvl)))
                 
                 def count_val(series, v_str):
-                     """
-                     Count how many elements in a pandas Series equal a given string after normalizing numeric-like values.
-                     
-                     This converts each element to string; if the string represents a number (allowing one decimal point) a trailing ".0" is removed (e.g., "1.0" -> "1") before comparing to v_str. The comparison is string equality performed after this normalization.
-                     
-                     Parameters:
-                         series (pandas.Series): Series whose values will be normalized and compared.
-                         v_str (str): Target string to match against each normalized series element.
-                     
-                     Returns:
-                         int: Number of elements equal to v_str after normalization.
-                     """
-                     return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
+                      return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
 
                 c_all = count_val(X_raw, lvl_str)
                 if c_all == 0:
@@ -289,8 +272,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 res['p_comp'] = np.nan
                 res['test_name'] = "-"
 
-        # --- UNIVARIATE REGRESSION (Crude OR) ---
-        # 🟢 ใช้ Method ที่ User เลือก
+        # --- UNIVARIATE REGRESSION ---
         data_uni = pd.DataFrame({'y': y, 'x': X_num}).dropna()
         if not data_uni.empty and data_uni['x'].nunique() > 1:
             params, conf, pvals, status = run_binary_logit(data_uni['y'], data_uni[['x']], method=preferred_method)
@@ -310,7 +292,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
 
         results_db[col] = res
         
-        # Screening P < 0.20
         p_screen = res.get('p_comp', np.nan)
         if pd.isna(p_screen): p_screen = res.get('p_or', np.nan)
         if pd.notna(p_screen) and p_screen < 0.20:
@@ -329,7 +310,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         final_n_multi = len(multi_data)
         
         if not multi_data.empty and final_n_multi > 10:
-            # 🟢 ใช้ Method ที่ User เลือก สำหรับ Multivariate
             params, conf, pvals, status = run_binary_logit(multi_data['y'], multi_data[cand_valid], method=preferred_method)
             
             if status == "OK":
@@ -348,16 +328,14 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     # 🟢 1. เตรียมรายชื่อคอลัมน์ที่มีผลลัพธ์
     valid_cols_for_html = [c for c in sorted_cols if c in results_db]
 
-    # 🟢 2. สร้างฟังก์ชันสำหรับเรียงลำดับ: เรียงตาม Group ก่อน แล้วค่อยเรียงตามชื่อ
+    # 🟢 2. ฟังก์ชันเรียงลำดับ (Group -> Name)
     def sort_key_for_grouping(col_name):
-        # ถ้ามี _ ให้ใช้คำหน้าเป็น Group, ถ้าไม่มีให้เป็น "Variables"
         group = col_name.split('_')[0] if '_' in col_name else "Variables"
         return (group, col_name)
 
-    # 🟢 3. ทำการเรียงลำดับใหม่
+    # 🟢 3. เรียงลำดับ
     grouped_cols = sorted(valid_cols_for_html, key=sort_key_for_grouping)
 
-    # 🟢 4. Loop สร้าง HTML จากรายการที่เรียงใหม่แล้ว
     for col in grouped_cols:
         if col == outcome_name: continue
         res = results_db[col]
@@ -415,7 +393,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     else:
         method_note = "Binary Logistic Regression"
 
-    # 🟢 แก้ไขส่วน Return HTML ให้เพิ่ม Note เรื่อง aOR
+    # 🟢 4. ส่วน Return HTML (เพิ่มสัญลักษณ์ †)
     return f"""
     <div id='{outcome_name}' class='table-container'>
     <div class='outcome-title'>Outcome: {outcome_name} (Total n={total_n})</div>
@@ -428,7 +406,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 <th>Group 1</th>
                 <th>Crude OR (95% CI)</th>
                 <th>Test Used</th> <th>Crude P-value</th>
-                <th>aOR (95% CI)<br><span style='font-size:0.8em; font-weight:normal'>(n={final_n_multi})</span></th>
+                <th>aOR (95% CI) <sup style='color:#d32f2f; font-weight:bold;'>†</sup><br><span style='font-size:0.8em; font-weight:normal'>(n={final_n_multi})</span></th>
                 <th>aP-value</th>
             </tr>
         </thead>
@@ -438,7 +416,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         <b>Method:</b> {method_note}. Complete Case Analysis.<br>
         <i>Univariate comparison uses Chi-square test (Categorical) or Mann-Whitney U test (Continuous).</i>
         <div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee; font-size: 0.9em; color: #666;'>
-            <b>* Note on aOR:</b> Adjusted Odds Ratios are calculated only for variables with a <b>Crude P-value < 0.20</b> 
+            <sup style='color:#d32f2f; font-weight:bold;'>†</sup> <b>Note on aOR:</b> Adjusted Odds Ratios are calculated only for variables with a <b>Crude P-value < 0.20</b> 
             (Screening criteria) and sufficient data quality to prevent overfitting.
         </div>
     </div>
