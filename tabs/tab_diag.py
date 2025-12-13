@@ -46,38 +46,22 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         
         rc1, rc2, rc3, rc4 = st.columns(4)
         
-        # ---------------------------------------------------------
-        # 🟢 Auto-Select Logic (โค้ดของคุณ + ส่วนขยาย)
-        # ---------------------------------------------------------
-        
-        # 1. หา Index สำหรับ Gold Standard (มองหาคำว่า 'gold', 'outcome', 'status')
-        gold_idx = 0
+        def_idx = 0
         for i, c in enumerate(all_cols):
-            c_low = c.lower()
-            if 'gold' in c_low or 'outcome' in c_low or 'status' in c_low:
-                gold_idx = i
-                break
+            if 'Gold' in c.lower() or 'standard' in c.lower(): def_idx = i; break
         
-        # 2. หา Index สำหรับ Test Variable (มองหาคำว่า 'rapid', 'test', 'score')
-        test_idx = 0
-        if len(all_cols) > 1: # เช็คว่ามี column พอให้เลือกไหม
-            for i, c in enumerate(all_cols):
-                c_low = c.lower()
-                # ต้องไม่ซ้ำกับ Gold Standard และมีคำค้นหา
-                if i != gold_idx and ('rapid' in c_low or 'test' in c_low or 'score' in c_low):
-                    test_idx = i
-                    break
-        # ---------------------------------------------------------
-
-        # นำ index ที่หาได้มาใส่ใน selectbox ตรงพารามิเตอร์ `index=...`
-        target_var = rc1.selectbox("1. Gold Standard (Binary):", all_cols, index=gold_idx)
-        test_var = rc2.selectbox("2. Test Variable (Continuous):", all_cols, index=test_idx)
+        truth = rc1.selectbox("Gold Standard (Binary):", all_cols, index=def_idx, key='roc_truth_diag')
+        
+        score_idx = 0
+        for i, c in enumerate(all_cols):
+            if 'score' in c.lower(): score_idx = i; break
+        score = rc2.selectbox("Test Score (Continuous):", all_cols, index=score_idx, key='roc_score_diag')
         
         method = rc3.radio("CI Method:", ["DeLong et al.", "Binomial (Hanley)"], key='roc_method_diag')
 
         # Positive Label
         pos_label = None
-        unique_vals = df[target_var].dropna().unique()
+        unique_vals = df[truth].dropna().unique()
         if len(unique_vals) == 2:
             sorted_vals = sorted([str(x) for x in unique_vals])
             default_pos_idx = 0
@@ -93,11 +77,11 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         if run_col.button("📉 Analyze ROC", key='btn_roc_diag'):
             if pos_label and len(unique_vals) == 2:
                 # Call analyze_roc from diag_test
-                res, err, fig, coords_df = diag_test.analyze_roc(df, target_var, score, 'delong' if 'DeLong' in method else 'hanley', pos_label_user=pos_label)
+                res, err, fig, coords_df = diag_test.analyze_roc(df, truth, score, 'delong' if 'DeLong' in method else 'hanley', pos_label_user=pos_label)
                 if err: st.error(err)
                 else:
                     rep = [
-                        {'type':'text', 'data':f"Analysis: <b>{score}</b> vs <b>{target_var}</b>"},
+                        {'type':'text', 'data':f"Analysis: <b>{score}</b> vs <b>{truth}</b>"},
                         {'type':'plot', 'data':fig},
                         {'type':'table', 'header':'Key Statistics', 'data':pd.DataFrame([res]).T},
                         {'type':'table', 'header':'Diagnostic Performance', 'data':coords_df}
