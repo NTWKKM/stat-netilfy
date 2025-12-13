@@ -39,13 +39,14 @@ def clean_survival_data(df, time_col, event_col, covariates=None):
     # ลบแถวที่มี Missing Value (Complete Case Analysis)
     data = data.dropna()
     dropped = before - len(data)
-    # Optional: surface this via logging/UI instead of silently ignoring it.
+    if dropped > 0:
+        st.warning(f"Dropped {dropped} rows due to missing values or non-numeric data.")
     return data
 
 # --- 1. Kaplan-Meier & Log-Rank ---
 def fit_km_logrank(df, time_col, event_col, group_col=None):
     """
-    Fit and plot Kaplan–Meier survival curves and perform log-rank testing for group comparisons.
+    Fit and plot Kaplan-Meier survival curves and perform log-rank testing for group comparisons.
     
     This function accepts pre-filtered data (suitable for landmark analyses), fits Kaplan-Meier estimators either overall or by group, plots the survival curves, and computes basic summary statistics. If 2+ groups are present, a log-rank test is performed (pairwise for 2 groups; multivariate for 3+), and its p-value is included in the results and plot title.
     
@@ -57,7 +58,7 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
     
     Returns:
         tuple: (figure, stats_df)
-            figure (matplotlib.figure.Figure): Matplotlib Figure containing the Kaplan–Meier plot.
+            figure (matplotlib.figure.Figure): Matplotlib Figure containing the Kaplan-Meier plot.
             stats_df (pandas.DataFrame): Table of summary statistics (per-group or overall) with rows for each statistic and columns for groups or a single "Value" column.
     """
     data = clean_survival_data(df, time_col, event_col, [])
@@ -130,7 +131,7 @@ def fit_km_logrank(df, time_col, event_col, group_col=None):
 # --- 2. Nelson-Aalen (Cumulative Hazard) ---
 def fit_nelson_aalen(df, time_col, event_col, group_col=None):
     """
-    Create and plot a Nelson–Aalen cumulative hazard curve, optionally stratified by a grouping column.
+    Create and plot a Nelson-Aalen cumulative hazard curve, optionally stratified by a grouping column.
     
     Parameters:
         df (pandas.DataFrame): Input dataset containing time, event, and optional group columns.
@@ -140,7 +141,7 @@ def fit_nelson_aalen(df, time_col, event_col, group_col=None):
     
     Returns:
         tuple: A tuple (fig, stats_df) where:
-            - fig (matplotlib.figure.Figure): Figure containing the Nelson–Aalen cumulative hazard plot.
+            - fig (matplotlib.figure.Figure): Figure containing the Nelson-Aalen cumulative hazard plot.
             - stats_df (pandas.DataFrame): Table of counts and event totals per group (or total counts when no group_col is provided).
     """
     data = clean_survival_data(df, time_col, event_col, [])
@@ -161,7 +162,7 @@ def fit_nelson_aalen(df, time_col, event_col, group_col=None):
                 naf.plot_cumulative_hazard(ax=ax)
                 stats_res[f"{g} (N)"] = len(group_data)
                 stats_res[f"{g} (Events)"] = group_data[event_col].sum()
-            ax.set_title(f"Nelson-Aalen Cumulative Hazard: {group_col}")
+        ax.set_title(f"Nelson-Aalen Cumulative Hazard: {group_col}")
     else:
         T = data[time_col]
         E = data[event_col]
@@ -213,10 +214,10 @@ def fit_cox_ph(df, time_col, event_col, covariates):
 
 def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariates):
     """
-    Fit a time-varying Cox proportional hazards model using start–stop (long-format) data.
+    Fit a time-varying Cox proportional hazards model using start-stop (long-format) data.
     
     Parameters:
-        df (pd.DataFrame): Source dataframe containing long-format (start–stop) rows.
+        df (pd.DataFrame): Source dataframe containing long-format (start-stop) rows.
         id_col (str): Column name identifying subject/patient IDs.
         event_col (str): Column name for the event indicator (1 if event occurred, 0 if censored).
         start_col (str): Column name for the interval start time.
