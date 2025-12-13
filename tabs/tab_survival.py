@@ -106,9 +106,9 @@ def render(df, _var_meta):
             st.session_state.landmark_val = float(max_t) * 0.1
 
         # Functions to Sync
-        def update_from_slider():
+        def update_from_slider() -> None:
             st.session_state.landmark_val = st.session_state.lm_slider_widget
-        def update_from_number():
+        def update_from_number() -> None:
             st.session_state.landmark_val = st.session_state.lm_number_widget
 
         c_slide, c_num = st.columns([3, 1])
