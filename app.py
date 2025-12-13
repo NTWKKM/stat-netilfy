@@ -96,23 +96,30 @@ if st.sidebar.button("📄 Load Example Data"):
     # ปรับค่าให้ใกล้กันมากขึ้น (Overlap) เพื่อให้ ROC ไม่ Perfect เกินไป
     # Healthy (0): Mean=35, SD=10 (ช่วงส่วนใหญ่ 15-55)
     # Disease (1): Mean=55, SD=15 (ช่วงส่วนใหญ่ 25-85)
-    # จะมีช่วง 25-55 ที่ทับซ้อนกัน ซึ่งเป็น Grey Zone ที่ทำให้ AUC < 1.0
     rapid_test_val = np.where(gold_std==1, 
-                              np.random.normal(55, 15, n), # เดิม 60
-                              np.random.normal(35, 10, n)) # เดิม 20
+                              np.random.normal(55, 15, n), 
+                              np.random.normal(35, 10, n))
     
-    # ป้องกันค่าติดลบ (ถ้าเป็น Lab ทั่วไป) และปัดทศนิยม
+    # ป้องกันค่าติดลบ และปัดทศนิยม
     rapid_test_val = np.maximum(rapid_test_val, 0).round(1)
     
     # Inter-rater (Kappa): Dr.A vs Dr.B
     dr_a = np.where(gold_std==1, np.random.binomial(1, 0.9, n), np.random.binomial(1, 0.1, n))
-    agree_noise = np.random.binomial(1, 0.85, n) # ลด Agreement ลงนิดหน่อยให้ดู Real
+    agree_noise = np.random.binomial(1, 0.85, n)
     dr_b = np.where(agree_noise==1, dr_a, 1-dr_a)
 
     # --- 5. Correlation ---
     lab_alb = np.random.normal(3.5, 0.5, n).round(2)
     lab_ca = 2 + 1.5*lab_alb + np.random.normal(0, 0.3, n)
     lab_ca = lab_ca.round(2)
+
+    # --- 6. ICC (Intraclass Correlation) [NEW] ---
+    # จำลองการวัดซ้ำ (Repeated Measures) หรือ Rater 2 คน
+    # Rater 1: วัดค่า (เช่น Tumor Size หรือ Score)
+    icc_rater1 = np.random.normal(50, 10, n).round(1)
+    # Rater 2: สัมพันธ์กับ Rater 1 สูง แต่มี Error/Noise เล็กน้อย
+    icc_rater2 = icc_rater1 + np.random.normal(0, 3, n)
+    icc_rater2 = icc_rater2.round(1)
 
     # Create DataFrame
     data = {
@@ -133,6 +140,9 @@ if st.sidebar.button("📄 Load Example Data"):
         # Correlation
         'Lab_Albumin': lab_alb,
         'Lab_Calcium': lab_ca,
+        # ICC Data
+        'ICC_Rater1': icc_rater1,
+        'ICC_Rater2': icc_rater2,
         # For Time Cox
         'T_Start': np.zeros(n, dtype=int),
         'T_Stop': time_obs
@@ -149,9 +159,10 @@ if st.sidebar.button("📄 Load Example Data"):
         'Gold_Standard': {'type':'Categorical', 'map':{0:'Healthy', 1:'Disease'}},
         'Diagnosis_Dr_A': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}},
         'Diagnosis_Dr_B': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}}
+        # ICC_Rater1 และ ICC_Rater2 เป็น Continuous โดยธรรมชาติ ไม่ต้องตั้งค่าอะไร
     }
     
-    st.sidebar.success(f"Loaded {n} Example Patients! (Rapid Test Updated)")
+    st.sidebar.success(f"Loaded {n} Example Patients! (Includes ICC Data)")
     st.rerun()
     
 # File Uploader
