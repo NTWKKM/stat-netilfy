@@ -204,7 +204,8 @@ def render(df, _var_meta):
                             st.session_state.cox_html = None
                         else:
                             # 2. Check Assumptions (Auto Run)
-                            txt_report, figs_assump = survival_lib.check_cph_assumptions(cph, model_data)
+                            # 🟢 UPDATE: รับค่าเป็น fig_images (List of bytes) แทน Figure objects
+                            txt_report, fig_images = survival_lib.check_cph_assumptions(cph, model_data)
                             
                             st.session_state.cox_res = res
                             st.success("Analysis Complete!")
@@ -220,10 +221,11 @@ def render(df, _var_meta):
                                     st.text(txt_report)
                             
                             # Show Plots
-                            if figs_assump:
+                            if fig_images:
                                 st.write("**Schoenfeld Residuals Plots:**")
-                                for fig in figs_assump:
-                                    st.pyplot(fig)
+                                for img_bytes in fig_images:
+                                    # 🟢 UPDATE: ใช้ st.image แสดงผลรูปภาพจาก bytes โดยตรง
+                                    st.image(img_bytes, caption="Assumption Check Plot", use_column_width=True)
                             else:
                                 st.info("No assumption plots generated (maybe model is valid or too simple).")
 
@@ -232,14 +234,14 @@ def render(df, _var_meta):
                                 {'type':'header','data':'Cox Proportional Hazards'},
                                 {'type':'table','data':res},
                                 {'type':'header','data':'Assumption Check (Schoenfeld Residuals)'},
-                                
-                                # 🔴 ลบอันเก่า: {'type':'text','data':f"<pre>{html.escape(txt_report)}</pre>"}
-                                # 🟢 ใส่อันใหม่: ส่ง txt_report ดิบๆ ไปให้ lib จัดการ
-                                {'type':'preformatted','data':txt_report}
+                                # ใช้ preformatted ถ้าแก้ตามรอบก่อน หรือใช้ text แบบเดิม
+                                {'type':'preformatted','data':txt_report} 
                             ]
-                            if figs_assump:
-                                for fig in figs_assump:
-                                    elements.append({'type':'plot','data':fig})
+                            
+                            if fig_images:
+                                for img_bytes in fig_images:
+                                    # 🟢 UPDATE: ส่ง Type ใหม่ 'image' พร้อมข้อมูล bytes
+                                    elements.append({'type':'image','data':img_bytes})
                             
                             report_html = survival_lib.generate_report_survival(f"Cox: {col_time}", elements)
                             st.session_state.cox_html = report_html
