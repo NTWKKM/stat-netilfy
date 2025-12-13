@@ -79,7 +79,7 @@ if st.sidebar.button("📄 Load Example Data"):
     p_treat = 1 / (1 + np.exp(-logit_treat))
     group = np.random.binomial(1, p_treat) 
 
-    # --- 3. Outcome & Survival ---
+    # --- 3. Survival Outcome ---
     lambda_base = 0.02
     hazard = lambda_base * np.exp(0.4*comorbidity - 0.8*group)
     surv_time = np.random.exponential(1/hazard)
@@ -88,36 +88,34 @@ if st.sidebar.button("📄 Load Example Data"):
     time_obs = np.minimum(surv_time, censor_time).round(1)
     event_death = (surv_time <= censor_time).astype(int)
 
-    # --- 4. Diagnostic Test (Adjusted: More Realistic Overlap) ---
-    # Gold Standard: โรคจริง
+    # --- 4. Logistic Regression Outcome [NEW] ---
+    # Outcome: Cured (1=หาย, 0=ไม่หาย)
+    # ปัจจัย: ยาใหม่ (Group 1) ช่วยให้หายง่ายขึ้น, แต่อายุมากและโรคประจำตัวทำให้หายยาก
+    logit_cure = 0.5 + 1.2*group - 0.03*age - 0.8*comorbidity
+    p_cure = 1 / (1 + np.exp(-logit_cure))
+    outcome_cured = np.random.binomial(1, p_cure)
+
+    # --- 5. Diagnostic Test ---
     gold_std = np.random.binomial(1, 0.3, n)
     
-    # Rapid Test Score (Continuous): 
-    # ปรับค่าให้ใกล้กันมากขึ้น (Overlap) เพื่อให้ ROC ไม่ Perfect เกินไป
-    # Healthy (0): Mean=35, SD=10 (ช่วงส่วนใหญ่ 15-55)
-    # Disease (1): Mean=55, SD=15 (ช่วงส่วนใหญ่ 25-85)
+    # Rapid Test (Continuous)
     rapid_test_val = np.where(gold_std==1, 
                               np.random.normal(55, 15, n), 
                               np.random.normal(35, 10, n))
-    
-    # ป้องกันค่าติดลบ และปัดทศนิยม
     rapid_test_val = np.maximum(rapid_test_val, 0).round(1)
     
-    # Inter-rater (Kappa): Dr.A vs Dr.B
+    # Kappa Raters
     dr_a = np.where(gold_std==1, np.random.binomial(1, 0.9, n), np.random.binomial(1, 0.1, n))
     agree_noise = np.random.binomial(1, 0.85, n)
     dr_b = np.where(agree_noise==1, dr_a, 1-dr_a)
 
-    # --- 5. Correlation ---
+    # --- 6. Correlation ---
     lab_alb = np.random.normal(3.5, 0.5, n).round(2)
     lab_ca = 2 + 1.5*lab_alb + np.random.normal(0, 0.3, n)
     lab_ca = lab_ca.round(2)
 
-    # --- 6. ICC (Intraclass Correlation) [NEW] ---
-    # จำลองการวัดซ้ำ (Repeated Measures) หรือ Rater 2 คน
-    # Rater 1: วัดค่า (เช่น Tumor Size หรือ Score)
+    # --- 7. ICC Data ---
     icc_rater1 = np.random.normal(50, 10, n).round(1)
-    # Rater 2: สัมพันธ์กับ Rater 1 สูง แต่มี Error/Noise เล็กน้อย
     icc_rater2 = icc_rater1 + np.random.normal(0, 3, n)
     icc_rater2 = icc_rater2.round(1)
 
@@ -129,6 +127,8 @@ if st.sidebar.button("📄 Load Example Data"):
         'Sex': sex,
         'BMI': bmi,
         'Comorbidity': comorbidity,
+        # Logistic Outcome [NEW]
+        'Outcome_Cured': outcome_cured,
         # Survival
         'Time_Months': time_obs,
         'Status_Death': event_death,
@@ -140,10 +140,10 @@ if st.sidebar.button("📄 Load Example Data"):
         # Correlation
         'Lab_Albumin': lab_alb,
         'Lab_Calcium': lab_ca,
-        # ICC Data
+        # ICC
         'ICC_Rater1': icc_rater1,
         'ICC_Rater2': icc_rater2,
-        # For Time Cox
+        # Time Cox
         'T_Start': np.zeros(n, dtype=int),
         'T_Stop': time_obs
     }
@@ -155,14 +155,14 @@ if st.sidebar.button("📄 Load Example Data"):
         'Group_Treatment': {'type':'Categorical', 'map':{0:'Standard Care', 1:'New Drug'}},
         'Sex': {'type':'Categorical', 'map':{0:'Female', 1:'Male'}},
         'Comorbidity': {'type':'Categorical', 'map':{0:'No', 1:'Yes'}},
+        'Outcome_Cured': {'type':'Categorical', 'map':{0:'Not Cured', 1:'Cured'}}, # Added Metadata
         'Status_Death': {'type':'Categorical', 'map':{0:'Censored', 1:'Dead'}},
         'Gold_Standard': {'type':'Categorical', 'map':{0:'Healthy', 1:'Disease'}},
         'Diagnosis_Dr_A': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}},
         'Diagnosis_Dr_B': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}}
-        # ICC_Rater1 และ ICC_Rater2 เป็น Continuous โดยธรรมชาติ ไม่ต้องตั้งค่าอะไร
     }
     
-    st.sidebar.success(f"Loaded {n} Example Patients! (Includes ICC Data)")
+    st.sidebar.success(f"Loaded {n} Example Patients! (Includes Logistic Outcome)")
     st.rerun()
     
 # File Uploader
