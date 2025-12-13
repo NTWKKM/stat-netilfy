@@ -44,8 +44,8 @@ def render(df):
         cc1, cc2, cc3 = st.columns(3)
         
         # 🟢 UPDATE 1: Auto-select V1 and V2
-        v1_default_name = 'Hypertension'
-        v2_default_name = 'Outcome_Disease'
+        v1_default_name = 'Group_Treatment'
+        v2_default_name = 'Status_Death'
         
         v1_idx = next((i for i, c in enumerate(all_cols) if c == v1_default_name), 0)
         v2_idx = next((i for i, c in enumerate(all_cols) if c == v2_default_name), min(1, len(all_cols)-1))
@@ -178,8 +178,8 @@ def render(df):
         cm = c1.selectbox("Correlation Coefficient:", ["Pearson", "Spearman"], key='coeff_type_tab')
         
         # 🟢 UPDATE: Auto-select BMI and Inflammation_Marker
-        cv1_default_name = 'BMI'
-        cv2_default_name = 'Inflammation_Marker'
+        cv1_default_name = 'Lab_Calcium'
+        cv2_default_name = 'Lab_Albumin'
         
         cv1_idx = next((i for i, c in enumerate(all_cols) if c == cv1_default_name), 0)
         cv2_idx = next((i for i, c in enumerate(all_cols) if c == cv2_default_name), min(1, len(all_cols)-1))
