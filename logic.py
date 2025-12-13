@@ -98,27 +98,34 @@ def run_binary_logit(y, X, method='default'):
 
 def get_label(col_name, var_meta):
     """
-    Create an HTML label for a variable by deriving a display name from the column name and optional metadata.
-    
-    Parameters:
-    	col_name (str): Column identifier; if it contains an underscore, the substring after the first underscore is used as the variable name shown.
-    	var_meta (dict or None): Optional mapping from variable name to metadata dict. If metadata for the variable contains a 'label' entry, that value is used as the secondary (grey) label.
-    
-    Returns:
-    	html_label (str): An HTML string with the variable name in bold on the first line and a secondary grey label on the second line.
+    Create an HTML label. 
+    FIX: Use full column name instead of splitting by '_' to prevent weird names like 'of_birth'
     """
-    parts = col_name.split('_', 1)
-    orig_name = parts[1] if len(parts) > 1 else col_name
+    # 1. ใช้ชื่อเต็มเป็นค่าเริ่มต้น (ไม่ตัด _ ทิ้งแล้ว)
+    display_name = col_name 
     
-    label = orig_name 
-    # [แก้ไข] ย่อหน้าบรรทัด 105 และ 106 ให้ถูกต้อง
-    if var_meta and orig_name in var_meta:
-        if 'label' in var_meta[orig_name]:          # <--- ย่อหน้าเข้ามา 8 spaces
-            label = var_meta[orig_name]['label']    # <--- ย่อหน้าเข้ามา 12 spaces
-             
-    safe_name = _html.escape(str(orig_name))
-    safe_label = _html.escape(str(label))
-    return f"<b>{safe_name}</b><br><span style='color:#666; font-size:0.9em'>{safe_label}</span>"
+    # 2. ค้นหาคำอธิบาย (Label) ใน Metadata
+    secondary_label = ""
+    if var_meta:
+        # ลองหาด้วยชื่อเต็มก่อน
+        if col_name in var_meta and 'label' in var_meta[col_name]:
+            secondary_label = var_meta[col_name]['label']
+        # (Optional) ลองหาด้วยชื่อย่อ เผื่อ config เก่าตั้งไว้
+        elif '_' in col_name:
+            parts = col_name.split('_', 1)
+            if len(parts) > 1:
+                short_name = parts[1]
+                if short_name in var_meta and 'label' in var_meta[short_name]:
+                    secondary_label = var_meta[short_name]['label']
+
+    safe_name = _html.escape(str(display_name))
+    
+    # 3. ถ้ามี Label ให้แสดงบรรทัดล่าง, ถ้าไม่มีให้แสดงแค่ชื่อตัวแปร
+    if secondary_label:
+        safe_label = _html.escape(str(secondary_label))
+        return f"<b>{safe_name}</b><br><span style='color:#666; font-size:0.9em'>{safe_label}</span>"
+    else:
+        return f"<b>{safe_name}</b>"
 
 # ✅ CACHE DATA: ช่วยให้เว็บเร็วขึ้น ไม่ต้องคำนวณใหม่ทุกครั้งที่กดปุ่มอื่น
 # 🟢 NOTE: ต้องเพิ่ม method ลงใน argument เพื่อให้ cache แยกกันตาม method ที่เลือก
