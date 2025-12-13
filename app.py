@@ -61,8 +61,8 @@ st.sidebar.header("1. Data Management")
 
 # Example Data Generator
 if st.sidebar.button("📄 Load Example Data"):
-    np.random.seed(999) # Fixed seed for reproducibility
-    n = 600 # Sufficient sample size for significant p-values
+    np.random.seed(999) # Fixed seed เพื่อให้ผลลัพธ์เหมือนเดิมทุกครั้ง
+    n = 600 # เพิ่ม N เป็น 600 เพื่อให้ P-value เห็นผลชัดเจน
     
     # --- 1. Demographics & Confounders (Table 1 & PSM) ---
     # Age: Normal distribution
@@ -74,118 +74,94 @@ if st.sidebar.button("📄 Load Example Data"):
     # BMI: Normal distribution
     bmi = np.random.normal(24, 4, n).round(1)
     
-    # Severity Score (Continuous): correlated with Age
-    severity_score = (age * 0.1) + np.random.normal(0, 2, n)
-    severity_score = (severity_score - severity_score.min()) + 1 # Make positive
-    severity_score = severity_score.round(1)
-
-    # Comorbidity (Binary): correlated with Age and BMI
-    # Logit model for probability of comorbidity
+    # Comorbidity (Binary): สัมพันธ์กับ Age และ BMI (เป็น Confounder)
     logit_comorb = -5 + 0.05*age + 0.1*bmi
     p_comorb = 1 / (1 + np.exp(-logit_comorb))
     comorbidity = np.random.binomial(1, p_comorb)
 
     # --- 2. Treatment Assignment (Selection Bias for PSM) ---
-    # Patients with higher Severity and Comorbidity are more likely to get "New Drug" (Group 1)
-    # This creates a difference in baseline characteristics (Table 1) -> Needs PSM
-    logit_treat = -2 + 0.3*severity_score + 1.5*comorbidity - 0.02*age
+    # กำหนดให้คนที่มี Comorbidity หรือ Age มาก มีโอกาสได้ยาใหม่ (Group 1) มากกว่า
+    # สิ่งนี้ทำให้ Baseline Table 1 ไม่เท่ากัน (Bias) -> ต้องแก้ด้วย PSM
+    logit_treat = -2 + 1.5*comorbidity - 0.02*age
     p_treat = 1 / (1 + np.exp(-logit_treat))
     group = np.random.binomial(1, p_treat) 
 
-    # --- 3. Outcome for Logistic Regression ---
-    # New Drug (Group 1) is protective (coef -1.2), but Age/Severity are risks
-    # Without adjustment, the drug might look less effective due to selection bias (sicker patients get drug)
-    logit_outcome = -1 + 0.1*age + 0.5*severity_score - 1.5*group
-    p_outcome = 1 / (1 + np.exp(-logit_outcome))
-    outcome_cured = np.random.binomial(1, 1 - p_outcome) # Inverse: Lower risk score = Higher cure chance
-    
-    # --- 4. Survival Analysis (Kaplan-Meier & Cox) ---
-    # Group 1 lives longer (lower hazard). Age increases hazard.
-    # Baseline hazard (lambda)
-    lambda_base = 0.002 
-    # Hazard Ratio: Group=0.5 (Protective), Age=1.03 (Risk)
-    hazard = lambda_base * np.exp(0.03*age - 0.8*group + 0.2*comorbidity)
-    
-    # Generate time from exponential distribution
+    # --- 3. Outcome & Survival ---
+    # Survival: Group 1 (New Drug) อยู่ได้นานกว่า (Protective Effect)
+    # Hazard Ratio: Group=0.5 (ลดเสี่ยง), Comorbidity=1.5 (เพิ่มเสี่ยง)
+    lambda_base = 0.02
+    hazard = lambda_base * np.exp(0.4*comorbidity - 0.8*group)
     surv_time = np.random.exponential(1/hazard)
     
-    # Censoring: Random censor time or fixed study end
-    censor_time = np.random.uniform(0, 1000, n)
-    
-    time_obs = np.minimum(surv_time, censor_time).astype(int) + 1
-    event_death = (surv_time <= censor_time).astype(int) # 1=Event (Dead), 0=Censored
+    # Censoring
+    censor_time = np.random.uniform(0, 100, n)
+    time_obs = np.minimum(surv_time, censor_time).round(1)
+    event_death = (surv_time <= censor_time).astype(int) # 1=Dead, 0=Censored
 
-    # --- 5. Diagnostic Test (Sensitivity/Specificity/Kappa) ---
-    # Gold Standard: Actual Disease Status
-    true_disease = np.random.binomial(1, 0.3, n) # 30% prevalence
+    # --- 4. Diagnostic Test (สำคัญ: ปรับให้มี Sens/Spec) ---
+    # Gold Standard: โรคจริง
+    gold_std = np.random.binomial(1, 0.3, n) # ความชุก 30%
     
-    # Rapid Test: Sensitivity ~85%, Specificity ~90%
-    # If Disease=1, Test=1 with prob 0.85
-    # If Disease=0, Test=1 with prob 0.10
-    prob_test = np.where(true_disease==1, 0.85, 0.10)
+    # Rapid Test: สร้างให้ตรงกับ Gold Standard ประมาณ 85-90%
+    # ถ้าเป็นโรค (1) ตรวจเจอ (1) 85% (Sensitivity)
+    # ถ้าไม่เป็นโรค (0) ตรวจเจอ (1) 10% (False Positive -> Spec 90%)
+    prob_test = np.where(gold_std==1, 0.85, 0.10)
     rapid_test = np.random.binomial(1, prob_test)
     
-    # Inter-rater Agreement (Kappa)
-    # Radiologist A vs B (Both looking at True Disease with some noise)
-    rad_a = np.where(true_disease==1, np.random.binomial(1, 0.9, n), np.random.binomial(1, 0.1, n))
-    # Rad B agrees with Rad A 90% of the time
+    # Inter-rater (Kappa): Dr.A vs Dr.B
+    # ให้ Dr.A วินิจฉัยใกล้เคียงความจริง
+    dr_a = np.where(gold_std==1, np.random.binomial(1, 0.9, n), np.random.binomial(1, 0.1, n))
+    # ให้ Dr.B เห็นตรงกับ Dr.A 90% (High Agreement)
     agree_noise = np.random.binomial(1, 0.90, n)
-    rad_b = np.where(agree_noise==1, rad_a, 1-rad_a)
+    dr_b = np.where(agree_noise==1, dr_a, 1-dr_a)
 
-    # --- 6. Correlation (Linear) ---
-    # Lab Value X vs Lab Value Y
-    lab_albumin = np.random.normal(3.5, 0.5, n)
-    # Calcium correlates with Albumin
-    lab_calcium = 2 + 1.5*lab_albumin + np.random.normal(0, 0.3, n)
-    
-    # Rounding
-    lab_albumin = lab_albumin.round(2)
-    lab_calcium = lab_calcium.round(2)
+    # --- 5. Correlation ---
+    lab_alb = np.random.normal(3.5, 0.5, n).round(2)
+    # Ca สัมพันธ์กับ Alb
+    lab_ca = 2 + 1.5*lab_alb + np.random.normal(0, 0.3, n)
+    lab_ca = lab_ca.round(2)
 
     # Create DataFrame
     data = {
         'ID': range(1, n+1),
-        'Group_Treatment': group, # 0=Standard, 1=New Drug
+        'Group_Treatment': group, 
         'Age': age,
         'Sex': sex,
         'BMI': bmi,
         'Comorbidity': comorbidity,
-        'Severity_Score': severity_score,
-        'Outcome_Cured': outcome_cured,
         # Survival
         'Time_Months': time_obs,
         'Status_Death': event_death,
         # Diagnostic
-        'Gold_Standard': true_disease,
+        'Gold_Standard': gold_std,
         'Rapid_Test': rapid_test,
-        'Radiologist_A': rad_a,
-        'Radiologist_B': rad_b,
+        'Diagnosis_Dr_A': dr_a,
+        'Diagnosis_Dr_B': dr_b,
         # Correlation
-        'Lab_Albumin': lab_albumin,
-        'Lab_Calcium': lab_calcium,
-        # For Time Cox (Placeholder structure)
+        'Lab_Albumin': lab_alb,
+        'Lab_Calcium': lab_ca,
+        # For Time Cox (Placeholder)
         'T_Start': np.zeros(n, dtype=int),
         'T_Stop': time_obs
     }
     
     st.session_state.df = pd.DataFrame(data)
     
-    # Define Metadata for Auto-Labeling
+    # Set Metadata (ให้แสดงผลสวยๆ อัตโนมัติ)
     st.session_state.var_meta = {
         'Group_Treatment': {'type':'Categorical', 'map':{0:'Standard Care', 1:'New Drug'}},
         'Sex': {'type':'Categorical', 'map':{0:'Female', 1:'Male'}},
         'Comorbidity': {'type':'Categorical', 'map':{0:'No', 1:'Yes'}},
-        'Outcome_Cured': {'type':'Categorical', 'map':{0:'Not Cured', 1:'Cured'}},
-        'Status_Death': {'type':'Categorical', 'map':{0:'Censored/Alive', 1:'Death'}},
+        'Status_Death': {'type':'Categorical', 'map':{0:'Censored', 1:'Dead'}},
         'Gold_Standard': {'type':'Categorical', 'map':{0:'Healthy', 1:'Disease'}},
         'Rapid_Test': {'type':'Categorical', 'map':{0:'Negative', 1:'Positive'}},
-        'Radiologist_A': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}},
-        'Radiologist_B': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}}
+        'Diagnosis_Dr_A': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}},
+        'Diagnosis_Dr_B': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}}
     }
     
     st.sidebar.success(f"Loaded {n} Example Patients! Ready for all tabs.")
     st.rerun()
-
+    
 # File Uploader
 upl = st.sidebar.file_uploader("Upload CSV/Excel", type=['csv', 'xlsx'])
 if upl:
