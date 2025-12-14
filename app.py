@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import time
+import io
 import streamlit.components.v1 as components
 
 # ==========================================
@@ -52,11 +53,14 @@ except Exception as e:
     st.stop()
 
 # --- INITIALIZE STATE ---
-if 'df' not in st.session_state: st.session_state.df = None
-if 'var_meta' not in st.session_state: st.session_state.var_meta = {}
+if 'df' not in st.session_state:
+    st.session_state.df = None
+if 'var_meta' not in st.session_state:
+    st.session_state.var_meta = {}
 # 🟢 เพิ่ม State สำหรับการติดตามไฟล์ที่อัปโหลด (เพื่อป้องกันการโหลดซ้ำ)
-if 'uploaded_file_name' not in st.session_state: st.session_state.uploaded_file_name = None
-
+if 'uploaded_file_name' not in st.session_state:
+    st.session_state.uploaded_file_name = None
+    
 # --- SIDEBAR (ยังคงไว้ใน app.py เพราะเป็น Global Control) ---
 st.sidebar.title("MENU")
 st.sidebar.header("1. Data Management")
@@ -184,12 +188,13 @@ if st.sidebar.button("📄 Load Example Data"):
 upl = st.sidebar.file_uploader("Upload CSV/Excel", type=['csv', 'xlsx'])
 if upl:
     try:
-        # Check if the file is new to avoid unnecessary re-reading/re-initialization
-        if st.session_state.get('uploaded_file_name') != upl.name:
-            if upl.name.endswith('.csv'): 
-                new_df = pd.read_csv(upl)
+        data_bytes = upl.getvalue()
+        file_sig = (upl.name, hash(data_bytes))
+        if st.session_state.get('uploaded_file_sig') != file_sig:
+            if upl.name.endswith('.csv'):
+                new_df = pd.read_csv(io.BytesIO(data_bytes))
             else:
-                new_df = pd.read_excel(io.BytesIO(upl.getvalue()))
+                new_df = pd.read_excel(io.BytesIO(data_bytes))
             
             # --- Data Pre-processing (as per previous simplified structure) ---
             # new_df.columns = new_df.columns.str.replace('[^0-9a-zA-Z_]', '', regex=True) # Assuming this cleaning happens later or is optional
@@ -197,6 +202,7 @@ if upl:
             
             st.session_state.df = new_df
             st.session_state.uploaded_file_name = upl.name
+            st.session_state.uploaded_file_sig = file_sig
             st.session_state.var_meta = {} # Reset meta for new file
             
             # 🟢 REQUIRED FIX: Add default metadata for new continuous/categorical variables
@@ -215,10 +221,11 @@ if upl:
         else:
             st.sidebar.info("File already loaded.")
             
-    except Exception as e: 
+    except (ValueError, UnicodeDecodeError, pd.errors.ParserError) as e: 
         st.sidebar.error(f"Error: {e}")
         st.session_state.df = None
         st.session_state.uploaded_file_name = None
+        st.session_state.uploaded_file_sig = None
 
 if st.sidebar.button("⚠️ Reset All Data", type="primary"):
     st.session_state.clear()
@@ -236,7 +243,7 @@ if st.session_state.df is not None:
     if s_var != "Select...":
         # Ensure metadata for s_var exists before accessing
         if s_var not in st.session_state.var_meta:
-             # Fallback to auto-detect if metadata is missing (shouldn't happen with fix, but safer)
+            # Fallback to auto-detect if metadata is missing (shouldn't happen with fix, but safer)
             is_numeric = pd.api.types.is_numeric_dtype(st.session_state.df[s_var]) if s_var in st.session_state.df.columns else False
             initial_type = 'Continuous' if is_numeric else 'Categorical'
             st.session_state.var_meta[s_var] = {'type': initial_type, 'label': s_var, 'map': {}}
@@ -246,8 +253,8 @@ if st.session_state.df is not None:
         # Determine current type for radio button display
         current_type = meta.get('type', 'Auto-detect')
         if current_type == 'Auto-detect':
-             is_numeric = pd.api.types.is_numeric_dtype(st.session_state.df[s_var]) if s_var in st.session_state.df.columns else False
-             current_type = 'Continuous' if is_numeric else 'Categorical'
+            is_numeric = pd.api.types.is_numeric_dtype(st.session_state.df[s_var]) if s_var in st.session_state.df.columns else False
+            current_type = 'Continuous' if is_numeric else 'Categorical'
 
         n_type = st.sidebar.radio("Type:", ['Categorical', 'Continuous'], 
                                   index=['Categorical', 'Continuous'].index(current_type))
@@ -260,12 +267,16 @@ if st.session_state.df is not None:
             for line in map_txt.split('\n'):
                 if '=' in line:
                     k, v = line.split('=', 1)
-                    try: 
-                        k=k.strip()
-                        # Try to convert key to float/int if it looks numeric
-                        if k.replace('.','',1).isdigit(): k = float(k) if '.' in k else int(k)
+                    try:
+                        k = k.strip()
+                        # Try numeric parse (supports negatives, floats, sci-notation)
+                        try:
+                            k_num = float(k)
+                            k = int(k_num) if k_num.is_integer() else k_num
+                        except ValueError:
+                            pass
                         new_map[k] = v.strip()
-                    except Exception as e:
+                    except (TypeError, ValueError) as e:
                         st.sidebar.warning(f"Skipping invalid map line '{line}': {e}")
             
             # Ensure the key exists
@@ -275,7 +286,7 @@ if st.session_state.df is not None:
             # Update meta
             st.session_state.var_meta[s_var]['type'] = n_type
             st.session_state.var_meta[s_var]['map'] = new_map
-            st.session_state.var_meta[s_var]['label'] = s_var # Ensure label is set
+            st.session_state.var_meta[s_var].setdefault('label', s_var)  # don't clobber existing labels
             
             st.sidebar.success("Saved!")
             st.rerun()
