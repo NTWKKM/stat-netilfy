@@ -203,7 +203,7 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                     {"Statistic": "Risk Ratio (RR)", "Value": f"{rr:.4f}", 
                      "Interpretation": f"Risk in {label_exp} is {rr:.2f} times that of {label_unexp}"},
                     {"Statistic": "Risk Difference (RD)", "Value": f"{rd:.4f}", 
-                     "Interpretation": f"Absolute difference (R1 - R0)"},
+                     "Interpretation": "Absolute difference (R1 - R0)"},
                     {"Statistic": nnt_label, "Value": nnt_value, 
                      "Interpretation": nnt_interp}, # <-- Updated NNT/NNH presentation
                     {"Statistic": "Odds Ratio (OR)", "Value": f"{odd_ratio:.4f}", 
@@ -249,7 +249,7 @@ def calculate_correlation(df, col1, col2, method='pearson'):
     
     # Check if enough numeric data remains (need at least 2 points for correlation)
     if len(data_numeric) < 2:
-        return None, f"Error: Cannot compute correlation. Columns must contain at least two numeric values.", None
+        return None, "Error: Cannot compute correlation. Columns must contain at least two numeric values.", None
     
     v1 = data_numeric[col1]
     v2 = data_numeric[col2]
