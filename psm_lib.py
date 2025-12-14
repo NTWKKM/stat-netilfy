@@ -309,7 +309,7 @@ def generate_psm_report(title, elements):
     """
     
     html = f"<!DOCTYPE html>\n<html>\n<head><meta charset='utf-8'>{css}</head>\n<body>"
-    html += f"<h1>{title}</h1>"
+    html += f"<h1>{_html.escape(str(title))}</h1>"
     
     for el in elements:
         if el['type'] == 'text':
