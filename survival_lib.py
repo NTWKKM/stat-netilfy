@@ -1,380 +1,445 @@
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib
-import html
-from lifelines import KaplanMeierFitter, CoxPHFitter, NelsonAalenFitter, CoxTimeVaryingFitter
-from lifelines.statistics import logrank_test, multivariate_logrank_test
-import io
-import base64
-import contextlib
-import streamlit as st
+from lifelines import KaplanMeierFitter, CoxPHFitter
+from lifelines.statistics import logrank_test
+import plotly.graph_objects as go
+import plotly.express as px
+import warnings
+import io, base64
+import html as _html
 
-# --- Helper: Clean Data ---
-def clean_survival_data(df, time_col, event_col, covariates=None):
-    """
-    Prepare a numeric, complete-case DataFrame for survival analysis with one row per subject.
-    
-    This function selects the requested time, event, and optional covariate columns from the input DataFrame, coerces all selected columns to numeric (invalid parsing becomes NaN), and drops any rows containing missing values.
+warnings.filterwarnings("ignore")
+
+# --- 1. Kaplan-Meier Estimator (with Plotly) ---
+def estimate_km(df, duration_col, event_col, group_col=None, group_val=None):
+    """ 
+    Fit Kaplan-Meier survival curves using the provided dataframe.
     
     Parameters:
-        df (pd.DataFrame): Source data.
-        time_col (str): Name of the duration/time-to-event column.
-        event_col (str): Name of the event indicator column (typically 0/1).
-        covariates (list[str] | None): Optional list of covariate column names to include.
+        df (pandas.DataFrame): Input dataset containing duration, event, and optional grouping columns.
+        duration_col (str): Column name with event/censoring times.
+        event_col (str): Column name with event indicator (1=event, 0=censored).
+        group_col (str, optional): Column name for group/stratification variable.
+        group_val (optional): Specific group value to subset (if None, uses entire dataset).
     
     Returns:
-        pd.DataFrame: Cleaned DataFrame containing only the requested columns as numeric types and only complete cases (no missing values).
+        tuple: (kmf, fig)
+            kmf (lifelines.KaplanMeierFitter): Fitted KM estimator object.
+            fig (plotly.graph_objects.Figure): Interactive Plotly figure showing KM curve with confidence intervals.
     """
-    cols = [time_col, event_col]
-    if covariates:
-        cols += covariates
+    data = df.dropna(subset=[duration_col, event_col])
     
-    # เลือกเฉพาะคอลัมน์ที่ใช้ และแปลงเป็นตัวเลข
-    data = df[cols].copy()
-    before = len(data)
-    for c in data.columns:
-        data[c] = pd.to_numeric(data[c], errors="coerce")
-        
-    # ลบแถวที่มี Missing Value (Complete Case Analysis)
-    data = data.dropna()
-    dropped = before - len(data)
-    if dropped > 0:
-        st.warning(f"Dropped {dropped} rows due to missing values or non-numeric data.")
-    return data
-
-# --- 1. Kaplan-Meier & Log-Rank ---
-def fit_km_logrank(df, time_col, event_col, group_col=None):
-    """
-    Fit and plot Kaplan-Meier survival curves and perform log-rank testing for group comparisons.
-    
-    This function accepts pre-filtered data (suitable for landmark analyses), fits Kaplan-Meier estimators either overall or by group, plots the survival curves, and computes basic summary statistics. If 2+ groups are present, a log-rank test is performed (pairwise for 2 groups; multivariate for 3+), and its p-value is included in the results and plot title.
-    
-    Parameters:
-        df (pandas.DataFrame): Input dataset containing time, event, and optional grouping columns.
-        time_col (str): Column name for survival or follow-up time.
-        event_col (str): Column name for the event indicator (1=event, 0=censored).
-        group_col (str, optional): Column name for a grouping variable to produce group-wise curves and comparisons. If omitted, a single overall curve is produced.
-    
-    Returns:
-        tuple: (figure, stats_df)
-            figure (matplotlib.figure.Figure): Matplotlib Figure containing the Kaplan-Meier plot.
-            stats_df (pandas.DataFrame): Table of summary statistics (per-group or overall) with rows for each statistic and columns for groups or a single "Value" column.
-    """
-    data = clean_survival_data(df, time_col, event_col, [])
-    if group_col:
-        data[group_col] = df.loc[data.index, group_col]
-        data = data.dropna(subset=[group_col])
+    if group_col is not None:
+        if group_val is not None:
+            data = data[data[group_col] == group_val]
     
     kmf = KaplanMeierFitter()
-    fig, ax = plt.subplots(figsize=(8, 5))
+    kmf.fit(data[duration_col], data[event_col], label=f"{group_col}={group_val}" if group_col else "Overall")
     
-    stats_res = {}
+    # 🟢 UPDATED: สร้างกราฟ Plotly แทน Matplotlib
+    fig = go.Figure()
     
-    if group_col:
-        # เปรียบเทียบระหว่างกลุ่ม
-        groups = sorted(data[group_col].unique(), key=lambda x: str(x))
-        T_list, E_list = [], []
-        
-        for g in groups:
-            mask = data[group_col] == g
-            T = data.loc[mask, time_col]
-            E = data.loc[mask, event_col]
-            
-            if len(T) > 0:
-                kmf.fit(T, event_observed=E, label=str(g))
-                kmf.plot_survival_function(ax=ax, ci_show=False)
-                
-                # เก็บสถิติพื้นฐาน
-                stats_res[f"{g} (N)"] = len(T)
-                stats_res[f"{g} (Events)"] = E.sum()
-                stats_res[f"{g} (Median)"] = kmf.median_survival_time_
-                
-                T_list.append(T)
-                E_list.append(E)
-            
-        # Log-Rank Test (ถ้ามี 2 กลุ่มขึ้นไป)
-        if len(T_list) >= 2:
-            if len(T_list) == 2:
-                # Pairwise log-rank test for 2 groups
-                lr_result = logrank_test(T_list[0], T_list[1], event_observed_A=E_list[0], event_observed_B=E_list[1])
-                stats_res['Log-Rank p-value'] = lr_result.p_value
-                ax.set_title(f"KM Curve: {group_col} (p = {lr_result.p_value:.4f})")
-            else:
-                # Multivariate log-rank test for 3+ groups
-                lr_result = multivariate_logrank_test(data[time_col], data[group_col], data[event_col])
-                stats_res['Log-Rank p-value'] = lr_result.p_value
-                ax.set_title(f"KM Curve: {group_col} (p = {lr_result.p_value:.4f})")
-        else:
-            ax.set_title(f"KM Curve: {group_col}")
-             
-    else:
-        # ดูภาพรวม (ไม่มีกลุ่มเปรียบเทียบ)
-        T = data[time_col]
-        E = data[event_col]
-        kmf.fit(T, event_observed=E, label="All Patients")
-        kmf.plot_survival_function(ax=ax)
-        
-        stats_res["Total N"] = len(T)
-        stats_res["Events"] = E.sum()
-        stats_res["Censored"] = len(T) - E.sum()
-        stats_res["Median Survival"] = kmf.median_survival_time_
-        
-        ax.set_title("Kaplan-Meier Survival Curve")
-        
-    ax.set_xlabel(f"Time ({time_col})")
-    ax.set_ylabel("Survival Probability")
-    ax.grid(True, alpha=0.3)
+    # เพิ่ม survival curve
+    fig.add_trace(go.Scatter(
+        x=kmf.survival_function_.index,
+        y=kmf.survival_function_.iloc[:, 0],
+        mode='lines',
+        name='Survival Probability',
+        line=dict(color='blue', width=2),
+        hovertemplate='Time: %{x:.1f}<br>Survival: %{y:.3f}<extra></extra>'
+    ))
     
-    return fig, pd.DataFrame(stats_res, index=["Value"]).T
+    # เพิ่ม confidence interval (upper)
+    ci_upper = kmf.confidence_interval_survival_function_.iloc[:, 1]
+    fig.add_trace(go.Scatter(
+        x=kmf.survival_function_.index,
+        y=ci_upper,
+        mode='lines',
+        name='95% CI Upper',
+        line=dict(color='rgba(0, 0, 255, 0)'),
+        showlegend=False,
+        hoverinfo='skip'
+    ))
+    
+    # เพิ่ม confidence interval (lower)
+    ci_lower = kmf.confidence_interval_survival_function_.iloc[:, 0]
+    fig.add_trace(go.Scatter(
+        x=kmf.survival_function_.index,
+        y=ci_lower,
+        mode='lines',
+        name='95% CI Lower',
+        line=dict(color='rgba(0, 0, 255, 0)'),
+        fillcolor='rgba(0, 100, 200, 0.2)',
+        fill='tonexty',
+        showlegend=False,
+        hoverinfo='skip'
+    ))
+    
+    # ปรับแต่งเค้าโครง
+    fig.update_layout(
+        title='Kaplan-Meier Survival Curve',
+        xaxis_title='Time',
+        yaxis_title='Survival Probability',
+        hovermode='x unified',
+        template='plotly_white',
+        height=500,
+        width=800,
+        font=dict(size=12)
+    )
+    
+    # ปรับแต่ง y-axis range
+    fig.update_yaxes(range=[0, 1.05])
+    
+    return kmf, fig
 
-# --- 2. Nelson-Aalen (Cumulative Hazard) ---
-def fit_nelson_aalen(df, time_col, event_col, group_col=None):
-    """
-    Create and plot a Nelson-Aalen cumulative hazard curve, optionally stratified by a grouping column.
-    
-    Parameters:
-        df (pandas.DataFrame): Input dataset containing time, event, and optional group columns.
-        time_col (str): Column name for survival time or follow-up time.
-        event_col (str): Column name for the event indicator (1 for event, 0 for censored).
-        group_col (str, optional): Column name to stratify the cumulative hazard by groups. If omitted, the function fits a single curve for all patients.
-    
-    Returns:
-        tuple: A tuple (fig, stats_df) where:
-            - fig (matplotlib.figure.Figure): Figure containing the Nelson-Aalen cumulative hazard plot.
-            - stats_df (pandas.DataFrame): Table of counts and event totals per group (or total counts when no group_col is provided).
-    """
-    data = clean_survival_data(df, time_col, event_col, [])
-    if group_col:
-        data[group_col] = df.loc[data.index, group_col]
-        data = data.dropna(subset=[group_col])
-    naf = NelsonAalenFitter()
-    fig, ax = plt.subplots(figsize=(8, 5))
-    stats_res = {}
-    
-    if group_col:
-        groups = sorted(data[group_col].unique(), key=lambda x: str(x))
-        for g in groups:
-            mask = data[group_col] == g
-            group_data = data.loc[mask]
-            if not group_data.empty:
-                naf.fit(group_data[time_col], event_observed=group_data[event_col], label=str(g))
-                naf.plot_cumulative_hazard(ax=ax)
-                stats_res[f"{g} (N)"] = len(group_data)
-                stats_res[f"{g} (Events)"] = group_data[event_col].sum()
-        ax.set_title(f"Nelson-Aalen Cumulative Hazard: {group_col}")
-    else:
-        T = data[time_col]
-        E = data[event_col]
-        naf.fit(T, event_observed=E, label="All")
-        naf.plot_cumulative_hazard(ax=ax)
-        stats_res["Total N"] = len(T)
-        stats_res["Events"] = E.sum()
-        ax.set_title("Nelson-Aalen Cumulative Hazard")
-        
-    ax.set_xlabel(f"Time ({time_col})")
-    ax.set_ylabel("Cumulative Hazard")
-    ax.grid(True, alpha=0.3)
-    
-    return fig, pd.DataFrame(stats_res, index=["Count"]).T
 
-# --- 3. Cox Proportional Hazards (Standard) ---
-
-def fit_cox_ph(df, time_col, event_col, covariates):
-    """
-    Fit a time-independent Cox proportional hazards model on numeric, complete-case data.
+def compare_km_groups(df, duration_col, event_col, group_col):
+    """ 
+    Compare Kaplan-Meier survival curves between groups and perform log-rank test.
     
     Parameters:
         df (pandas.DataFrame): Input dataset.
-        time_col (str): Column name containing event durations.
-        event_col (str): Column name containing the event/censoring indicator (0/1).
-        covariates (list[str]): List of covariate column names to include in the model.
+        duration_col (str): Column name with event/censoring times.
+        event_col (str): Column name with event indicator (1=event, 0=censored).
+        group_col (str): Column name for group/stratification variable.
     
     Returns:
-        cph (lifelines.CoxPHFitter or None): Fitted CoxPHFitter when successful, otherwise `None`.
-        summary_df (pandas.DataFrame or None): Summary table with columns `['Coef', 'HR', 'Lower 95%', 'Upper 95%', 'P-value']` when successful, otherwise `None`.
-        data (pandas.DataFrame or None): Cleaned numeric complete-case DataFrame used for fitting when successful, otherwise `None`.
-        error (str or None): Error message string if fitting failed, otherwise `None`.
+        tuple: (fig, test_result)
+            fig (plotly.graph_objects.Figure): Interactive Plotly figure comparing survival curves by group.
+            test_result (dict): Log-rank test results (statistic, p-value, degrees of freedom, test name).
     """
-    data = clean_survival_data(df, time_col, event_col, covariates)
+    data = df.dropna(subset=[duration_col, event_col, group_col])
+    
+    groups = data[group_col].unique()
+    
+    # 🟢 UPDATED: ใช้ Plotly สำหรับการวาดกราฟ
+    fig = go.Figure()
+    
+    colors = ['blue', 'red', 'green', 'orange', 'purple']
+    
+    for i, g in enumerate(groups):
+        group_data = data[data[group_col] == g]
+        kmf = KaplanMeierFitter()
+        kmf.fit(group_data[duration_col], group_data[event_col], label=f"{group_col}={g}")
+        
+        color = colors[i % len(colors)]
+        
+        # เพิ่ม survival curve
+        fig.add_trace(go.Scatter(
+            x=kmf.survival_function_.index,
+            y=kmf.survival_function_.iloc[:, 0],
+            mode='lines',
+            name=f'{g} (n={len(group_data)})',
+            line=dict(color=color, width=2),
+            hovertemplate=f'{group_col}={g}<br>Time: %{{x:.1f}}<br>Survival: %{{y:.3f}}<extra></extra>'
+        ))
+    
+    # ปรับแต่งเค้าโครง
+    fig.update_layout(
+        title=f'Kaplan-Meier Survival Curves by {group_col}',
+        xaxis_title='Time',
+        yaxis_title='Survival Probability',
+        hovermode='x unified',
+        template='plotly_white',
+        height=500,
+        width=900,
+        font=dict(size=12)
+    )
+    
+    fig.update_yaxes(range=[0, 1.05])
+    
+    # Log-rank test
+    if len(groups) == 2:
+        g1, g2 = groups
+        data_g1 = data[data[group_col] == g1]
+        data_g2 = data[data[group_col] == g2]
+        
+        result = logrank_test(
+            data_g1[duration_col],
+            data_g2[duration_col],
+            event_observed_A=data_g1[event_col],
+            event_observed_B=data_g2[event_col]
+        )
+        
+        test_result = {
+            'Test': 'Log-Rank',
+            'Statistic': result.test_statistic,
+            'P-value': result.p_value,
+            'Degrees of Freedom': 1,
+            'Comparison': f'{g1} vs {g2}'
+        }
+    else:
+        test_result = {'Test': 'Log-Rank', 'Statistic': np.nan, 'P-value': np.nan, 
+                       'Note': 'Multiple groups detected. Manual comparison needed.'}
+    
+    return fig, test_result
+
+
+# --- 2. Cox Proportional Hazards Model ---
+def fit_cox_model(df, duration_col, event_col, covariate_cols):
+    """ 
+    Fit a Cox proportional hazards model using provided covariates.
+    
+    Parameters:
+        df (pandas.DataFrame): Input dataset.
+        duration_col (str): Column name with event/censoring times.
+        event_col (str): Column name with event indicator (1=event, 0=censored).
+        covariate_cols (list[str]): List of covariate column names.
+    
+    Returns:
+        tuple: (cph, fig_forest, fig_cumhaz)
+            cph (lifelines.CoxPHFitter): Fitted Cox model object.
+            fig_forest (plotly.graph_objects.Figure): Interactive forest plot (hazard ratios with CIs).
+            fig_cumhaz (plotly.graph_objects.Figure): Cumulative hazard plot (for assumption checking).
+    """
+    data = df.dropna(subset=[duration_col, event_col] + covariate_cols).copy()
+    
+    # Standardize numeric covariates
+    for col in covariate_cols:
+        if pd.api.types.is_numeric_dtype(data[col]):
+            data[col] = (data[col] - data[col].mean()) / data[col].std()
+    
     cph = CoxPHFitter()
-    try:
-        cph.fit(data, duration_col=time_col, event_col=event_col)
-        
-        summary_df = cph.summary[['coef', 'exp(coef)', 'exp(coef) lower 95%', 'exp(coef) upper 95%', 'p']]
-        summary_df.columns = ['Coef', 'HR', 'Lower 95%', 'Upper 95%', 'P-value']
-        
-        return cph, summary_df, data, None
-    except (KeyboardInterrupt, SystemExit):
-        raise
-    except Exception as e:
-        return None, None, None, str(e)
+    cph.fit(data, duration_col=duration_col, event_col=event_col)
+    
+    # 🟢 UPDATED: สร้าง Forest Plot ด้วย Plotly
+    # Extract hazard ratios and confidence intervals
+    hr = np.exp(cph.params_)
+    ci = np.exp(cph.confidence_intervals_)
+    
+    variables = hr.index.tolist()
+    hr_vals = hr.values
+    ci_lower = ci.iloc[:, 0].values
+    ci_upper = ci.iloc[:, 1].values
+    
+    fig_forest = go.Figure()
+    
+    # เพิ่ม points (Hazard Ratios)
+    fig_forest.add_trace(go.Scatter(
+        x=hr_vals,
+        y=variables,
+        mode='markers',
+        marker=dict(size=8, color='darkblue'),
+        name='HR',
+        hovertemplate='%{y}<br>HR: %{x:.3f}<extra></extra>'
+    ))
+    
+    # เพิ่ม error bars (Confidence Intervals)
+    fig_forest.add_trace(go.Scatter(
+        x=hr_vals,
+        y=variables,
+        error_x=dict(
+            type='data',
+            symmetric=False,
+            array=ci_upper - hr_vals,
+            arrayminus=hr_vals - ci_lower,
+            visible=True,
+            color='darkblue',
+            thickness=2
+        ),
+        mode='markers',
+        marker=dict(size=0),
+        showlegend=False,
+        hoverinfo='skip'
+    ))
+    
+    # เพิ่มเส้นอ้างอิง (HR = 1)
+    fig_forest.add_vline(
+        x=1,
+        line_dash='dash',
+        line_color='red',
+        opacity=0.5,
+        annotation_text='HR = 1 (No Effect)',
+        annotation_position='top right'
+    )
+    
+    # ปรับแต่งเค้าโครง
+    fig_forest.update_layout(
+        title='Cox Model: Hazard Ratios with 95% CI',
+        xaxis_title='Hazard Ratio (log scale)',
+        yaxis_title='Variable',
+        xaxis_type='log',
+        hovermode='y unified',
+        template='plotly_white',
+        height=400 + len(variables) * 30,
+        width=800,
+        font=dict(size=11)
+    )
+    
+    # Cumulative Hazard Plot (for assumption checking)
+    fig_cumhaz = go.Figure()
+    
+    cumhaz = cph.cumulative_hazard_
+    fig_cumhaz.add_trace(go.Scatter(
+        x=cumhaz.index,
+        y=cumhaz.iloc[:, 0],
+        mode='lines',
+        name='Cumulative Hazard',
+        line=dict(color='blue', width=2),
+        hovertemplate='Time: %{x:.1f}<br>Cumulative Hazard: %{y:.3f}<extra></extra>'
+    ))
+    
+    fig_cumhaz.update_layout(
+        title='Cox Model: Cumulative Hazard Function',
+        xaxis_title='Time',
+        yaxis_title='Cumulative Hazard',
+        hovermode='x unified',
+        template='plotly_white',
+        height=400,
+        width=800,
+        font=dict(size=12)
+    )
+    
+    return cph, fig_forest, fig_cumhaz
 
-# --- 🟢 4. Time-Dependent Cox Regression (New!) ---
 
-def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariates):
-    """
-    Fit a time-varying Cox proportional hazards model using start-stop (long-format) data.
+def check_cox_assumptions(df, duration_col, event_col, covariate_cols):
+    """ 
+    Check Cox proportional hazards assumptions using Schoenfeld residuals.
+    Returns a summary of assumption tests.
     
     Parameters:
-        df (pd.DataFrame): Source dataframe containing long-format (start-stop) rows.
-        id_col (str): Column name identifying subject/patient IDs.
-        event_col (str): Column name for the event indicator (1 if event occurred, 0 if censored).
-        start_col (str): Column name for the interval start time.
-        stop_col (str): Column name for the interval stop time.
-        covariates (list[str]): List of time-varying covariate column names to include in the model.
+        df (pandas.DataFrame): Input dataset.
+        duration_col (str): Column name with event/censoring times.
+        event_col (str): Column name with event indicator (1=event, 0=censored).
+        covariate_cols (list[str]): List of covariate column names.
     
     Returns:
-        tuple:
-            - fitted_model (CoxTimeVaryingFitter or None): The fitted CoxTimeVaryingFitter on success, otherwise None.
-            - summary_df (pd.DataFrame or None): A summary table with columns ['Coef', 'HR', 'Lower 95%', 'Upper 95%', 'P-value'] on success, otherwise None.
-            - data (pd.DataFrame or None): The cleaned input DataFrame used for fitting on success, otherwise None.
-            - error (str or None): None on success; otherwise an error message describing the failure. Possible error messages include:
-                - "Error: Data is empty after selecting columns and dropping NAs." when no rows remain after selecting required columns and dropping missing values.
-                - "Error: Found rows where Start Time >= Stop Time." when any interval has start greater than or equal to stop.
-                - "Model Failed: <details>" when model fitting raises an exception.
+        str: HTML-formatted summary of proportional hazards test results.
     """
-    # 1. เลือกคอลัมน์ที่จำเป็น
-    cols = [id_col, event_col, start_col, stop_col] + covariates
+    data = df.dropna(subset=[duration_col, event_col] + covariate_cols).copy()
     
-    # 2. จัดการข้อมูล (ควรตรวจสอบว่า df มี NaN หรือไม่ก่อน drop)
-    data = df[cols].copy()
+    # Standardize numeric covariates
+    for col in covariate_cols:
+        if pd.api.types.is_numeric_dtype(data[col]):
+            data[col] = (data[col] - data[col].mean()) / data[col].std()
     
-    # Coerce numeric columns required by lifelines; keep id as-is
-    numeric_cols = [event_col, start_col, stop_col, *covariates]
-    for c in numeric_cols:
-        data[c] = pd.to_numeric(data[c], errors="coerce")
-        
-    data = data.dropna(subset=numeric_cols + [id_col])
+    cph = CoxPHFitter()
+    cph.fit(data, duration_col=duration_col, event_col=event_col)
     
-    # 🟢 VALIDATION: Event Column (Ensure Binary 0/1)
-    # แปลงค่าที่มากกว่า 0 ให้เป็น 1, ที่เหลือเป็น 0 (Coerce non-zero positives to 1)
-    # วิธีนี้ช่วยจัดการค่าแปลกปลอม เช่น 2, 0.5, หรือ -1 (ถ้ามี) ให้เป็น Binary มาตรฐาน
-    data[event_col] = np.where(data[event_col] > 0, 1, 0)
+    # Test proportional hazards assumption
+    from lifelines.statistics import proportional_hazard_test
+    
+    ph_test_results = proportional_hazard_test(cph, data, time_transform='rank')
+    
+    html_output = "<h3>Proportional Hazards Test Results</h3>"
+    html_output += "<table border='1' cellpadding='10'>"
+    html_output += "<tr><th>Variable</th><th>Test Statistic</th><th>P-value</th><th>Interpretation</th></tr>"
+    
+    for var in ph_test_results.index:
+        stat = ph_test_results.loc[var, 'test_statistic']
+        p_val = ph_test_results.loc[var, 'p']
+        interpretation = "✓ Assumption held" if p_val > 0.05 else "✗ Assumption violated"
+        html_output += f"<tr><td>{var}</td><td>{stat:.4f}</td><td>{p_val:.4f}</td><td>{interpretation}</td></tr>"
+    
+    html_output += "</table>"
+    
+    return html_output
 
-    # 🟢 SORTING: Deterministic Order
-    # เรียงข้อมูลตาม ID และเวลา เพื่อให้ lifelines ประมวลผลได้ถูกต้องและ Reproducible
-    data = data.sort_values(by=[id_col, start_col, stop_col])
-    
-    # 3. ตรวจสอบเบื้องต้น (เช่น start < stop)
-    if data.empty:
-        return None, None, None, "Error: Data is empty after selecting columns and dropping NAs."
-         
-    if (data[start_col] >= data[stop_col]).any():
-        return None, None, None, "Error: Found rows where Start Time >= Stop Time."
 
-    ctv = CoxTimeVaryingFitter()
-    try:
-        # fit() ต้องการ id_col เพื่อรู้ว่าแถวไหนเป็นคนเดียวกัน
-        ctv.fit(data, id_col=id_col, event_col=event_col, start_col=start_col, stop_col=stop_col, show_progress=False)
-        
-        summary_df = ctv.summary[['coef', 'exp(coef)', 'exp(coef) lower 95%', 'exp(coef) upper 95%', 'p']]
-        summary_df.columns = ['Coef', 'HR', 'Lower 95%', 'Upper 95%', 'P-value']
-        
-        return ctv, summary_df, data, None
-    except Exception as e:
-        return None, None, None, f"Model Failed: {str(e)}"
-
-# --- 5. Check Assumptions ---
-def check_cph_assumptions(cph, data):
-    """
-    Check proportional hazards assumptions for a fitted Cox model and capture the textual diagnostics and any generated diagnostic plots.
+# --- 3. Report Generation (with Plotly support) ---
+def generate_survival_report(title, elements):
+    """ 
+    Generate a complete HTML report containing survival analysis results.
     
     Parameters:
-        cph: A fitted lifelines Cox model (e.g., CoxPHFitter or CoxTimeVaryingFitter) whose assumptions will be checked.
-        data: pandas.DataFrame used as the input to the assumption checks.
+        title (str): Report title displayed at the top of the page.
+        elements (list[dict]): Ordered list of report elements. Each element must include:
+            - type (str): One of 'text', 'header', 'table', 'preformatted', 'plot', or 'image'.
+            - data: Content for the element (see generate_survival_report for details).
     
     Returns:
-        tuple:
-            advice_text (str): Textual diagnostic output produced by lifelines' check_assumptions (or an error message if the check failed).
-            fig_images (list[bytes]): List of PNG image bytes from diagnostic plots; empty if none or on error. Figures are automatically closed to prevent memory leaks.
+        str: Complete HTML document as a string, styled and containing the rendered elements.
     """
-    try:
-        f = io.StringIO()
-        old_figs = plt.get_fignums()
-        
-        with contextlib.redirect_stdout(f):
-            # lifelines จะ print คำแนะนำและ plot กราฟออกมา
-            cph.check_assumptions(data, p_value_threshold=0.05, show_plots=True)
-        
-        advice_text = f.getvalue()
-        
-        # ดักจับกราฟที่ถูกสร้างขึ้นใหม่ และแปลงเป็น bytes ทันที
-        new_figs_nums = [n for n in plt.get_fignums() if n not in old_figs]
-        fig_images = []
-        for n in new_figs_nums:
-            fig = plt.figure(n)
-            buf = io.BytesIO()
-            fig.savefig(buf, format='png', bbox_inches='tight')
-            buf.seek(0)
-            fig_images.append(buf.getvalue())
-            plt.close(fig)  # ปิดทันทีเพื่อป้องกัน memory leak
-        
-        return advice_text, fig_images
-        
-    except (KeyboardInterrupt, SystemExit): # <--- 🟢 เพิ่มการ Re-raise
-        raise
-    except Exception as e:
-        return f"Error checking assumptions: {str(e)}", []
-
-# --- 6. Report Generator ---
-def generate_report_survival(title, elements):
-    """
-    Assemble an HTML report from given titled elements (text, headers, tables, and plots) suitable for embedding or saving.
-    
-    Parameters:
-        title (str): Report title displayed at the top of the report.
-        elements (list): Ordered list of elements to include in the report. Each element is a dict with:
-            - type (str): One of 'text', 'header', 'table', or 'plot'.
-            - data: For 'text' and 'header', a string; for 'table', a pandas DataFrame; for 'plot', a matplotlib Figure.
-    
-    Returns:
-        html (str): A complete HTML document as a string containing embedded styles, the rendered elements, and a footer.
-    """
-    css_style = """
+    css_style = """ 
     <style>
-        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; }
-        .report-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        h2 { border-bottom: 2px solid #34495e; padding-bottom: 10px; color: #2c3e50; }
-        h4 { color: #2980b9; margin-top: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9em; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-        th { background-color: #f2f2f2; }
-        .report-footer { text-align: right; font-size: 0.8em; color: #777; margin-top: 30px; border-top: 1px dashed #ccc; padding-top: 10px; }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #0066cc;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #0066cc;
+            margin-top: 30px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 20px 0;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        table th, table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        table th {
+            background-color: #0066cc;
+            color: white;
+        }
+        table tr:hover {
+            background-color: #f0f0f0;
+        }
+        p {
+            line-height: 1.6;
+            color: #333;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
     </style>
     """
     
-    # แก้ไข 1: ใช้ html.escape กับ title
-    html_doc = f"<!DOCTYPE html><html><head>{css_style}</head><body>"
-    html_doc += f"<div class='report-container'><h2>{html.escape(title)}</h2>"
+    html_doc = f"<!DOCTYPE html>\n<html>\n<head><meta charset='utf-8'>{css_style}</head>\n<body>"
+    html_doc += f"<h1>{_html.escape(str(title))}</h1>"
     
     for el in elements:
-        if el['type'] == 'text':
-            # แก้ไข 2: ใช้ html.escape กับ text content
-            html_doc += f"<p>{html.escape(str(el['data']))}</p>"
-        # 🟢 เพิ่มส่วนนี้: รองรับ Preformatted Text
-        elif el['type'] == 'preformatted':
-            # escape เฉพาะเนื้อหาข้างใน แต่ครอบด้วย <pre> ที่ไม่ถูก escape
-            html_doc += f"<pre style='white-space: pre-wrap; background-color: #f8f9fa; padding: 10px; border-radius: 4px; border: 1px solid #e9ecef;'>{html.escape(str(el['data']))}</pre>"
-        elif el['type'] == 'header':
-            # แก้ไข 3: ใช้ html.escape และแก้ Indentation ให้ตรงกับบรรทัดอื่น
-            html_doc += f"<h4>{html.escape(str(el['data']))}</h4>"
-        elif el['type'] == 'table':
-            html_doc += el['data'].to_html(classes='table')
-        # 🟢 UPDATE: รองรับ Plot ที่เป็น Figure object (ของ KM/NA)
-        elif el['type'] == 'plot':
-            buf = io.BytesIO()
-            el['data'].savefig(buf, format='png', bbox_inches='tight')
-            plt.close(el['data']) # Close figure after saving
-            uri = base64.b64encode(buf.getvalue()).decode('utf-8')
-            html_doc += f'<img src="data:image/png;base64,{uri}" style="max-width:100%; margin-top:10px;"/>'
-        # 🟢 NEW: รองรับ Image ที่เป็น Bytes (ของ Cox Assumption)
-        elif el['type'] == 'image':
-            # el['data'] คือ bytes อยู่แล้ว ไม่ต้อง savefig
-            uri = base64.b64encode(el['data']).decode('utf-8')
-            html_doc += f'<img src="data:image/png;base64,{uri}" style="max-width:100%; margin-top:10px;"/>'
+        element_type = el.get('type')
+        data = el.get('data')
+        
+        if element_type == 'text':
+            html_doc += f"<p>{_html.escape(str(data))}</p>"
+        
+        elif element_type == 'preformatted':
+            html_doc += f"<pre>{_html.escape(str(data))}</pre>"
+        
+        elif element_type == 'header':
+            html_doc += f"\n<h2>{_html.escape(str(data))}</h2>"
+        
+        elif element_type == 'table':
+            html_doc += data.to_html(classes='table')
+        
+        elif element_type == 'plot':
+            # ตรวจสอบว่าเป็น Plotly Figure หรือ Matplotlib Figure
+            plot_obj = data
             
-    html_doc += """<div class='report-footer'>
-    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM n Donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
-    </div></body></html>"""
+            # ถ้าเป็น Plotly Figure
+            if hasattr(plot_obj, 'to_html'):
+                html_doc += plot_obj.to_html(include_plotlyjs='cdn', div_id=f"plot_{id(plot_obj)}")
+            else:
+                # ถ้าเป็น Matplotlib Figure - แปลงเป็น PNG และ embed
+                buf = io.BytesIO()
+                plot_obj.savefig(buf, format='png', bbox_inches='tight')
+                b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+                html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%; margin: 20px 0;" />'
+        
+        elif element_type == 'image':
+            # el['data'] คือ bytes อยู่แล้ว
+            uri = base64.b64encode(data).decode('utf-8')
+            html_doc += f'<img src="data:image/png;base64,{uri}" style="max-width:100%; margin: 20px 0;" />'
+    
+    html_doc += """ 
+    <script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
+    """
+    html_doc += "</body>\n</html>"
+    
     return html_doc
