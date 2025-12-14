@@ -198,10 +198,8 @@ if upl:
         if st.session_state.get('uploaded_file_sig') != file_sig:
             if upl.name.endswith('.csv'):
                 new_df = pd.read_csv(io.BytesIO(data_bytes))
-            
-            # --- Data Pre-processing (as per previous simplified structure) ---
-            # new_df.columns = new_df.columns.str.replace('[^0-9a-zA-Z_]', '', regex=True) # Assuming this cleaning happens later or is optional
-            # new_df = new_df.replace({'': np.nan, ' ': np.nan}) 
+            else:
+                new_df = pd.read_excel(io.BytesIO(data_bytes))
             
             st.session_state.df = new_df
             st.session_state.uploaded_file_name = upl.name
