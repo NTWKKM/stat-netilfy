@@ -86,6 +86,7 @@ if st.sidebar.button("📄 Load Example Data"):
     
     censor_time = np.random.uniform(0, 100, n)
     time_obs = np.minimum(surv_time, censor_time).round(1)
+    time_obs = np.maximum(time_obs, 0.1)  # avoid zero/invalid durations
     event_death = (surv_time <= censor_time).astype(int)
 
     # --- 4. Logistic Regression Outcome [NEW] ---
@@ -144,8 +145,8 @@ if st.sidebar.button("📄 Load Example Data"):
         'ICC_Rater1': icc_rater1,
         'ICC_Rater2': icc_rater2,
         # Time Cox
-        'T_Start': np.zeros(n, dtype=int),
-        'T_Stop': time_obs
+        'T_Start': np.zeros(n, dtype=float),
+        'T_Stop': time_obs.astype(float)
     }
     
     st.session_state.df = pd.DataFrame(data)
