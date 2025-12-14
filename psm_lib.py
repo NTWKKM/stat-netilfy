@@ -241,7 +241,7 @@ def plot_love_plot(smd_pre, smd_post):
     # ปรับแต่ง marker
     fig.update_traces(
         marker={'size': 8, 'opacity': 0.7},
-        selector=dict(mode='markers')
+        selector={'mode': 'markers'}
     )
     
     return fig
