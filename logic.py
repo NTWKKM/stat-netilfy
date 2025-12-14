@@ -330,7 +330,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     valid_cols_for_html = [c for c in sorted_cols if c in results_db]
 
     # 🟢 2. ฟังก์ชันเรียงลำดับ (Group -> Name)
-    def sort_key_for_grouping(col_name):
+    def sort_key_for_grouping(col_name) -> tuple[str, str]:
         group = col_name.split('_')[0] if '_' in col_name else "Variables"
         return (group, col_name)
 
@@ -338,7 +338,8 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     grouped_cols = sorted(valid_cols_for_html, key=sort_key_for_grouping)
 
     for col in grouped_cols:
-        if col == outcome_name: continue
+        if col == outcome_name:
+            continue
         res = results_db[col]
         
         sheet = col.split('_')[0] if '_' in col else "Variables"
