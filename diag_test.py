@@ -17,7 +17,7 @@ import html as _html
 def calculate_descriptive(df, col):
     """คำนวณสถิติพื้นฐาน"""
     if col not in df.columns:
-        return "Column not found"
+        return None
     
     data = df[col].dropna()
     
