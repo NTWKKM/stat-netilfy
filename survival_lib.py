@@ -8,6 +8,16 @@ import warnings
 import io, base64
 import html as _html
 
+# Helper function for standardization
+def _standardize_numeric_cols(data, cols):
+    """Standardize numeric columns in-place, warning on zero-variance."""
+    for col in cols:
+        if pd.api.types.is_numeric_dtype(data[col]):
+            std = data[col].std()
+            if std == 0:
+                warnings.warn(f"Covariate '{col}' has zero variance", stacklevel=3)
+            else:
+
 # --- 1. Kaplan-Meier Estimator (with Plotly) ---
 def estimate_km(df, duration_col, event_col, group_col=None, group_val=None):
     """ 
@@ -237,13 +247,7 @@ def fit_cox_model(df, duration_col, event_col, covariate_cols):
         raise ValueError("No events observed in the data")
         
     # Standardize numeric covariates
-    for col in covariate_cols:
-        if pd.api.types.is_numeric_dtype(data[col]):
-            std = data[col].std()
-            if std == 0:
-                warnings.warn(f"Covariate '{col}' has zero variance and will not be standardized", stacklevel=2)
-            else:
-                data[col] = (data[col] - data[col].mean()) / std
+    _standardize_numeric_cols(data, covariate_cols)
     
     cph = CoxPHFitter()
     try:
@@ -426,13 +430,7 @@ def check_cox_assumptions(df, duration_col, event_col, covariate_cols):
         raise ValueError("No valid data after removing missing values")
       
     # Standardize numeric covariates
-    for col in covariate_cols:
-        if pd.api.types.is_numeric_dtype(data[col]):
-            std = data[col].std()
-            if std == 0:
-                warnings.warn(f"Covariate '{col}' has zero variance")
-            else:
-                data[col] = (data[col] - data[col].mean()) / std
+    _standardize_numeric_cols(data, covariate_cols)
     
     cph = CoxPHFitter()
     try:
