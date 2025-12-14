@@ -155,7 +155,7 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
 # --- 3. Cox Proportional Hazards ---
 def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     """
-    Fits CoxPH model.
+    Fits CoxPH model with auto-retry using penalizer if convergence fails.
     Returns: (cph_object, results_df, model_data, error_message)
     """
     missing = [c for c in [duration_col, event_col, *covariate_cols] if c not in df.columns]
@@ -174,11 +174,19 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
 
     _standardize_numeric_cols(data, covariate_cols)
 
-    cph = CoxPHFitter()
+    # 🟢 MODIFIED: Try standard fit first, then retry with penalizer if it fails
     try:
+        cph = CoxPHFitter() # Default penalizer=0.0
         cph.fit(data, duration_col=duration_col, event_col=event_col)
-    except Exception as e:
-        return None, None, data, str(e)
+    except Exception as e_std:
+        # ถ้า Error ให้ลองใหม่ด้วย penalizer = 0.1 (ช่วยแก้ปัญหา delta contains nan / convergence)
+        try:
+            warnings.warn(f"Standard Cox fit failed ({e_std}). Retrying with penalizer=0.1")
+            cph = CoxPHFitter(penalizer=0.1)
+            cph.fit(data, duration_col=duration_col, event_col=event_col)
+        except Exception as e_pen:
+            # ถ้ายังไม่ได้ ให้แจ้ง Error รวม
+            return None, None, data, f"Model Convergence Failed. Likely due to high collinearity or perfect separation.\nDetails: {e_std}"
 
     # Format Results
     summary = cph.summary.copy()
@@ -189,7 +197,7 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     res_df = summary[['HR', '95% CI Lower', '95% CI Upper', 'p']].rename(columns={'p': 'P-value'})
     
     return cph, res_df, data, None
-
+    
 def check_cph_assumptions(cph, data):
     """
     Checks PH assumptions.
