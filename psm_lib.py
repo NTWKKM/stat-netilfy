@@ -5,6 +5,7 @@ import plotly.express as px
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import NearestNeighbors
 import io, base64
+import html as _html
 
 # --- 1. Propensity Score Calculation ---
 def calculate_ps(df, treatment_col, covariate_cols):
@@ -233,13 +234,13 @@ def plot_love_plot(smd_pre, smd_post):
         plot_bgcolor='rgba(240,240,240,0.5)',
         xaxis_title='Standardized Mean Difference (SMD)',
         yaxis_title='Variable',
-        font=dict(size=12),
+        font={'size': 12},
         height=len(smd_pre) * 40 + 200
     )
     
     # ปรับแต่ง marker
     fig.update_traces(
-        marker=dict(size=8, opacity=0.7),
+        marker={'size': 8, 'opacity': 0.7},
         selector=dict(mode='markers')
     )
     
@@ -312,7 +313,7 @@ def generate_psm_report(title, elements):
     
     for el in elements:
         if el['type'] == 'text':
-            html += f"<p>{el['data']}</p>"
+            html += f"<p>{_html.escape(str(el['data']))}</p>"
         elif el['type'] == 'table':
             html += el['data'].to_html(classes='report-table', border=0)
         elif el['type'] == 'plot':
