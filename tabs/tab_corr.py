@@ -55,6 +55,9 @@ def render(df):
         
         v1 = cc1.selectbox("Variable 1 (Exposure/Row):", all_cols, index=v1_idx, key='chi1_corr_tab') 
         v2 = cc2.selectbox("Variable 2 (Outcome/Col):", all_cols, index=v2_idx, key='chi2_corr_tab')
+        if v1 == v2:
+            st.error("Please select two different variables.")
+            st.stop()
         
         # 🟢 UPDATE: เพิ่ม Fisher's Exact Test
         method_choice = cc3.radio(
