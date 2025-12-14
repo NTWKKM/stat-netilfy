@@ -99,7 +99,7 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             final_col_order_base.remove(v2_pos_original)
             final_col_order_base.insert(0, v2_pos_original)
     else:
-        final_row_order_base.sort(key=custom_sort)
+        final_col_order_base.sort(key=custom_sort)
     
     final_col_order = final_col_order_base + ['Total']
     
@@ -111,7 +111,7 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             final_row_order_base.remove(v1_pos_original)
             final_row_order_base.insert(0, v1_pos_original)
     else:
-        final_col_order_base.sort(key=custom_sort)
+        final_row_order_base.sort(key=custom_sort)
     
     final_row_order = final_row_order_base + ['Total']
     
@@ -426,7 +426,7 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
     # Layout
     fig.update_layout(
         title=dict(
-            text=f'ROC Curve<br><sub>AUC = {auc_val:.4f} (95% CI: {max(0, ci_lower):.4f}-{min(1, ci_upper):.4f})</sub>',
+            text=f'ROC Curve<br><sub>AUC = {auc_val:.4f} (95% CI: {stats_res["95% CI Lower"]:.4f}-{stats_res["95% CI Upper"]:.4f})</sub>',
             x=0.5,
             xanchor='center'
         ),
@@ -658,7 +658,7 @@ def generate_report(title, elements):
             
             if hasattr(plot_obj, 'to_html'):
                 # Plotly Figure
-                html += plot_obj.to_html(include_plotlyjs='cdn', div_id=f"plot_{id(plot_obj)}")
+                html += plot_obj.to_html(full_html=False, include_plotlyjs='cdn', div_id=f"plot_{id(plot_obj)}")
             else:
                 # Matplotlib Figure - convert to PNG
                 buf = io.BytesIO()
@@ -667,7 +667,6 @@ def generate_report(title, elements):
                 html += f'<img src="data:image/png;base64,{b64}" style="max-width:100%; margin: 20px 0;" />'
     
     html += """ 
-    <script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
     """
     html += "</body>\n</html>"
     
