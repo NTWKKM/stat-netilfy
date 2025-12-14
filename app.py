@@ -265,7 +265,8 @@ if st.session_state.df is not None:
                         # Try to convert key to float/int if it looks numeric
                         if k.replace('.','',1).isdigit(): k = float(k) if '.' in k else int(k)
                         new_map[k] = v.strip()
-                    except: pass
+                    except Exception as e:
+                        st.sidebar.warning(f"Skipping invalid map line '{line}': {e}")
             
             # Ensure the key exists
             if s_var not in st.session_state.var_meta: 
