@@ -368,8 +368,7 @@ def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariate_c
     """
     
     # 1. Prepare data
-    required_cols = [id_col, start_col, stop_col, event_col] + covariate_cols
-    # Or use: required_cols = [id_col, start_col, stop_col, event_col, *covariate_cols]
+    required_cols = [id_col, start_col, stop_col, event_col, *covariate_cols]
     missing = [c for c in required_cols if c not in df.columns]
     if missing:
         return None, None, df, f"Missing required columns: {missing}"
