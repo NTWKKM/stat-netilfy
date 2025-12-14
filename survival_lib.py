@@ -8,7 +8,8 @@ import warnings
 import io, base64
 import html as _html
 
-warnings.filterwarnings("ignore")
+# Suppress specific warnings if needed, e.g.:
+# warnings.filterwarnings("ignore", category=ConvergenceWarning, module="lifelines")
 
 # --- 1. Kaplan-Meier Estimator (with Plotly) ---
 def estimate_km(df, duration_col, event_col, group_col=None, group_val=None):
@@ -29,9 +30,17 @@ def estimate_km(df, duration_col, event_col, group_col=None, group_val=None):
     """
     data = df.dropna(subset=[duration_col, event_col])
     
+    if len(data) == 0:
+        raise ValueError("No valid data after removing missing values")
+        
     if group_col is not None:
         if group_val is not None:
             data = data[data[group_col] == group_val]
+            if len(data) == 0:
+                raise ValueError(f"No data for group {group_col}={group_val}")
+
+    if data[event_col].sum() == 0:
+        raise ValueError("No events observed in the data")
     
     kmf = KaplanMeierFitter()
     kmf.fit(data[duration_col], data[event_col], label=f"{group_col}={group_val}" if group_col else "Overall")
@@ -109,8 +118,14 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
             test_result (dict): Log-rank test results (statistic, p-value, degrees of freedom, test name).
     """
     data = df.dropna(subset=[duration_col, event_col, group_col])
+
+    if len(data) == 0:
+        raise ValueError("No valid data after removing missing values")    
     
     groups = data[group_col].unique()
+
+    if len(groups) < 2:
+        raise ValueError(f"Need at least 2 groups for comparison, found {len(groups)}")
     
     # 🟢 UPDATED: ใช้ Plotly สำหรับการวาดกราฟ
     fig = go.Figure()
@@ -192,15 +207,28 @@ def fit_cox_model(df, duration_col, event_col, covariate_cols):
             fig_forest (plotly.graph_objects.Figure): Interactive forest plot (hazard ratios with CIs).
             fig_cumhaz (plotly.graph_objects.Figure): Cumulative hazard plot (for assumption checking).
     """
-    data = df.dropna(subset=[duration_col, event_col] + covariate_cols).copy()
+    data = df.dropna(subset=[duration_col, event_col, *covariate_cols]).copy()
+
+    if len(data) == 0:
+        raise ValueError("No valid data after removing missing values")
     
+    if data[event_col].sum() == 0:
+        raise ValueError("No events observed in the data")
+        
     # Standardize numeric covariates
     for col in covariate_cols:
         if pd.api.types.is_numeric_dtype(data[col]):
-            data[col] = (data[col] - data[col].mean()) / data[col].std()
+            std = data[col].std()
+            if std == 0:
+                warnings.warn(f"Covariate '{col}' has zero variance and will not be standardized")
+            else:
+                data[col] = (data[col] - data[col].mean()) / std
     
     cph = CoxPHFitter()
-    cph.fit(data, duration_col=duration_col, event_col=event_col)
+    try:
+        cph.fit(data, duration_col=duration_col, event_col=event_col)
+    except Exception as e:
+        raise RuntimeError(f"Cox model fitting failed: {str(e)}")
     
     # 🟢 UPDATED: สร้าง Forest Plot ด้วย Plotly
     # Extract hazard ratios and confidence intervals
@@ -261,7 +289,7 @@ def fit_cox_model(df, duration_col, event_col, covariate_cols):
         xaxis_type='log',
         hovermode='y unified',
         template='plotly_white',
-        height=400 + len(variables) * 30,
+        height=min(400 + len(variables) * 30, 1200),  # Cap at reasonable max
         width=800,
         font=dict(size=11)
     )
@@ -307,20 +335,33 @@ def check_cox_assumptions(df, duration_col, event_col, covariate_cols):
     Returns:
         str: HTML-formatted summary of proportional hazards test results.
     """
-    data = df.dropna(subset=[duration_col, event_col] + covariate_cols).copy()
-    
+    data = df.dropna(subset=[duration_col, event_col, *covariate_cols]).copy()
+
+    if len(data) == 0:
+        raise ValueError("No valid data after removing missing values")
+      
     # Standardize numeric covariates
     for col in covariate_cols:
         if pd.api.types.is_numeric_dtype(data[col]):
-            data[col] = (data[col] - data[col].mean()) / data[col].std()
+            std = data[col].std()
+            if std == 0:
+                warnings.warn(f"Covariate '{col}' has zero variance")
+            else:
+                data[col] = (data[col] - data[col].mean()) / std
     
     cph = CoxPHFitter()
-    cph.fit(data, duration_col=duration_col, event_col=event_col)
+    try:
+        cph.fit(data, duration_col=duration_col, event_col=event_col)
+    except Exception as e:
+        raise RuntimeError(f"Cox model fitting failed: {str(e)}")
     
     # Test proportional hazards assumption
     from lifelines.statistics import proportional_hazard_test
     
-    ph_test_results = proportional_hazard_test(cph, data, time_transform='rank')
+    try:
+        ph_test_results = proportional_hazard_test(cph, data, time_transform='rank')
+    except Exception as e:
+        raise RuntimeError(f"Proportional hazards test failed: {str(e)}")
     
     html_output = "<h3>Proportional Hazards Test Results</h3>"
     html_output += "<table border='1' cellpadding='10'>"
@@ -330,7 +371,7 @@ def check_cox_assumptions(df, duration_col, event_col, covariate_cols):
         stat = ph_test_results.loc[var, 'test_statistic']
         p_val = ph_test_results.loc[var, 'p']
         interpretation = "✓ Assumption held" if p_val > 0.05 else "✗ Assumption violated"
-        html_output += f"<tr><td>{var}</td><td>{stat:.4f}</td><td>{p_val:.4f}</td><td>{interpretation}</td></tr>"
+        html_output += f"<tr><td>{_html.escape(str(var))}</td><td>{stat:.4f}</td><td>{p_val:.4f}</td><td>{interpretation}</td></tr>"
     
     html_output += "</table>"
     
@@ -438,7 +479,6 @@ def generate_survival_report(title, elements):
             html_doc += f'<img src="data:image/png;base64,{uri}" style="max-width:100%; margin: 20px 0;" />'
     
     html_doc += """ 
-    <script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
     """
     html_doc += "</body>\n</html>"
     
