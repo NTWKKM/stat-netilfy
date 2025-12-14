@@ -93,7 +93,7 @@ def estimate_km(df, duration_col, event_col, group_col=None, group_val=None):
     return kmf, fig
 
 
-def compare_km_groups(df, duration_col, event_col, group_col):
+def fit_km_logrank(df, duration_col, event_col, group_col):
     """ 
     Compare Kaplan-Meier survival curves between groups and perform log-rank test.
     
