@@ -25,6 +25,9 @@ def render(df):
     ])
     
     all_cols = df.columns.tolist()
+    if not all_cols:
+        st.warning("No columns available for correlation analysis.")
+        return
 
     # ==================================================
     # SUB-TAB 1: Chi-Square & Risk Measures (Categorical)
