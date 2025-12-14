@@ -411,9 +411,8 @@ def generate_report(title, elements):
         if header:
             html += f"<h2>{_html.escape(str(header))}</h2>"
         
-        elif element_type == 'text':
-            # 🟢 MODIFIED: Removed _html.escape() to allow <b> and <br> tags to render for formatting
-            html += f"<p>{str(data)}</p>"
+        if element_type == 'text':
+            html += f"<p>{_html.escape(str(data))}</p>"
         
         elif element_type == 'table':
             idx = 'Interpretation' not in data.columns
@@ -463,7 +462,7 @@ def generate_report(title, elements):
             # ถ้าเป็น Plotly Figure
             if hasattr(plot_obj, 'to_html'):
                 # 🟢 MODIFIED: Use include_plotlyjs='cdn' for portability 
-                # to fix graph rendering issues.
+                # and remove global CDN injection at the bottom.
                 html += plot_obj.to_html(full_html=False, include_plotlyjs='cdn', div_id=f"plot_{id(plot_obj)}") 
             else:
                 # ถ้าเป็น Matplotlib Figure - แปลงเป็น PNG และ embed
