@@ -221,7 +221,7 @@ if upl:
         else:
             st.sidebar.info("File already loaded.")
             
-    except (ValueError, UnicodeDecodeError, pd.errors.ParserError) as e: 
+    except (ValueError, UnicodeDecodeError, pd.errors.ParserError, ImportError) as e:  
         st.sidebar.error(f"Error: {e}")
         st.session_state.df = None
         st.session_state.uploaded_file_name = None
