@@ -1,15 +1,15 @@
 import pandas as pd
 import numpy as np
 from lifelines import KaplanMeierFitter, CoxPHFitter, CoxTimeVaryingFitter # 🟢 MODIFIED: Added CoxTimeVaryingFitter
-from lifelines.statistics import logrank_test
+from lifelines.statistics import logrank_test, multivariate_logrank_test # 🟢 MODIFIED: Added multivariate_logrank_test
 import plotly.graph_objects as go
 import plotly.express as px
 import warnings
 import io, base64
 import html as _html
 
-# Suppress specific warnings if needed, e.g.:
-# warnings.filterwarnings("ignore", category=ConvergenceWarning, module="lifelines")
+# 🟢 MODIFIED: Removed blanket filterwarnings as requested.
+# warnings.filterwarnings("ignore") 
 
 # --- 1. Kaplan-Meier Estimator (with Plotly) ---
 def estimate_km(df, duration_col, event_col, group_col=None, group_val=None):
@@ -164,8 +164,9 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
     
     fig.update_yaxes(range=[0, 1.05])
     
-    # Log-rank test
+    # 🟢 MODIFIED: Log-rank test logic for 2 groups vs >2 groups
     if len(groups) == 2:
+        # Standard Log-rank test for 2 groups
         g1, g2 = groups
         data_g1 = data[data[group_col] == g1]
         data_g2 = data[data[group_col] == g2]
@@ -178,15 +179,23 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
         )
         
         test_result = {
-            'Test': 'Log-Rank',
+            'Test': 'Log-Rank (Pairwise)',
             'Statistic': result.test_statistic,
             'P-value': result.p_value,
             'Degrees of Freedom': 1,
             'Comparison': f'{g1} vs {g2}'
         }
     else:
-        test_result = {'Test': 'Log-Rank', 'Statistic': np.nan, 'P-value': np.nan, 
-                       'Note': 'Multiple groups detected. Manual comparison needed.'}
+        # Multivariate log-rank test for >2 groups (Omnibus test)
+        result = multivariate_logrank_test(data[duration_col], data[group_col], data[event_col])
+        
+        test_result = {
+            'Test': 'Log-Rank (Omnibus)',
+            'Statistic': result.test_statistic,
+            'P-value': result.p_value,
+            'Degrees of Freedom': len(groups) - 1,
+            'Comparison': 'All groups combined'
+        }
     
     return fig, test_result
 
