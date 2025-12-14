@@ -2,8 +2,8 @@
 import pandas as pd
 import numpy as np
 from scipy import stats
-# 🟢 NEW: Import statsmodels for Logistic Regression (Continuous OR)
-import statsmodels.api as sm 
+import statsmodels.api as sm
+import html as _html
 
 def clean_numeric(val):
     if pd.isna(val): return np.nan
@@ -59,7 +59,7 @@ def get_stats_categorical_str(counts, total):
     res = []
     for cat, count in counts.items():
         pct = (count / total) * 100 if total > 0 else 0
-        res.append(f"{cat}: {count} ({pct:.1f}%)")
+        res.append(f"{_html.escape(str(cat))}: {count} ({pct:.1f}%)")
     return "<br>".join(res)
 
 # --- 🟢 NEW: Calculate OR & 95% CI (One-vs-Rest) for Categorical ---
@@ -117,7 +117,7 @@ def calculate_or_continuous_logit(df, feature_col, group_col, group1_val):
         X = df[feature_col].apply(clean_numeric)
         
         # Drop NaNs aligned
-        mask = ~np.isnan(X) & ~np.isnan(y)
+        mask = X.notna() & y.notna()
         y = y[mask]
         X = X[mask]
         
@@ -165,7 +165,8 @@ def calculate_p_continuous(data_groups):
                 s, p = stats.kruskal(*clean_groups)
                 test_name = "Kruskal-Wallis"
         return p, test_name
-    except: return np.nan, "Error"
+    except Exception as e:
+        return np.nan, f"Error: {e}"
 
 def calculate_p_categorical(df, col, group_col):
     try:
@@ -243,7 +244,7 @@ def generate_table(df, selected_vars, group_col, var_meta):
     if has_group:
         for g in groups:
             n_g = len(df[df[group_col] == g['val']])
-            html += f"<th>{g['label']} (n={n_g})</th>"
+            html += f"<th>{_html.escape(str(g['label']))} (n={n_g})</th>"
     
     # 🟢 Add OR Column Header
     if show_or:
@@ -268,7 +269,7 @@ def generate_table(df, selected_vars, group_col, var_meta):
         if not is_cat:
             if df[col].nunique() < 10 or df[col].dtype == object: is_cat = True 
         
-        row_html = f"<tr><td><b>{label}</b></td>"
+        row_html = f"<tr><td><b>{_html.escape(str(label))}</b></td>"
         
         # --- DATA PREPARATION ---
         # Need to handle mapping globally for the row first to ensure consistency across columns
@@ -319,7 +320,7 @@ def generate_table(df, selected_vars, group_col, var_meta):
                         # Calculate OR: (This Cat vs Others) x (Group 1 vs Group 0)
                         # We use mapped_full_series to ensure we match the 'cat' label
                         or_res = compute_or_for_row(mapped_full_series, cat, df[group_col], group_1_val)
-                        cat_ors.append(f"{cat}: {or_res}")
+                        cat_ors.append(f"{_html.escape(str(cat))}: {or_res}")
                     or_cell_content = "<br>".join(cat_ors)
                 else:
                     # 🟢 NEW: Continuous Variable OR Calculation
