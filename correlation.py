@@ -282,9 +282,11 @@ def calculate_correlation(df, col1, col2, method='pearson'):
                 hovertemplate='Fitted line<extra></extra>'
             ))
         except Exception as e:
-            # Keep plot usable, but surface the reason for missing fit line
-            # (could also `st.warning(...)` if this runs in a UI context)
-            pass
+            fig.add_annotation(
+                text=f"Fit line unavailable: {e}",
+                xref="paper", yref="paper", x=0.5, y=1.08, showarrow=False,
+                font=dict(color="darkred", size=11),
+            )
     
     # ปรับแต่งเค้าโครง
     fig.update_layout(
