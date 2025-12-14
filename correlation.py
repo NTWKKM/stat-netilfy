@@ -223,13 +223,19 @@ def calculate_correlation(df, col1, col2, method='pearson'):
     if col1 not in df.columns or col2 not in df.columns:
         return None, "Columns not found", None
     
-    data = df[[col1, col2]].dropna()
+    # 1. Coerce to numeric, turning non-numeric into NaN (handles mixed types gracefully)
+    v1_coerced = pd.to_numeric(df[col1], errors='coerce')
+    v2_coerced = pd.to_numeric(df[col2], errors='coerce')
     
-    try:
-        v1 = pd.to_numeric(data[col1], errors='raise')
-        v2 = pd.to_numeric(data[col2], errors='raise')
-    except:
-        return None, f"Error: Numeric required.", None
+    # 2. Combine and drop all rows where either column is NaN (original NaN or coerced non-numeric)
+    data_numeric = pd.DataFrame({col1: v1_coerced, col2: v2_coerced}).dropna()
+    
+    # Check if enough numeric data remains (need at least 2 points for correlation)
+    if len(data_numeric) < 2:
+        return None, f"Error: Cannot compute correlation. Columns must contain at least two numeric values.", None
+    
+    v1 = data_numeric[col1]
+    v2 = data_numeric[col2]
     
     if method == 'pearson':
         corr, p = stats.pearsonr(v1, v2)
@@ -297,7 +303,7 @@ def calculate_correlation(df, col1, col2, method='pearson'):
     fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='lightgray')
     fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='lightgray')
     
-    return {"Method": name, "Coefficient": corr, "P-value": p, "N": len(data)}, None, fig
+    return {"Method": name, "Coefficient": corr, "P-value": p, "N": len(data_numeric)}, None, fig
 
 
 def generate_report(title, elements):
