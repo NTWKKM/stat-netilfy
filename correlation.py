@@ -281,7 +281,9 @@ def calculate_correlation(df, col1, col2, method='pearson'):
                 line=dict(color='red', width=2, dash='dash'),
                 hovertemplate='Fitted line<extra></extra>'
             ))
-        except:
+        except Exception as e:
+            # Keep plot usable, but surface the reason for missing fit line
+            # (could also `st.warning(...)` if this runs in a UI context)
             pass
     
     # ปรับแต่งเค้าโครง
