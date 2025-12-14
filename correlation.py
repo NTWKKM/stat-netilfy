@@ -461,9 +461,9 @@ def generate_report(title, elements):
             
             # ถ้าเป็น Plotly Figure
             if hasattr(plot_obj, 'to_html'):
-                # 🟢 MODIFIED: Use include_plotlyjs=False to prevent conflicts, 
-                # relying on the single CDN injection at the end.
-                html += plot_obj.to_html(full_html=False, include_plotlyjs=False, div_id=f"plot_{id(plot_obj)}") 
+                # 🟢 MODIFIED: Use include_plotlyjs='cdn' for portability 
+                # and remove global CDN injection at the bottom.
+                html += plot_obj.to_html(full_html=False, include_plotlyjs='cdn', div_id=f"plot_{id(plot_obj)}") 
             else:
                 # ถ้าเป็น Matplotlib Figure - แปลงเป็น PNG และ embed
                 buf = io.BytesIO()
@@ -471,9 +471,10 @@ def generate_report(title, elements):
                 b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
                 html += f'<img src="data:image/png;base64,{b64}" />'
     
-    html += """ 
-    <script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
-    """
+    # 🟢 REMOVED: Removed the duplicate global CDN script injection
+    # html += """ 
+    # <script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
+    # """
 
     html += """<div class='report-footer'>
     &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM n donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
