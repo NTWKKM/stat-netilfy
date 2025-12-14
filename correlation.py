@@ -388,7 +388,7 @@ def generate_report(title, elements):
             html += f"<p>{_html.escape(str(data))}</p>"
         
         elif element_type == 'table':
-            idx = not ('Interpretation' in data.columns)
+            idx = 'Interpretation' not in data.columns
             html += data.to_html(index=idx, classes='report-table')
         
         elif element_type == 'contingency_table':
