@@ -8,8 +8,10 @@ import html as _html
 def clean_numeric(val):
     if pd.isna(val): return np.nan
     s = str(val).strip().replace('>', '').replace('<', '').replace(',', '')
-    try: return float(s)
-    except: return np.nan
+    try:
+        return float(s)
+    except (ValueError, TypeError):
+        return np.nan
 
 # --- Helper: Normality Check ---
 def check_normality(series):
@@ -292,7 +294,6 @@ def generate_table(df, selected_vars, group_col, var_meta):
         row_html += f"<td style='text-align: center;'>{val_total}</td>"
         
         group_vals_list = []
-        or_strings = [] # Store OR strings for each category
         
         if has_group:
             for g in groups:
