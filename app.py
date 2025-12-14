@@ -188,8 +188,8 @@ if upl:
         if st.session_state.get('uploaded_file_name') != upl.name:
             if upl.name.endswith('.csv'): 
                 new_df = pd.read_csv(upl)
-            else: 
-                new_df = pd.read_excel(upl)
+            else:
+                new_df = pd.read_excel(io.BytesIO(upl.getvalue()))
             
             # --- Data Pre-processing (as per previous simplified structure) ---
             # new_df.columns = new_df.columns.str.replace('[^0-9a-zA-Z_]', '', regex=True) # Assuming this cleaning happens later or is optional
