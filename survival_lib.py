@@ -40,10 +40,11 @@ def estimate_km(df, duration_col, event_col, group_col=None, group_val=None):
                 raise ValueError(f"No data for group {group_col}={group_val}")
 
     if data[event_col].sum() == 0:
-        raise ValueError("No events observed in the data")
+        warnings.warn("No events observed in the data; survival curve will be flat at 1.0.", stacklevel=2)
     
     kmf = KaplanMeierFitter()
-    kmf.fit(data[duration_col], data[event_col], label=f"{group_col}={group_val}" if group_col else "Overall")
+    label = "Overall" if (group_col is None or group_val is None) else f"{group_col}={group_val}"
+    kmf.fit(data[duration_col], data[event_col], label=label)
     
     # 🟢 UPDATED: สร้างกราฟ Plotly แทน Matplotlib
     fig = go.Figure()
@@ -192,6 +193,9 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
 
 # --- 2. Cox Proportional Hazards Model (Standard) ---
 def fit_cox_model(df, duration_col, event_col, covariate_cols):
+    missing = [c for c in [duration_col, event_col, *covariate_cols] if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
     """ 
     Fit a Cox proportional hazards model using provided covariates.
     
@@ -228,7 +232,7 @@ def fit_cox_model(df, duration_col, event_col, covariate_cols):
     try:
         cph.fit(data, duration_col=duration_col, event_col=event_col)
     except Exception as e:
-        raise RuntimeError(f"Cox model fitting failed: {str(e)}")
+        raise RuntimeError(f"Cox model fitting failed: {e}") from e
     
     # 🟢 UPDATED: สร้าง Forest Plot ด้วย Plotly
     # Extract hazard ratios and confidence intervals
@@ -499,8 +503,9 @@ def generate_survival_report(title, elements):
         }
     </style>
     """
-    
-    html_doc = f"<!DOCTYPE html>\n<html>\n<head><meta charset='utf-8'>{css_style}</head>\n<body>"
+
+    plotly_cdn = '<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>'
+    html_doc = f"<!DOCTYPE html>\n<html>\n<head><meta charset='utf-8'>{css_style}{plotly_cdn}</head>\n<body>"
     html_doc += f"<h1>{_html.escape(str(title))}</h1>"
     
     for el in elements:
@@ -525,7 +530,7 @@ def generate_survival_report(title, elements):
             
             # ถ้าเป็น Plotly Figure
             if hasattr(plot_obj, 'to_html'):
-                html_doc += plot_obj.to_html(include_plotlyjs='cdn', div_id=f"plot_{id(plot_obj)}")
+                html_doc += plot_obj.to_html(full_html=False, include_plotlyjs=False, div_id=f"plot_{id(plot_obj)}")
             else:
                 # ถ้าเป็น Matplotlib Figure - แปลงเป็น PNG และ embed
                 buf = io.BytesIO()
