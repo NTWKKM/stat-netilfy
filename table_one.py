@@ -193,7 +193,14 @@ def generate_table(df, selected_vars, group_col, var_meta):
             key = group_col.split('_')[1] if '_' in group_col else group_col
             if group_col in var_meta: mapper = var_meta[group_col].get('map', {})
             elif key in var_meta: mapper = var_meta[key].get('map', {})
-        raw_groups = sorted(df[group_col].dropna().unique())
+        raw_groups = df[group_col].dropna().unique().tolist()
+        def _group_sort_key(v):
+            s = str(v)
+            try:
+                return (0, float(s))
+            except Exception:
+                return (1, s)
+        raw_groups.sort(key=_group_sort_key)
         for g in raw_groups:
             label = mapper.get(g, mapper.get(float(g), str(g)) if str(g).replace('.','',1).isdigit() else str(g))
             groups.append({'val': g, 'label': str(label)})
@@ -204,7 +211,7 @@ def generate_table(df, selected_vars, group_col, var_meta):
     if show_or:
         # Prefer 1 when present; otherwise fall back to the "higher" value
         group_vals = [g["val"] for g in groups]
-        group_1_val = 1 if 1 in group_vals else sorted(group_vals)[-1]
+        group_1_val = 1 if 1 in group_vals else max(group_vals, key=_group_sort_key)
 
     # CSS
     css_style = """
