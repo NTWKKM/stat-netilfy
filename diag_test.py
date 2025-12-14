@@ -680,9 +680,6 @@ def generate_report(title, elements):
                 b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
                 html += f'<img src="data:image/png;base64,{b64}" style="max-width:100%; margin: 20px 0;" />'
     
-    html += """ 
-    """
-    
     html += """<div class='report-footer'>
     &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM n donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
     </div>"""
