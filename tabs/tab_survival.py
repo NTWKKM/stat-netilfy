@@ -57,7 +57,7 @@ def render(df, _var_meta):
                 if "Kaplan-Meier" in plot_type:
                     # Run KM
                     fig, stats_df = survival_lib.fit_km_logrank(df, col_time, col_event, grp)
-                    st.pyplot(fig) 
+                    st.plotly_chart(fig, use_container_width=True) 
                     
                     st.markdown("##### Log-Rank / Statistics")
                     st.dataframe(stats_df)
@@ -69,7 +69,7 @@ def render(df, _var_meta):
                 else:
                     # Run Nelson-Aalen
                     fig, stats_df = survival_lib.fit_nelson_aalen(df, col_time, col_event, grp)
-                    st.pyplot(fig)
+                    st.plotly_chart(fig, use_container_width=True)
                     
                     st.markdown("##### Summary Statistics (N / Events)")
                     st.dataframe(stats_df)
@@ -166,7 +166,7 @@ def render(df, _var_meta):
                 ax.legend()
                 ax.set_title(f"Landmark Analysis (Survival from landmark t={landmark_t})")
                 
-                st.pyplot(fig)
+                st.plotly_chart(fig, use_container_width=True)
                 st.dataframe(stats)
                 
                 elements = [
