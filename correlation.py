@@ -391,9 +391,8 @@ def generate_report(title, elements):
         }
     </style>
     """
-
-    plotly_cdn = "<script src='https://cdn.plot.ly/plotly-latest.min.js'></script>"
-    html = f"<!DOCTYPE html>\n<html>\n<head><meta charset='utf-8'>{css_style}{plotly_cdn}</head>\n<body>"
+    
+    html = f"<!DOCTYPE html>\n<html>\n<head><meta charset='utf-8'>{css_style}</head>\n<body>"
     html += f"<h1>{_html.escape(str(title))}</h1>"
     
     for element in elements:
@@ -454,7 +453,9 @@ def generate_report(title, elements):
             
             # ถ้าเป็น Plotly Figure
             if hasattr(plot_obj, 'to_html'):
-                html += plot_obj.to_html(full_html=False, include_plotlyjs=False, div_id=f"plot_{id(plot_obj)}")
+                # 🟢 MODIFIED: Use include_plotlyjs=False to prevent conflicts, 
+                # relying on the single CDN injection at the end.
+                html += plot_obj.to_html(full_html=False, include_plotlyjs=False, div_id=f"plot_{id(plot_obj)}") 
             else:
                 # ถ้าเป็น Matplotlib Figure - แปลงเป็น PNG และ embed
                 buf = io.BytesIO()
@@ -462,5 +463,8 @@ def generate_report(title, elements):
                 b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
                 html += f'<img src="data:image/png;base64,{b64}" />'
     
+    html += """ 
+    <script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
+    """
     html += "</body>\n</html>"
     return html
