@@ -241,7 +241,7 @@ def fit_cox_model(df, duration_col, event_col, covariate_cols):
         if pd.api.types.is_numeric_dtype(data[col]):
             std = data[col].std()
             if std == 0:
-                warnings.warn(f"Covariate '{col}' has zero variance and will not be standardized")
+                warnings.warn(f"Covariate '{col}' has zero variance and will not be standardized", stacklevel=2)
             else:
                 data[col] = (data[col] - data[col].mean()) / std
     
@@ -364,6 +364,7 @@ def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariate_c
     
     # 1. Prepare data
     required_cols = [id_col, start_col, stop_col, event_col] + covariate_cols
+    # Or use: required_cols = [id_col, start_col, stop_col, event_col, *covariate_cols]
     missing = [c for c in required_cols if c not in df.columns]
     if missing:
         return None, None, df, f"Missing required columns: {missing}"
@@ -389,7 +390,7 @@ def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariate_c
             formula=formula  # Pass covariates via formula
         )
     except Exception as e:
-        return None, None, data, f"Cox Time-Varying model fitting failed: {str(e)}"
+        return None, None, data, f"Cox Time-Varying model fitting failed: {e}"
         
     # 3. Format results
     summary = ctv.summary.copy()
