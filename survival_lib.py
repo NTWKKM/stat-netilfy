@@ -17,6 +17,7 @@ def _standardize_numeric_cols(data, cols):
             if std == 0:
                 warnings.warn(f"Covariate '{col}' has zero variance", stacklevel=3)
             else:
+                data[col] = (data[col] - data[col].mean()) / std
 
 # --- 1. Kaplan-Meier Estimator (with Plotly) ---
 def estimate_km(df, duration_col, event_col, group_col=None, group_val=None):
