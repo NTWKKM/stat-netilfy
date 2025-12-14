@@ -221,7 +221,8 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 if str(lvl).endswith('.0'): lvl_str = str(int(float(lvl)))
                 
                 def count_val(series, v_str):
-                      return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
+                    # 🟢 MODIFIED: Fixed indentation for standard Python readability (4 spaces)
+                    return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
 
                 c_all = count_val(X_raw, lvl_str)
                 if c_all == 0:
