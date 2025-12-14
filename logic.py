@@ -221,7 +221,18 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 if str(lvl).endswith('.0'): lvl_str = str(int(float(lvl)))
                 
                 def count_val(series, v_str):
-                    # 🟢 MODIFIED: Fixed indentation for standard Python readability (4 spaces)
+                    """
+                    Count how many elements in a pandas Series equal a given string after normalizing numeric-like values.
+                    
+                    This converts each element to string; if the string represents a number (allowing one decimal point) a trailing ".0" is removed (e.g., "1.0" -> "1") before comparing to v_str. The comparison is string equality performed after this normalization.
+                    
+                    Parameters:
+                        series (pandas.Series): Series whose values will be normalized and compared.
+                        v_str (str): Target string to match against each normalized series element.
+                    
+                    Returns:
+                        int: Number of elements equal to v_str after normalization.
+                    """
                     return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
 
                 c_all = count_val(X_raw, lvl_str)
@@ -426,6 +437,19 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     """
 
 def process_data_and_generate_html(df, target_outcome, var_meta=None, method='auto'):
+    """
+    Primary entry point to run univariate/multivariate logistic regression analysis 
+    on a DataFrame and generate a complete HTML report.
+
+    Parameters:
+        df (pandas.DataFrame): The input data.
+        target_outcome (str): The column name of the binary outcome variable.
+        var_meta (dict, optional): Metadata mapping for variable types and labels. Defaults to None.
+        method (str, optional): The logistic regression estimation method ('auto', 'firth', 'bfgs', 'default').
+
+    Returns:
+        str: The complete HTML report string.
+    """ # 🟢 MODIFIED: Restored Docstring
     css_style = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; }
