@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import time
 import io
+import hashlib
 import streamlit.components.v1 as components
 
 # ==========================================
@@ -189,12 +190,14 @@ upl = st.sidebar.file_uploader("Upload CSV/Excel", type=['csv', 'xlsx'])
 if upl:
     try:
         data_bytes = upl.getvalue()
-        file_sig = (upl.name, hash(data_bytes))
+        
+        # 🟢 แก้ไข: ใช้ hashlib.md5 เพื่อให้ได้ค่า hash ที่คงที่ (Deterministic)
+        # เดิม: file_sig = (upl.name, hash(data_bytes))
+        file_sig = (upl.name, hashlib.md5(data_bytes).hexdigest())
+        
         if st.session_state.get('uploaded_file_sig') != file_sig:
             if upl.name.endswith('.csv'):
                 new_df = pd.read_csv(io.BytesIO(data_bytes))
-            else:
-                new_df = pd.read_excel(io.BytesIO(data_bytes))
             
             # --- Data Pre-processing (as per previous simplified structure) ---
             # new_df.columns = new_df.columns.str.replace('[^0-9a-zA-Z_]', '', regex=True) # Assuming this cleaning happens later or is optional
