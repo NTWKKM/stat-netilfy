@@ -392,22 +392,31 @@ def generate_report(title, elements):
         elif element_type == 'contingency_table':
             col_labels = data.columns.tolist()
             row_labels = data.index.tolist()
-            exp_name = data.index.name
+            exp_name = data.index.name or "Exposure"
             out_name = element.get('outcome_col', 'Outcome')
             
-            html_tab = "\n\n|"
-            html_tab += f"|{out_name}"
-            html_tab += "|\n|--|--|\n|"
-            
+            # --- START: HTML Table Generation for Contingency Table ---
+            html += "<table class='report-table'>"
+            html += "<thead>"
+            # Row 1: The outcome column spanning all outcome categories
+            html += f"<tr><th></th><th colspan='{len(col_labels)}'>{out_name}</th></tr>"
+            # Row 2: Exposure label and individual outcome categories
+            html += "<tr>"
+            html += f"<th>{exp_name}</th>"
+            for col_label in col_labels:
+                html += f"<th>{col_label}</th>"
+            html += "</tr></thead><tbody>"
+
             for idx_label in row_labels:
-                html_tab += f"{exp_name}: {idx_label}|"
+                html += "<tr>"
+                html += f"<td>{idx_label}</td>"
                 for col_label in col_labels:
                     val = data.loc[idx_label, col_label]
-                    html_tab += f"{val}|"
-                html_tab += "\n|"
-            
-            html += html_tab
-        
+                    html += f"<td>{val}</td>"
+                html += "</tr>"
+            html += "</tbody></table>"
+            # --- END: HTML Table Generation for Contingency Table ---
+
         elif element_type == 'plot':
             # ตรวจสอบว่าเป็น Plotly Figure หรือ Matplotlib Figure
             plot_obj = data
