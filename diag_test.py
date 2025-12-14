@@ -24,7 +24,7 @@ def calculate_descriptive(df, col):
     try:
         num_data = pd.to_numeric(data, errors='raise')
         is_numeric = True
-    except:
+    except (ValueError, TypeError):
         is_numeric = False
     
     if is_numeric:
@@ -202,8 +202,9 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                     {"Statistic": "Odds Ratio (OR)", "Value": f"{odd_ratio:.4f}"}
                 ]
                 risk_df = pd.DataFrame(risk_data)
-            except:
-                pass
+            except Exception as e:
+                risk_df = None
+                msg += f" (Risk metrics unavailable: {e})"
         
         return display_tab, stats_res, msg, risk_df
     
@@ -405,12 +406,13 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
     
     # Optimal point (Youden J)
     fig.add_trace(go.Scatter(
-        x=[1-fpr[best_idx]],
+        x=[fpr[best_idx]],
         y=[tpr[best_idx]],
         mode='markers',
         name=f'Optimal (Sens={tpr[best_idx]:.3f}, Spec={1-fpr[best_idx]:.3f})',
         marker=dict(size=10, color='red'),
-        hovertemplate='Sensitivity: %{y:.3f}<br>Specificity: %{x:.3f}<extra></extra>'
+        hovertemplate='Sensitivity: %{y:.3f}<br>Specificity: %{customdata:.3f}<extra></extra>',
+        customdata=[1 - fpr[best_idx]],
     ))
     
     # Layout
