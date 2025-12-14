@@ -365,11 +365,13 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
     j_scores = tpr - fpr
     best_idx = np.argmax(j_scores)
     
+    ci_lower_f = ci_lower if np.isfinite(ci_lower) else np.nan
+    ci_upper_f = ci_upper if np.isfinite(ci_upper) else np.nan
     stats_res = {
         "AUC": auc_val,
         "SE": se,
-        "95% CI Lower": max(0, ci_lower),
-        "95% CI Upper": min(1, ci_upper),
+        "95% CI Lower": max(0, ci_lower_f) if np.isfinite(ci_lower_f) else np.nan,
+        "95% CI Upper": min(1, ci_upper_f) if np.isfinite(ci_upper_f) else np.nan,
         "Method": m_name,
         "P-value": p_val_auc,
         "Youden J": j_scores[best_idx],
@@ -604,7 +606,7 @@ def generate_report(title, elements):
             html += f"<p>{_html.escape(str(data))}</p>"
         
         elif element_type == 'table':
-            idx = not ('Interpretation' in data.columns)
+            idx = 'Interpretation' not in data.columns
             html += data.to_html(index=idx, classes='report-table')
         
         elif element_type == 'contingency_table':
