@@ -194,12 +194,18 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                 odd_ratio, _ = stats.fisher_exact(tab_chi2)
                 
                 risk_data = [
-                    {"Statistic": f"Risk in {label_exp} (R1)", "Value": f"{risk_exp:.4f}"},
-                    {"Statistic": f"Risk in {label_unexp} (R0)", "Value": f"{risk_unexp:.4f}"},
-                    {"Statistic": "Risk Ratio (RR)", "Value": f"{rr:.4f}"},
-                    {"Statistic": "Risk Difference (RD)", "Value": f"{rd:.4f}"},
-                    {"Statistic": "Number Needed to Treat (NNT)", "Value": f"{nnt:.1f}"},
-                    {"Statistic": "Odds Ratio (OR)", "Value": f"{odd_ratio:.4f}"}
+                    {"Statistic": f"Risk in {label_exp} (R1)", "Value": f"{risk_exp:.4f}",
+                     "Interpretation": f"Risk of '{label_event}' in group {label_exp}"},
+                    {"Statistic": f"Risk in {label_unexp} (R0)", "Value": f"{risk_unexp:.4f}",
+                     "Interpretation": f"Baseline risk of '{label_event}' in group {label_unexp}"},
+                    {"Statistic": "Risk Ratio (RR)", "Value": f"{rr:.4f}",
+                     "Interpretation": f"Risk in {label_exp} is {rr:.2f}× that of {label_unexp}"},
+                    {"Statistic": "Risk Difference (RD)", "Value": f"{rd:.4f}",
+                     "Interpretation": "Absolute difference (R1 - R0)"},
+                    {"Statistic": "Number Needed to Treat (NNT)", "Value": f"{nnt:.1f}",
+                     "Interpretation": "Patients to treat to prevent/cause 1 outcome"},
+                    {"Statistic": "Odds Ratio (OR)", "Value": f"{odd_ratio:.4f}",
+                     "Interpretation": "Odds of event (Exp vs Unexp)"}
                 ]
                 risk_df = pd.DataFrame(risk_data)
             except Exception as e:
