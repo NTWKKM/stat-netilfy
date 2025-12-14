@@ -314,17 +314,20 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         numeric_cols = df.select_dtypes(include="number").columns.tolist()
         
         # Auto-select columns with 'measurement' or 'rater' or 'machine'
-        default_icc_cols = [c for c in all_cols if any(k in c.lower() for k in ['measure', 'machine', 'rater', 'score', 'read'])]
+        default_icc_cols = [c for c in numeric_cols if any(k in c.lower() for k in ['measure', 'machine', 'rater', 'score', 'read'])]
         if len(default_icc_cols) < 2:
             default_icc_cols = numeric_cols[:2] if len(numeric_cols) >= 2 else []
         
-        icc_cols = st.multiselect("Select Variables (Raters/Methods):", all_cols, default=default_icc_cols, key='icc_vars_diag')
+        icc_cols = st.multiselect("Select Variables (Raters/Methods):", numeric_cols, default=default_icc_cols, key='icc_vars_diag')
         
         icc_run, icc_dl = st.columns([1, 1])
         if 'html_output_icc' not in st.session_state: 
             st.session_state.html_output_icc = None
         
         if icc_run.button("📏 Calculate ICC", key='btn_icc_run'):
+            if len(icc_cols) < 2:
+                st.error("Please select at least 2 numeric columns for ICC.")
+                st.stop()
             res_df, err, anova_df = diag_test.calculate_icc(df, icc_cols)
             
             if err:
