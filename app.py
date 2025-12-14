@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import time
-import streamlit.components.v1 as components 
+import streamlit.components.v1 as components
 
 # ==========================================
 # 1. CONFIG & LOADING SCREEN KILLER (Must be First)
@@ -54,6 +54,8 @@ except Exception as e:
 # --- INITIALIZE STATE ---
 if 'df' not in st.session_state: st.session_state.df = None
 if 'var_meta' not in st.session_state: st.session_state.var_meta = {}
+# 🟢 เพิ่ม State สำหรับการติดตามไฟล์ที่อัปโหลด (เพื่อป้องกันการโหลดซ้ำ)
+if 'uploaded_file_name' not in st.session_state: st.session_state.uploaded_file_name = None
 
 # --- SIDEBAR (ยังคงไว้ใน app.py เพราะเป็น Global Control) ---
 st.sidebar.title("MENU")
@@ -86,7 +88,7 @@ if st.sidebar.button("📄 Load Example Data"):
     
     censor_time = np.random.uniform(0, 100, n)
     time_obs = np.minimum(surv_time, censor_time).round(1)
-    time_obs = np.maximum(time_obs, 0.1)  # avoid zero/invalid durations
+    time_obs = np.maximum(time_obs, 0.1) # avoid zero/invalid durations
     event_death = (surv_time <= censor_time).astype(int)
 
     # --- 4. Logistic Regression Outcome [NEW] ---
@@ -160,8 +162,20 @@ if st.sidebar.button("📄 Load Example Data"):
         'Status_Death': {'type':'Categorical', 'map':{0:'Censored', 1:'Dead'}},
         'Gold_Standard': {'type':'Categorical', 'map':{0:'Healthy', 1:'Disease'}},
         'Diagnosis_Dr_A': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}},
-        'Diagnosis_Dr_B': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}}
+        'Diagnosis_Dr_B': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}},
+        # 🟢 Initialize continuous variables explicitly too, matching the file upload logic
+        'Age': {'type': 'Continuous', 'label': 'Age', 'map': {}},
+        'BMI': {'type': 'Continuous', 'label': 'BMI', 'map': {}},
+        'Time_Months': {'type': 'Continuous', 'label': 'Time (Months)', 'map': {}},
+        'Rapid_Test_Score': {'type': 'Continuous', 'label': 'Rapid Test Score', 'map': {}},
+        'Lab_Albumin': {'type': 'Continuous', 'label': 'Albumin (g/dL)', 'map': {}},
+        'Lab_Calcium': {'type': 'Continuous', 'label': 'Calcium (mg/dL)', 'map': {}},
+        'ICC_Rater1': {'type': 'Continuous', 'label': 'ICC Rater 1', 'map': {}},
+        'ICC_Rater2': {'type': 'Continuous', 'label': 'ICC Rater 2', 'map': {}},
+        'T_Start': {'type': 'Continuous', 'label': 'Time Start', 'map': {}},
+        'T_Stop': {'type': 'Continuous', 'label': 'Time Stop', 'map': {}},
     }
+    st.session_state.uploaded_file_name = "Example Data" # Mark as loaded example data
     
     st.sidebar.success(f"Loaded {n} Example Patients! (Includes Logistic Outcome)")
     st.rerun()
@@ -170,11 +184,42 @@ if st.sidebar.button("📄 Load Example Data"):
 upl = st.sidebar.file_uploader("Upload CSV/Excel", type=['csv', 'xlsx'])
 if upl:
     try:
-        if upl.name.endswith('.csv'): st.session_state.df = pd.read_csv(upl)
-        else: st.session_state.df = pd.read_excel(upl)
-        st.sidebar.success("File Uploaded!")
-    except Exception as e: st.sidebar.error(f"Error: {e}")
+        # Check if the file is new to avoid unnecessary re-reading/re-initialization
+        if st.session_state.get('uploaded_file_name') != upl.name:
+            if upl.name.endswith('.csv'): 
+                new_df = pd.read_csv(upl)
+            else: 
+                new_df = pd.read_excel(upl)
+            
+            # --- Data Pre-processing (as per previous simplified structure) ---
+            # new_df.columns = new_df.columns.str.replace('[^0-9a-zA-Z_]', '', regex=True) # Assuming this cleaning happens later or is optional
+            # new_df = new_df.replace({'': np.nan, ' ': np.nan}) 
+            
+            st.session_state.df = new_df
+            st.session_state.uploaded_file_name = upl.name
+            st.session_state.var_meta = {} # Reset meta for new file
+            
+            # 🟢 REQUIRED FIX: Add default metadata for new continuous/categorical variables
+            current_meta = {}
+            for col in new_df.columns:
+                # Determine type automatically
+                if pd.api.types.is_numeric_dtype(new_df[col]):
+                    current_meta[col] = {'type': 'Continuous', 'label': col, 'map': {}}
+                else:
+                    current_meta[col] = {'type': 'Categorical', 'label': col, 'map': {}}
+
+            st.session_state.var_meta = current_meta
+            st.sidebar.success("File Uploaded and Metadata Initialized!")
+            st.rerun() # Rerun to update the main page and sidebar controls
         
+        else:
+            st.sidebar.info("File already loaded.")
+            
+    except Exception as e: 
+        st.sidebar.error(f"Error: {e}")
+        st.session_state.df = None
+        st.session_state.uploaded_file_name = None
+
 if st.sidebar.button("⚠️ Reset All Data", type="primary"):
     st.session_state.clear()
     st.rerun()
@@ -183,11 +228,30 @@ if st.sidebar.button("⚠️ Reset All Data", type="primary"):
 if st.session_state.df is not None:
     st.sidebar.header("2. Settings")
     cols = st.session_state.df.columns.tolist()
+    
+    # 🟢 Use a default value of 'Auto-detect' if the key doesn't exist, which is safer
+    auto_detect_meta = {c: st.session_state.var_meta.get(c, {'type': 'Auto-detect', 'map': {}}).get('type', 'Auto-detect') for c in cols}
+    
     s_var = st.sidebar.selectbox("Edit Var:", ["Select..."] + cols)
     if s_var != "Select...":
+        # Ensure metadata for s_var exists before accessing
+        if s_var not in st.session_state.var_meta:
+             # Fallback to auto-detect if metadata is missing (shouldn't happen with fix, but safer)
+            is_numeric = pd.api.types.is_numeric_dtype(st.session_state.df[s_var]) if s_var in st.session_state.df.columns else False
+            initial_type = 'Continuous' if is_numeric else 'Categorical'
+            st.session_state.var_meta[s_var] = {'type': initial_type, 'label': s_var, 'map': {}}
+
         meta = st.session_state.var_meta.get(s_var, {})
-        n_type = st.sidebar.radio("Type:", ['Auto-detect', 'Categorical', 'Continuous'], 
-                                  index=['Auto-detect', 'Categorical', 'Continuous'].index(meta.get('type','Auto-detect')))
+        
+        # Determine current type for radio button display
+        current_type = meta.get('type', 'Auto-detect')
+        if current_type == 'Auto-detect':
+             is_numeric = pd.api.types.is_numeric_dtype(st.session_state.df[s_var]) if s_var in st.session_state.df.columns else False
+             current_type = 'Continuous' if is_numeric else 'Categorical'
+
+        n_type = st.sidebar.radio("Type:", ['Categorical', 'Continuous'], 
+                                  index=['Categorical', 'Continuous'].index(current_type))
+                                  
         st.sidebar.markdown("Labels (0=No):")
         map_txt = st.sidebar.text_area("Map", value="\n".join([f"{k}={v}" for k,v in meta.get('map',{}).items()]), height=80)
         
@@ -198,12 +262,20 @@ if st.session_state.df is not None:
                     k, v = line.split('=', 1)
                     try: 
                         k=k.strip()
+                        # Try to convert key to float/int if it looks numeric
                         if k.replace('.','',1).isdigit(): k = float(k) if '.' in k else int(k)
                         new_map[k] = v.strip()
                     except: pass
-            if s_var not in st.session_state.var_meta: st.session_state.var_meta[s_var]={}
+            
+            # Ensure the key exists
+            if s_var not in st.session_state.var_meta: 
+                st.session_state.var_meta[s_var] = {}
+            
+            # Update meta
             st.session_state.var_meta[s_var]['type'] = n_type
             st.session_state.var_meta[s_var]['map'] = new_map
+            st.session_state.var_meta[s_var]['label'] = s_var # Ensure label is set
+            
             st.sidebar.success("Saved!")
             st.rerun()
 
@@ -213,7 +285,7 @@ if st.session_state.df is not None:
 if st.session_state.df is not None:
     df = st.session_state.df 
 
-    # 🟢 FIX 2: เพิ่ม Tab t7 สำหรับ Advanced Survival Analysis
+    # 🟢 FIX 2: เพิ่ม Tab t7 สำหรับ Advanced Survival Analysis (Time Cox Regs)
     t0, t1, t2, t3, t4, t5, t6, t7 = st.tabs([
         "📄 Raw Data", 
         "📋 Baseline Table 1", 
