@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from lifelines import KaplanMeierFitter, CoxPHFitter
+from lifelines import KaplanMeierFitter, CoxPHFitter, CoxTimeVaryingFitter # 🟢 MODIFIED: Added CoxTimeVaryingFitter
 from lifelines.statistics import logrank_test
 import plotly.graph_objects as go
 import plotly.express as px
@@ -190,7 +190,7 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
     return fig, test_result
 
 
-# --- 2. Cox Proportional Hazards Model ---
+# --- 2. Cox Proportional Hazards Model (Standard) ---
 def fit_cox_model(df, duration_col, event_col, covariate_cols):
     """ 
     Fit a Cox proportional hazards model using provided covariates.
@@ -320,6 +320,66 @@ def fit_cox_model(df, duration_col, event_col, covariate_cols):
     
     return cph, fig_forest, fig_cumhaz
 
+# --- 2. Cox Proportional Hazards Model (Time-Varying) ---
+def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariate_cols):
+    """
+    Fit a Cox Time-Varying Proportional Hazards model using lifelines.CoxTimeVaryingFitter.
+    
+    Parameters:
+        df (pandas.DataFrame): Data in long (start-stop) format.
+        id_col (str): Column identifying individuals.
+        event_col (str): Event indicator column.
+        start_col (str): Start time column.
+        stop_col (str): Stop time column.
+        covariate_cols (list[str]): List of covariate columns.
+        
+    Returns:
+        tuple: (ctv, results_df, data_used, error_msg)
+            ctv (lifelines.CoxTimeVaryingFitter): Fitted model object.
+            results_df (pandas.DataFrame): Formatted results (HR, CI, P-value).
+            data_used (pandas.DataFrame): Data used after dropping NAs.
+            error_msg (str | None): Error message if fitting fails, otherwise None.
+    """
+    
+    # 1. Prepare data
+    required_cols = [id_col, start_col, stop_col, event_col] + covariate_cols
+    data = df.dropna(subset=required_cols).copy()
+
+    if len(data) < 2:
+        return None, None, data, "Insufficient data after removing missing values."
+    
+    if data[event_col].sum() == 0:
+        return None, None, data, "No events observed in the data."
+
+    # 2. Fit model
+    ctv = CoxTimeVaryingFitter()
+    formula = " + ".join(covariate_cols)
+    try:
+        # CoxTimeVaryingFitter.fit uses the columns directly for start, stop, and event
+        ctv.fit(
+            data,
+            id_col=id_col,
+            event_col=event_col,
+            start_col=start_col,
+            stop_col=stop_col,
+            formula=formula  # Pass covariates via formula
+        )
+    except Exception as e:
+        return None, None, data, f"Cox Time-Varying model fitting failed: {str(e)}"
+        
+    # 3. Format results
+    summary = ctv.summary.copy()
+    
+    # Calculate HR and CI for output consistency with CoxPHFitter
+    summary['HR'] = np.exp(summary['coef'])
+    summary['95% CI Lower'] = np.exp(summary['lower 95% bound'])
+    summary['95% CI Upper'] = np.exp(summary['upper 95% bound'])
+    summary['P-value'] = summary['p']
+    
+    # Select and reorder columns for display
+    results_df = summary[['HR', '95% CI Lower', '95% CI Upper', 'P-value']].sort_index()
+
+    return ctv, results_df, data, None
 
 def check_cox_assumptions(df, duration_col, event_col, covariate_cols):
     """ 
