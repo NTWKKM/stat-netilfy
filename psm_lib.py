@@ -77,6 +77,8 @@ def perform_matching(df, treatment_col, ps_col='ps_logit', caliper=0.2):
     
     # Caliper Calculation
     sd_logit = df[ps_col].std()
+    if not np.isfinite(sd_logit) or sd_logit == 0:
+        return None, f"Error: {ps_col} has zero/undefined variance; cannot apply caliper matching."
     caliper_width = caliper * sd_logit
     
     # Nearest Neighbors
