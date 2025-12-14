@@ -307,8 +307,9 @@ def generate_psm_report(title, elements):
         }
     </style>
     """
-    
-    html = f"<!DOCTYPE html>\n<html>\n<head><meta charset='utf-8'>{css}</head>\n<body>"
+
+    plotly_cdn = "<script src='https://cdn.plot.ly/plotly-latest.min.js'></script>"
+    html = f"<!DOCTYPE html>\n<html>\n<head><meta charset='utf-8'>{css}{plotly_cdn}</head>\n<body>"
     html += f"<h1>{_html.escape(str(title))}</h1>"
     
     for el in elements:
@@ -322,7 +323,7 @@ def generate_psm_report(title, elements):
             
             # ถ้าเป็น Plotly Figure
             if hasattr(plot_obj, 'to_html'):
-                html += plot_obj.to_html(include_plotlyjs='cdn', div_id=f"plot_{id(plot_obj)}")
+                html += plot_obj.to_html(full_html=False, include_plotlyjs=False, div_id=f"plot_{id(plot_obj)}")
             else:
                 # ถ้าเป็น Matplotlib Figure - แปลงเป็น PNG และ embed
                 buf = io.BytesIO()
