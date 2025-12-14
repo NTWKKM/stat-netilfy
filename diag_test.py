@@ -608,21 +608,39 @@ def generate_report(title, elements):
         elif element_type == 'contingency_table':
             col_labels = data.columns.tolist()
             row_labels = data.index.tolist()
-            exp_name = data.index.name
+            exp_name = data.index.name or "Exposure"
             out_name = element.get('outcome_col', 'Outcome')
             
-            html_tab = "\n\n|"
-            html_tab += f"|{out_name}"
-            html_tab += "|\n|--|--|\n|"
+            # Start of HTML Table Construction
+            html += "<table class='report-table'>"
+            html += "<thead>"
             
+            # First Header Row: Spanning Outcome Column
+            html += f"<tr><th></th><th colspan='{len(col_labels)}'>{_html.escape(str(out_name))}</th></tr>"
+            
+            # Second Header Row: Exposure and all Column Labels
+            html += "<tr>"
+            html += f"<th>{_html.escape(str(exp_name))}</th>"
+            for col_label in col_labels:
+                html += f"<th>{_html.escape(str(col_label))}</th>"
+            html += "</tr>"
+            html += "</thead>"
+            
+            # Table Body
+            html += "<tbody>"
             for idx_label in row_labels:
-                html_tab += f"{exp_name}: {idx_label}|"
+                html += "<tr>"
+                # Row Header (Index name)
+                html += f"<td>{_html.escape(str(idx_label))}</td>"
+                # Data Cells
                 for col_label in col_labels:
                     val = data.loc[idx_label, col_label]
-                    html_tab += f"{val}|"
-                html_tab += "\n|"
+                    # Ensure value is treated as string and escaped
+                    html += f"<td>{_html.escape(str(val))}</td>" 
+                html += "</tr>"
+            html += "</tbody>"
             
-            html += html_tab
+            html += "</table>"
         
         elif element_type == 'plot':
             # Support both Plotly and Matplotlib figures
