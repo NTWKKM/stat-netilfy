@@ -177,8 +177,23 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                 risk_unexp = c/(c+d) if (c+d)>0 else 0
                 rr = risk_exp/risk_unexp if risk_unexp>0 else np.nan
                 rd = risk_exp - risk_unexp
-                nnt = abs(1/rd) if rd!=0 else np.inf
                 odd_ratio, _ = stats.fisher_exact(tab_chi2)
+                
+                # 🟢 MODIFIED: Compute NNT or NNH based on Risk Difference sign
+                nnt_abs = abs(1/rd) if rd!=0 else np.inf
+                nnt_value = f"{nnt_abs:.1f}" if np.isfinite(nnt_abs) else str(np.inf)
+                
+                if rd < 0: # Risk in exposed is lower -> BENEFIT (Number Needed to Treat)
+                    nnt_label = "Number Needed to Treat (NNT)"
+                    nnt_interp = f"Treat {nnt_value} patients with {label_exp} to prevent 1 outcome ('{label_event}')"
+                elif rd > 0: # Risk in exposed is higher -> HARM (Number Needed to Harm)
+                    nnt_label = "Number Needed to Harm (NNH)"
+                    nnt_interp = f"Expose {nnt_value} patients to {label_exp} to cause 1 additional outcome ('{label_event}')"
+                else: # rd == 0
+                    nnt_label = "NNT/NNH"
+                    nnt_value = str(np.inf)
+                    nnt_interp = "Risk Difference is zero (No absolute effect)"
+                # ---------------------
                 
                 risk_data = [
                     {"Statistic": f"Risk in {label_exp} (R1)", "Value": f"{risk_exp:.4f}", 
@@ -189,8 +204,8 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                      "Interpretation": f"Risk in {label_exp} is {rr:.2f} times that of {label_unexp}"},
                     {"Statistic": "Risk Difference (RD)", "Value": f"{rd:.4f}", 
                      "Interpretation": f"Absolute difference (R1 - R0)"},
-                    {"Statistic": "Number Needed to Treat (NNT)", "Value": f"{nnt:.1f}", 
-                     "Interpretation": "Patients to treat to prevent/cause 1 outcome"},
+                    {"Statistic": nnt_label, "Value": nnt_value, 
+                     "Interpretation": nnt_interp}, # <-- Updated NNT/NNH presentation
                     {"Statistic": "Odds Ratio (OR)", "Value": f"{odd_ratio:.4f}", 
                      "Interpretation": "Odds of Event (Exp vs Unexp)"}
                 ]
@@ -376,8 +391,9 @@ def generate_report(title, elements):
         }
     </style>
     """
-    
-    html = f"<!DOCTYPE html>\n<html>\n<head><meta charset='utf-8'>{css_style}</head>\n<body>"
+
+    plotly_cdn = "<script src='https://cdn.plot.ly/plotly-latest.min.js'></script>"
+    html = f"<!DOCTYPE html>\n<html>\n<head><meta charset='utf-8'>{css_style}{plotly_cdn}</head>\n<body>"
     html += f"<h1>{_html.escape(str(title))}</h1>"
     
     for element in elements:
@@ -438,7 +454,7 @@ def generate_report(title, elements):
             
             # ถ้าเป็น Plotly Figure
             if hasattr(plot_obj, 'to_html'):
-                html += plot_obj.to_html(include_plotlyjs='cdn', div_id=f"plot_{id(plot_obj)}")
+                html += plot_obj.to_html(full_html=False, include_plotlyjs=False, div_id=f"plot_{id(plot_obj)}")
             else:
                 # ถ้าเป็น Matplotlib Figure - แปลงเป็น PNG และ embed
                 buf = io.BytesIO()
@@ -446,8 +462,5 @@ def generate_report(title, elements):
                 b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
                 html += f'<img src="data:image/png;base64,{b64}" />'
     
-    html += """ 
-    <script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
-    """
     html += "</body>\n</html>"
     return html
