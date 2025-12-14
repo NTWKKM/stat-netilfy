@@ -6,7 +6,8 @@ import statsmodels.api as sm
 import html as _html
 
 def clean_numeric(val):
-    if pd.isna(val): return np.nan
+    if pd.isna(val): 
+        return np.nan
     s = str(val).strip().replace('>', '').replace('<', '').replace(',', '')
     try:
         return float(s)
@@ -182,7 +183,8 @@ def calculate_p_categorical(df, col, group_col):
         test_name = "Chi-square"
         if (ex < 5).any(): test_name = "Chi-square (Low N)"
         return p_chi2, test_name
-    except: return np.nan, "Error"
+    except Exception as e:
+        return np.nan, f"Error: {e}"
 
 # --- Main Generator ---
 def generate_table(df, selected_vars, group_col, var_meta):
