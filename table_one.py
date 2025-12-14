@@ -65,6 +65,10 @@ def get_stats_categorical_str(counts, total):
 # --- 🟢 NEW: Calculate OR & 95% CI (One-vs-Rest) for Categorical ---
 def compute_or_for_row(row_series, cat_val, group_series, g1_val):
     try:
+        # Complete-case mask (avoid treating NaN as "not cat" / "group0")
+        mask = row_series.notna() & group_series.notna()
+        row_series = row_series[mask]
+        group_series = group_series[mask]
         # Construct 2x2 Table
         #            Group 1   Group 0
         # Cat Val       a         b
@@ -79,9 +83,12 @@ def compute_or_for_row(row_series, cat_val, group_series, g1_val):
         c = (~row_bin & group_bin).sum()
         d = (~row_bin & ~group_bin).sum()
         
-        if b == 0 or c == 0:
-            # Use Haldane-Anscombe correction (add 0.5) if zero cell
-            a += 0.5; b += 0.5; c += 0.5; d += 0.5
+        # Use Haldane-Anscombe correction if ANY cell is zero
+        if min(a, b, c, d) == 0:
+            a += 0.5
+            b += 0.5
+            c += 0.5
+            d += 0.5
             
         or_val = (a * d) / (b * c)
         
@@ -92,7 +99,7 @@ def compute_or_for_row(row_series, cat_val, group_series, g1_val):
         upper = np.exp(ln_or + 1.96 * se)
         
         return f"{or_val:.2f} ({lower:.2f}-{upper:.2f})"
-    except:
+    except Exception:
         return "-"
 
 # --- 🟢 NEW: Calculate OR & 95% CI for Continuous (Logistic Regression) ---
@@ -193,7 +200,11 @@ def generate_table(df, selected_vars, group_col, var_meta):
     
     # 🟢 Check if we can calculate OR (Must be exactly 2 groups)
     show_or = has_group and len(groups) == 2
-    group_1_val = groups[1]['val'] if show_or else None # Assume 2nd group is the "Event/Case" usually
+    group_1_val = None
+    if show_or:
+        # Prefer 1 when present; otherwise fall back to the "higher" value
+        group_vals = [g["val"] for g in groups]
+        group_1_val = 1 if 1 in group_vals else sorted(group_vals)[-1]
 
     # CSS
     css_style = """
@@ -257,7 +268,12 @@ def generate_table(df, selected_vars, group_col, var_meta):
         mapped_full_series = df[col].copy()
         col_mapper = meta.get('map', {})
         if col_mapper:
-             mapped_full_series = mapped_full_series.map(lambda x: col_mapper.get(x, col_mapper.get(float(x), x)) if pd.notna(x) and (x in col_mapper or (str(x).replace('.','',1).isdigit() and float(x) in col_mapper)) else x)
+            _m = col_mapper
+            mapped_full_series = mapped_full_series.map(
+                lambda x, m=_m: m.get(x, m.get(float(x), x))
+                if pd.notna(x) and (x in m or (str(x).replace(".", "", 1).isdigit() and float(x) in m))
+                else x
+            )
 
         if is_cat:
             counts_total, n_total, _ = get_stats_categorical_data(df[col], var_meta, col) # Pass raw for internal map
@@ -296,7 +312,7 @@ def generate_table(df, selected_vars, group_col, var_meta):
                         # Calculate OR: (This Cat vs Others) x (Group 1 vs Group 0)
                         # We use mapped_full_series to ensure we match the 'cat' label
                         or_res = compute_or_for_row(mapped_full_series, cat, df[group_col], group_1_val)
-                        cat_ors.append(f"{or_res}")
+                        cat_ors.append(f"{cat}: {or_res}")
                     or_cell_content = "<br>".join(cat_ors)
                 else:
                     # 🟢 NEW: Continuous Variable OR Calculation
