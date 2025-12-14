@@ -85,14 +85,13 @@
             "scipy", // ลบข้อจำกัดเวอร์ชัน
             "statsmodels",
             "openpyxl",
-            // "matplotlib", 
+            "matplotlib", 
             "lifelines==0.30.0", // คงเวอร์ชันเฉพาะเจาะจงตามที่คุณต้องการ
-            "formulaic",      // จำเป็นสำหรับ lifelines
+            "formulaic==<VERSION_COMPATIBLE_WITH_LIFELINES_0.30.0>",      // จำเป็นสำหรับ lifelines
             "scikit-learn",
             // "seaborn", 
             "firthlogist",
-            "plotly", // ลบข้อจำกัดเวอร์ชัน
-            "plotly-express" // ลบข้อจำกัดเวอร์ชัน
+            "plotly==<TESTED_VERSION>" // ลบข้อจำกัดเวอร์ชัน
         ],
         entrypoint: "app.py",
         files: {
