@@ -67,7 +67,7 @@ if st.sidebar.button("📄 Load Example Data"):
     # --- 1. Demographics & Confounders ---
     age = np.random.normal(55, 12, n).astype(int).clip(20, 90)
     sex = np.random.binomial(1, 0.55, n)
-    bmi = np.random.normal(24, 4, n).round(1)
+    bmi = np.random.normal(24, 4, n).round(1).clip(10, 60)
     
     # Comorbidity
     logit_comorb = -5 + 0.05*age + 0.1*bmi
