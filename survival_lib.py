@@ -1,15 +1,12 @@
 import pandas as pd
 import numpy as np
-from lifelines import KaplanMeierFitter, CoxPHFitter, CoxTimeVaryingFitter # 🟢 MODIFIED: Added CoxTimeVaryingFitter
-from lifelines.statistics import logrank_test, multivariate_logrank_test # 🟢 MODIFIED: Added multivariate_logrank_test
+from lifelines import KaplanMeierFitter, CoxPHFitter, CoxTimeVaryingFitter
+from lifelines.statistics import logrank_test, multivariate_logrank_test
 import plotly.graph_objects as go
 import plotly.express as px
 import warnings
 import io, base64
 import html as _html
-
-# 🟢 MODIFIED: Removed blanket filterwarnings as requested.
-# warnings.filterwarnings("ignore") 
 
 # --- 1. Kaplan-Meier Estimator (with Plotly) ---
 def estimate_km(df, duration_col, event_col, group_col=None, group_val=None):
@@ -59,31 +56,41 @@ def estimate_km(df, duration_col, event_col, group_col=None, group_val=None):
         hovertemplate='Time: %{x:.1f}<br>Survival: %{y:.3f}<extra></extra>'
     ))
     
-    # เพิ่ม confidence interval (upper)
-    ci_upper = kmf.confidence_interval_survival_function_.iloc[:, 1]
-    fig.add_trace(go.Scatter(
-        x=kmf.survival_function_.index,
-        y=ci_upper,
-        mode='lines',
-        name='95% CI Upper',
-        line=dict(color='rgba(0, 0, 255, 0)'),
-        showlegend=False,
-        hoverinfo='skip'
-    ))
-    
-    # เพิ่ม confidence interval (lower)
-    ci_lower = kmf.confidence_interval_survival_function_.iloc[:, 0]
-    fig.add_trace(go.Scatter(
-        x=kmf.survival_function_.index,
-        y=ci_lower,
-        mode='lines',
-        name='95% CI Lower',
-        line=dict(color='rgba(0, 0, 255, 0)'),
-        fillcolor='rgba(0, 100, 200, 0.2)',
-        fill='tonexty',
-        showlegend=False,
-        hoverinfo='skip'
-    ))
+    # 🟢 MODIFIED: Add safety check for Confidence Interval before plotting
+    ci_available = (
+        hasattr(kmf, 'confidence_interval_survival_function_') and 
+        kmf.confidence_interval_survival_function_ is not None and
+        kmf.confidence_interval_survival_function_.shape[1] >= 2
+    )
+
+    if ci_available:
+        # เพิ่ม confidence interval (upper)
+        ci_upper = kmf.confidence_interval_survival_function_.iloc[:, 1]
+        fig.add_trace(go.Scatter(
+            x=kmf.survival_function_.index,
+            y=ci_upper,
+            mode='lines',
+            name='95% CI Upper',
+            line=dict(color='rgba(0, 0, 255, 0)'),
+            showlegend=False,
+            hoverinfo='skip'
+        ))
+        
+        # เพิ่ม confidence interval (lower)
+        ci_lower = kmf.confidence_interval_survival_function_.iloc[:, 0]
+        fig.add_trace(go.Scatter(
+            x=kmf.survival_function_.index,
+            y=ci_lower,
+            mode='lines',
+            name='95% CI Lower',
+            line=dict(color='rgba(0, 0, 255, 0)'),
+            fillcolor='rgba(0, 100, 200, 0.2)',
+            fill='tonexty',
+            showlegend=False,
+            hoverinfo='skip'
+        ))
+    else:
+        warnings.warn("Confidence interval for KM curve could not be computed or is missing.", stacklevel=2)
     
     # ปรับแต่งเค้าโครง
     fig.update_layout(
