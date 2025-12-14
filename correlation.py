@@ -389,6 +389,14 @@ def generate_report(title, elements):
         .report-table {
             border: 1px solid #ddd;
         }
+        .report-footer {
+            text-align: right;
+            font-size: 0.75em;
+            color: var(--text-color);
+            margin-top: 20px;
+            border-top: 1px dashed var(--border-color);
+            padding-top: 10px;
+        }
     </style>
     """
     
@@ -466,5 +474,10 @@ def generate_report(title, elements):
     html += """ 
     <script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
     """
+
+    html += """<div class='report-footer'>
+    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM n donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
+    </div>"""
+    
     html += "</body>\n</html>"
     return html
