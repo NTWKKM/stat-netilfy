@@ -190,7 +190,13 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                 risk_unexp = c/(c+d) if (c+d)>0 else 0
                 rr = risk_exp/risk_unexp if risk_unexp>0 else np.nan
                 rd = risk_exp - risk_unexp
-                nnt = abs(1/rd) if rd!=0 else np.inf
+                nnt_abs = abs(1/rd) if rd!=0 else np.inf
+                if rd < 0:
+                    nnt_label = "Number Needed to Treat (NNT)"
+                elif rd > 0:
+                    nnt_label = "Number Needed to Harm (NNH)"
+                else:
+                    nnt_label = "NNT/NNH"
                 odd_ratio, _ = stats.fisher_exact(tab_chi2)
                 
                 risk_data = [
@@ -202,7 +208,7 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                      "Interpretation": f"Risk in {label_exp} is {rr:.2f}× that of {label_unexp}"},
                     {"Statistic": "Risk Difference (RD)", "Value": f"{rd:.4f}",
                      "Interpretation": "Absolute difference (R1 - R0)"},
-                    {"Statistic": "Number Needed to Treat (NNT)", "Value": f"{nnt:.1f}",
+                    {"Statistic": nnt_label, "Value": f"{nnt_abs:.1f}",
                      "Interpretation": "Patients to treat to prevent/cause 1 outcome"},
                     {"Statistic": "Odds Ratio (OR)", "Value": f"{odd_ratio:.4f}",
                      "Interpretation": "Odds of event (Exp vs Unexp)"}
