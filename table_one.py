@@ -142,8 +142,7 @@ def calculate_or_continuous_logit(df, feature_col, group_col, group1_val):
         upper = np.exp(conf[1])
         
         return f"{or_val:.2f} ({lower:.2f}-{upper:.2f})"
-    except Exception as e:
-        # print(f"Logit Error: {e}") # Debug if needed
+    except Exception:
         return "-"
 
 # --- P-value Functions (Unchanged) ---
