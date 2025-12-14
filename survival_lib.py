@@ -130,7 +130,7 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
     if len(data) == 0:
         raise ValueError("No valid data after removing missing values")    
     
-    groups = data[group_col].unique()
+    groups = sorted(data[group_col].unique(), key=lambda v: str(v))
 
     if len(groups) < 2:
         raise ValueError(f"Need at least 2 groups for comparison, found {len(groups)}")
@@ -209,9 +209,6 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
 
 # --- 2. Cox Proportional Hazards Model (Standard) ---
 def fit_cox_model(df, duration_col, event_col, covariate_cols):
-    missing = [c for c in [duration_col, event_col, *covariate_cols] if c not in df.columns]
-    if missing:
-        raise ValueError(f"Missing required columns: {missing}")
     """ 
     Fit a Cox proportional hazards model using provided covariates.
     
@@ -227,6 +224,10 @@ def fit_cox_model(df, duration_col, event_col, covariate_cols):
             fig_forest (plotly.graph_objects.Figure): Interactive forest plot (hazard ratios with CIs).
             fig_cumhaz (plotly.graph_objects.Figure): Cumulative hazard plot (for assumption checking).
     """
+    missing = [c for c in [duration_col, event_col, *covariate_cols] if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+        
     data = df.dropna(subset=[duration_col, event_col, *covariate_cols]).copy()
 
     if len(data) == 0:
@@ -363,6 +364,9 @@ def fit_cox_time_varying(df, id_col, event_col, start_col, stop_col, covariate_c
     
     # 1. Prepare data
     required_cols = [id_col, start_col, stop_col, event_col] + covariate_cols
+    missing = [c for c in required_cols if c not in df.columns]
+    if missing:
+        return None, None, df, f"Missing required columns: {missing}"
     data = df.dropna(subset=required_cols).copy()
 
     if len(data) < 2:
@@ -433,7 +437,7 @@ def check_cox_assumptions(df, duration_col, event_col, covariate_cols):
     try:
         cph.fit(data, duration_col=duration_col, event_col=event_col)
     except Exception as e:
-        raise RuntimeError(f"Cox model fitting failed: {str(e)}")
+        raise RuntimeError(f"Cox model fitting failed: {e}") from e
     
     # Test proportional hazards assumption
     from lifelines.statistics import proportional_hazard_test
@@ -441,7 +445,7 @@ def check_cox_assumptions(df, duration_col, event_col, covariate_cols):
     try:
         ph_test_results = proportional_hazard_test(cph, data, time_transform='rank')
     except Exception as e:
-        raise RuntimeError(f"Proportional hazards test failed: {str(e)}")
+        raise RuntimeError(f"Proportional hazards test failed: {e}") from e
     
     html_output = "<h3>Proportional Hazards Test Results</h3>"
     html_output += "<table border='1' cellpadding='10'>"
