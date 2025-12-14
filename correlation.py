@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 import io, base64
 import streamlit as st
+import html as _html
 
 # 🟢 1. IMPORT STREAMLIT
 
@@ -194,8 +195,9 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                      "Interpretation": "Odds of Event (Exp vs Unexp)"}
                 ]
                 risk_df = pd.DataFrame(risk_data)
-            except:
-                pass
+            except Exception as e: # 🟢 MODIFIED: Catch specific error for visibility
+                msg += f"\n⚠️ Warning: 2x2 risk-metric computation failed: {e}"
+                risk_df = None
         
         return display_tab, stats_res, msg, risk_df
     
@@ -372,7 +374,7 @@ def generate_report(title, elements):
     """
     
     html = f"<!DOCTYPE html>\n<html>\n<head><meta charset='utf-8'>{css_style}</head>\n<body>"
-    html += f"<h1>{title}</h1>"
+    html += f"<h1>{_html.escape(str(title))}</h1>"
     
     for element in elements:
         element_type = element.get('type')
@@ -380,10 +382,10 @@ def generate_report(title, elements):
         header = element.get('header')
         
         if header:
-            html += f"<h2>{header}</h2>"
+            html += f"<h2>{_html.escape(str(header))}</h2>"
         
         if element_type == 'text':
-            html += f"<p>{data}</p>"
+            html += f"<p>{_html.escape(str(data))}</p>"
         
         elif element_type == 'table':
             idx = not ('Interpretation' in data.columns)
@@ -395,28 +397,37 @@ def generate_report(title, elements):
             exp_name = data.index.name or "Exposure"
             out_name = element.get('outcome_col', 'Outcome')
             
-            # --- START: HTML Table Generation for Contingency Table ---
+            # 🟢 MODIFIED: Replaced Markdown pipe table with proper HTML table structure
             html += "<table class='report-table'>"
             html += "<thead>"
-            # Row 1: The outcome column spanning all outcome categories
-            html += f"<tr><th></th><th colspan='{len(col_labels)}'>{out_name}</th></tr>"
-            # Row 2: Exposure label and individual outcome categories
+            
+            # First Header Row: Spanning Outcome Column
+            html += f"<tr><th></th><th colspan='{len(col_labels)}'>{_html.escape(str(out_name))}</th></tr>"
+            
+            # Second Header Row: Exposure and all Column Labels
             html += "<tr>"
-            html += f"<th>{exp_name}</th>"
+            html += f"<th>{_html.escape(str(exp_name))}</th>"
             for col_label in col_labels:
-                html += f"<th>{col_label}</th>"
-            html += "</tr></thead><tbody>"
-
+                html += f"<th>{_html.escape(str(col_label))}</th>"
+            html += "</tr>"
+            html += "</thead>"
+            
+            # Table Body
+            html += "<tbody>"
             for idx_label in row_labels:
                 html += "<tr>"
-                html += f"<td>{idx_label}</td>"
+                # Row Header (Index name)
+                html += f"<td>{_html.escape(str(idx_label))}</td>"
+                # Data Cells
                 for col_label in col_labels:
                     val = data.loc[idx_label, col_label]
-                    html += f"<td>{val}</td>"
+                    # Ensure value is treated as string and escaped
+                    html += f"<td>{_html.escape(str(val))}</td>" 
                 html += "</tr>"
-            html += "</tbody></table>"
-            # --- END: HTML Table Generation for Contingency Table ---
-
+            html += "</tbody>"
+            
+            html += "</table>"
+        
         elif element_type == 'plot':
             # ตรวจสอบว่าเป็น Plotly Figure หรือ Matplotlib Figure
             plot_obj = data
@@ -431,5 +442,8 @@ def generate_report(title, elements):
                 b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
                 html += f'<img src="data:image/png;base64,{b64}" />'
     
+    html += """ 
+    <script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
+    """
     html += "</body>\n</html>"
     return html
