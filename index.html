@@ -79,20 +79,20 @@
     <script>
       stlite.mount({
         requirements: [
-            "streamlit>=1.42.0", // กำหนดเวอร์ชันขั้นต่ำ
-            "pandas>=2.1.0", // กำหนดเวอร์ชันขั้นต่ำ
-            "numpy", // ใช้แบบยืดหยุ่น
-            "scipy>=1.7.0", // กำหนดเวอร์ชันขั้นต่ำ
+            "streamlit", // ลบข้อจำกัดเวอร์ชัน
+            "pandas", // ลบข้อจำกัดเวอร์ชัน
+            "numpy", 
+            "scipy", // ลบข้อจำกัดเวอร์ชัน
             "statsmodels",
             "openpyxl",
             // "matplotlib", 
-            "lifelines==0.30.0", // คงเวอร์ชันเฉพาะเจาะจงไว้
-            "formulaic",      
+            "lifelines==0.30.0", // คงเวอร์ชันเฉพาะเจาะจง
+            "formulaic",      // จำเป็นสำหรับ lifelines
             "scikit-learn",
             // "seaborn", 
             "firthlogist",
-            "plotly>=5.0.0", // กำหนดเวอร์ชันขั้นต่ำ
-            "plotly-express>=5.0.0" // กำหนดเวอร์ชันขั้นต่ำ
+            "plotly", // ลบข้อจำกัดเวอร์ชัน
+            "plotly-express" // ลบข้อจำกัดเวอร์ชัน
         ],
         entrypoint: "app.py",
         files: {
