@@ -197,7 +197,7 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                     {"Statistic": f"Risk in {label_exp} (R1)", "Value": f"{risk_exp:.4f}",
                      "Interpretation": f"Risk of '{label_event}' in group {label_exp}"},
                     {"Statistic": f"Risk in {label_unexp} (R0)", "Value": f"{risk_unexp:.4f}",
-                     "Interpretation": f"Baseline risk of '{label_event}' in group {label_unexp}"},
+                     "Interpretation": f"Risk in {label_exp} is {rr:.2f}x that of {label_unexp}"},
                     {"Statistic": "Risk Ratio (RR)", "Value": f"{rr:.4f}",
                      "Interpretation": f"Risk in {label_exp} is {rr:.2f}× that of {label_unexp}"},
                     {"Statistic": "Risk Difference (RD)", "Value": f"{rd:.4f}",
@@ -273,12 +273,12 @@ def calculate_correlation(df, col1, col2, method='pearson'):
         x=v1,
         y=v2,
         mode='markers',
-        marker=dict(
-            size=8,
-            color='rgba(0, 100, 200, 0.6)',
-            line=dict(color='white', width=0.5),
-            opacity=0.7
-        ),
+        marker={
+            'size': 8,
+            'color': 'rgba(0, 100, 200, 0.6)',
+            'line': {'color': 'white', 'width': 0.5},
+            'opacity': 0.7
+        },
         name='Data points',
         hovertemplate=f'{col1}: %{{x:.2f}}<br>{col2}: %{{y:.2f}}<extra></extra>'
     ))
