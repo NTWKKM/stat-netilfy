@@ -191,12 +191,12 @@ if upl:
     try:
         data_bytes = upl.getvalue()
         
-        # 🟢 แก้ไข: ใช้ hashlib.md5 เพื่อให้ได้ค่า hash ที่คงที่ (Deterministic)
-        # เดิม: file_sig = (upl.name, hash(data_bytes))
-        file_sig = (upl.name, hashlib.md5(data_bytes).hexdigest())
+        # ใช้ SHA-256 แทน MD5 เพื่อหลีกเลี่ยง insecure-hash lint และเพิ่มความแข็งแรง
+        # เดิม: file_sig = (upl.name, hash(data_bytes))  หรือ MD5
+        file_sig = (upl.name, hashlib.sha256(data_bytes).hexdigest())
         
         if st.session_state.get('uploaded_file_sig') != file_sig:
-            if upl.name.endswith('.csv'):
+            if upl.name.lower().endswith('.csv'):
                 new_df = pd.read_csv(io.BytesIO(data_bytes))
             else:
                 new_df = pd.read_excel(io.BytesIO(data_bytes))
@@ -240,7 +240,7 @@ if st.session_state.df is not None:
     # 🟢 Use a default value of 'Auto-detect' if the key doesn't exist, which is safer
     auto_detect_meta = {c: st.session_state.var_meta.get(c, {'type': 'Auto-detect', 'map': {}}).get('type', 'Auto-detect') for c in cols}
     
-    s_var = st.sidebar.selectbox("Edit Var:", ["Select..."] + cols)
+    s_var = st.sidebar.selectbox("Edit Var:", ["Select...", *cols])
     if s_var != "Select...":
         # Ensure metadata for s_var exists before accessing
         if s_var not in st.session_state.var_meta:
@@ -257,8 +257,15 @@ if st.session_state.df is not None:
             is_numeric = pd.api.types.is_numeric_dtype(st.session_state.df[s_var]) if s_var in st.session_state.df.columns else False
             current_type = 'Continuous' if is_numeric else 'Categorical'
 
-        n_type = st.sidebar.radio("Type:", ['Categorical', 'Continuous'], 
-                                  index=['Categorical', 'Continuous'].index(current_type))
+        allowed_types = ['Categorical', 'Continuous']
+        if current_type not in allowed_types:
+            current_type = 'Categorical'
+
+        n_type = st.sidebar.radio(
+            "Type:",
+            allowed_types,
+            index=allowed_types.index(current_type),
+        )
                                   
         st.sidebar.markdown("Labels (0=No):")
         map_txt = st.sidebar.text_area("Map", value="\n".join([f"{k}={v}" for k,v in meta.get('map',{}).items()]), height=80)
