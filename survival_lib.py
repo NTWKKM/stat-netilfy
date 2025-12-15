@@ -28,6 +28,12 @@ def _standardize_numeric_cols(data, cols):
             else:
                 data[col] = (data[col] - data[col].mean()) / std
 
+# 🟢 NEW HELPER: Convert Hex to RGBA string for Plotly fillcolor
+def _hex_to_rgba(hex_color, alpha):
+    hex_color = hex_color.lstrip('#')
+    rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    return f'rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha})'
+
 # --- 1. Kaplan-Meier & Log-Rank (With Robust CI) 🟢 FIX KM CI ---
 def fit_km_logrank(df, duration_col, event_col, group_col):
     """
@@ -70,13 +76,16 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
                 # Use .iloc[:, 0] for lower bound and .iloc[:, 1] for upper bound
                 ci_lower = kmf.confidence_interval_.iloc[:, 0]
                 ci_upper = kmf.confidence_interval_.iloc[:, 1]
+                
+                # 🟢 FIX: Use RGBA string instead of 8-digit hex
+                rgba_color = _hex_to_rgba(colors[i % len(colors)], 0.2) # Alpha 0.2 for transparency
 
                 # 1. Add Shaded Area (Confidence Interval)
                 fig.add_trace(go.Scatter(
                     x=list(ci_lower.index) + list(ci_upper.index)[::-1], # Times forward and backward
                     y=list(ci_lower.values) + list(ci_upper.values)[::-1], # CI lower forward, CI upper backward
                     fill='toself',
-                    fillcolor=colors[i % len(colors)] + '30', # Add transparency (30)
+                    fillcolor=rgba_color, # 🟢 APPLIED FIX
                     line=dict(color='rgba(255,255,255,0)'), # Invisible line
                     hoverinfo="skip", 
                     name=f'{label} 95% CI',
@@ -176,13 +185,16 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
                 # Use .iloc[:, 0] for lower bound and .iloc[:, 1] for upper bound
                 ci_lower = naf.confidence_interval_.iloc[:, 0]
                 ci_upper = naf.confidence_interval_.iloc[:, 1]
+                
+                # 🟢 FIX: Use RGBA string instead of 8-digit hex
+                rgba_color = _hex_to_rgba(colors[i % len(colors)], 0.2) # Alpha 0.2 for transparency
 
                 # 1. Add Shaded Area (Confidence Interval)
                 fig.add_trace(go.Scatter(
                     x=list(ci_lower.index) + list(ci_upper.index)[::-1], 
                     y=list(ci_lower.values) + list(ci_upper.values)[::-1], 
                     fill='toself',
-                    fillcolor=colors[i % len(colors)] + '30', 
+                    fillcolor=rgba_color, # 🟢 APPLIED FIX
                     line=dict(color='rgba(255,255,255,0)'), 
                     hoverinfo="skip", 
                     name=f'{label} 95% CI',
@@ -216,7 +228,6 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
 
 # --- 3. Cox Proportional Hazards (Robust Version with Firth Fallback) ---
 def fit_cox_ph(df, duration_col, event_col, covariate_cols):
-    # ... (โค้ด fit_cox_ph เดิม ถูกต้องแล้ว)
     # 1. Validation
     missing = [c for c in [duration_col, event_col, *covariate_cols] if c not in df.columns]
     if missing:
@@ -274,9 +285,8 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     
     return cph, res_df, data, None
 
-# ... (check_cph_assumptions เหมือนเดิม)
+# ... (check_cph_assumptions remains the same)
 def check_cph_assumptions(cph, data):
-    # ... (โค้ด check_cph_assumptions เดิม)
     try:
         # 1. Statistical Test
         results = proportional_hazard_test(cph, data, time_transform='rank')
@@ -361,13 +371,16 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
                 # Use .iloc[:, 0] for lower bound and .iloc[:, 1] for upper bound
                 ci_lower = kmf.confidence_interval_.iloc[:, 0]
                 ci_upper = kmf.confidence_interval_.iloc[:, 1]
+                
+                # 🟢 FIX: Use RGBA string instead of 8-digit hex
+                rgba_color = _hex_to_rgba(colors[i % len(colors)], 0.2) # Alpha 0.2 for transparency
 
                 # 1. Add Shaded Area (Confidence Interval)
                 fig.add_trace(go.Scatter(
                     x=list(ci_lower.index) + list(ci_upper.index)[::-1],
                     y=list(ci_lower.values) + list(ci_upper.values)[::-1],
                     fill='toself',
-                    fillcolor=colors[i % len(colors)] + '30',
+                    fillcolor=rgba_color, # 🟢 APPLIED FIX
                     line=dict(color='rgba(255,255,255,0)'),
                     hoverinfo="skip",
                     name=f'{label} 95% CI',
@@ -429,7 +442,6 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
 
 # --- 5. Report Generation ---
 def generate_report_survival(title, elements):
-# ... (โค้ด generate_report_survival เดิม ถูกต้องแล้ว)
     """
     Generate HTML report (Renamed to match tab_survival.py calls)
     """
