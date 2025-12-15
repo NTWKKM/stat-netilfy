@@ -246,7 +246,7 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                     {"Statistic": f"Risk in {label_unexp} (R0)", "Value": f"{risk_unexp:.4f}",
                      "Interpretation": f"Baseline risk of '{label_event}' in group {label_unexp}"},
                     {"Statistic": "Risk Ratio (RR)", "Value": f"{rr:.4f}",
-                     "Interpretation": f"Risk in {label_exp} is {rr:.2f}× that of {label_unexp}"},
+                     "Interpretation": f"Risk in {label_exp} is {rr:.2f}x that of {label_unexp}"},
                     {"Statistic": "Risk Difference (RD)", "Value": f"{rd:.4f}",
                      "Interpretation": "Absolute difference (R1 - R0)"},
                     {"Statistic": nnt_label, "Value": f"{nnt_abs:.1f}",
