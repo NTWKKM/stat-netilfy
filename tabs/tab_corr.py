@@ -57,7 +57,7 @@ def render(df):
         v2 = cc2.selectbox("Variable 2 (Outcome/Col):", all_cols, index=v2_idx, key='chi2_corr_tab')
         if v1 == v2:
             st.error("Please select two different variables.")
-            return # 🟢 ใช้ return แทน st.stop()
+            return
         
         # 🟢 UPDATE: เพิ่ม Fisher's Exact Test
         method_choice = cc3.radio(
@@ -123,7 +123,6 @@ def render(df):
             df_calc[v1] = df_calc[v1].astype("string")
             df_calc[v2] = df_calc[v2].astype("string")
 
-            # 🟢 UPDATE: ส่ง df_calc แทน df
             # tab: Contingency table (DF), stats: Statistical results (DF), msg: Error/Warning (str), risk_df: Risk metrics (DF)
             tab, stats, msg, risk_df = correlation.calculate_chi2( 
                 df_calc, v1, v2,   # <--- ใช้ df_calc ที่แปลงแล้ว
@@ -141,6 +140,7 @@ def render(df):
                     {'type': 'contingency_table', 'header': 'Contingency Table', 'data': tab, 'outcome_col': v2},
                     
                     # Statistics
+                    # บรรทัดนี้เคยเป็น {'data': result} ซึ่งทำให้เกิด NameError และอาจเกิด ValueError
                     {'type': 'table', 'header': 'Detailed Statistics', 'data': stats} # 🟢 FIX: ใช้ 'data': stats ตรงๆ
                 ]
                 
@@ -171,7 +171,7 @@ def render(df):
 
     * **Pearson (r):** Assesses **linear** correlation; best for normally distributed data.
     * **Spearman (rho):** Assesses **monotonic** (directional) correlation; best for non-normal data or ranks/outliers.
-    	
+    
     **Interpretation of Coefficient (r/rho):**
     * **Close to +1:** Strong positive association (Both variables increase together).
     * **Close to -1:** Strong negative association (One increases as the other decreases).
@@ -208,8 +208,12 @@ def render(df):
                 if err: 
                     st.error(err)
                 else:
+                    # 🟢 FIX: ใช้ res['Value'].iloc[0] เพื่อดึงค่าแรก (Method Name) จาก DataFrame
+                    method_name = res['Value'].iloc[0] 
+                    
                     rep = [
-                        {'type':'text', 'data':f"Method: {res.iloc[0]['Value']}<br>Variables: {cv1} vs {cv2}"},
+                        # 🟢 FIX: ใช้ method_name ที่ดึงออกมา
+                        {'type':'text', 'data':f"Method: {method_name}<br>Variables: {cv1} vs {cv2}"},
                         # 🟢 FIX: res เป็น DataFrame อยู่แล้ว จึงไม่จำเป็นต้องสร้างใหม่
                         {'type':'table', 'header':'Statistics', 'data':res}, 
                         {'type':'plot', 'header':'Scatter Plot', 'data':fig}
