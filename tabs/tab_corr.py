@@ -79,7 +79,7 @@ def render(df):
 
         # Helper function to get unique values and set default index
         # from ._common import get_pos_label_settings <-- to fix after wthy this code not work properly
-        def get_pos_label_settings(df: pd.DataFrame, col_name: str) -> Tuple[List[str], int]:
+        def get_pos_label_settings(df: pd.DataFrame, col_name: str)
             """
             Helper function to get unique values from a column, convert them to strings, 
             sort them, and determine a default index (preferring '1', then '0').
