@@ -1,0 +1,13 @@
+streamlit
+pandas
+numpy
+scipy
+statsmodels>=0.14.0
+openpyxl
+matplotlib
+lifelines==0.30.0
+formulaic
+scikit-learn
+firthlogist
+plotly-express
+plotly
