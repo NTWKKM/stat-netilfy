@@ -135,7 +135,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         
         # Positive Label Selectors
         # Import ฟังก์ชันที่ย้ายไปไว้ในโมดูลใช้ร่วมกัน
-        from ._common import get_pos_label_settings
+        from tabs._common import get_pos_label_settings
 
         c4, c5, c6 = st.columns(3)
         v1_uv, v1_default_idx = get_pos_label_settings(df, v1)
