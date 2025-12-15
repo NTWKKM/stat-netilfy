@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import correlation # Import from root
+import tabs._common as _common
 
 def render(df):
     """
