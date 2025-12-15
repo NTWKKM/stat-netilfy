@@ -3,7 +3,7 @@ import numpy as np
 import scipy.stats as stats
 import statsmodels.api as sm
 import warnings
-import html as _html
+import html
 import streamlit as st  # ✅ IMPORT STREAMLIT
 
 # ✅ TRY IMPORT FIRTHLOGIST
@@ -118,11 +118,11 @@ def get_label(col_name, var_meta):
                 if short_name in var_meta and 'label' in var_meta[short_name]:
                     secondary_label = var_meta[short_name]['label']
 
-    safe_name = _html.escape(str(display_name))
+    safe_name = html.escape(str(display_name))
     
     # 3. ถ้ามี Label ให้แสดงบรรทัดล่าง, ถ้าไม่มีให้แสดงแค่ชื่อตัวแปร
     if secondary_label:
-        safe_label = _html.escape(str(secondary_label))
+        safe_label = html.escape(str(secondary_label))
         return f"<b>{safe_name}</b><br><span style='color:#666; font-size:0.9em'>{safe_label}</span>"
     else:
         return f"<b>{safe_name}</b>"
@@ -145,10 +145,28 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     Returns:
         str: An HTML fragment containing a table of variables with descriptive statistics, crude odds ratios (and p-values), and adjusted odds ratios where multivariable modelling was performed. If `outcome_name` is not found in `df`, returns an HTML alert div indicating the missing outcome.
     """
+    # ✅ FIX #3: ADD BINARY OUTCOME VALIDATION
     if outcome_name not in df.columns:
         return f"<div class='alert'>⚠️ Outcome '{outcome_name}' not found.</div>"
     
-    y = df[outcome_name].dropna().astype(int)
+    # NEW: Validate outcome is binary (exactly 2 unique values)
+    y_raw = df[outcome_name].dropna()
+    unique_outcomes = set(y_raw.unique())
+    
+    if len(unique_outcomes) != 2:
+        return f"""
+        <div class='alert' style='background:#ffebee; border-left:4px solid #d32f2f; padding:12px; border-radius:4px;'>
+            ❌ <b>Invalid Outcome:</b> Expected binary outcome (2 unique values) but found <b>{len(unique_outcomes)}</b>.<br>
+            Unique values: {sorted(unique_outcomes)}<br>
+            <span style='font-size:0.9em; color:#666; margin-top:8px; display:block;'>💡 Please select a truly binary outcome variable (e.g., Yes/No, Dead/Alive, 0/1)</span>
+        </div>
+        """
+    
+    # NEW: Warn if outcome isn't 0/1
+    if not unique_outcomes.issubset({0, 1}):
+        st.warning(f"ℹ️ Outcome values are {sorted(unique_outcomes)}, not {{0, 1}}. Will be converted to binary.")
+    
+    y = y_raw.astype(int)
     df_aligned = df.loc[y.index]
     total_n = len(y)
     
@@ -184,11 +202,23 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         unique_vals = X_num.dropna().unique()
         unique_count = len(unique_vals)
         
+        # ✅ FIX #2: IMPROVE CATEGORICAL/CONTINUOUS DETECTION
         is_categorical = False
         is_binary = set(unique_vals).issubset({0, 1})
-        if is_binary or unique_count < 5:
+        
+        # NEW: Better detection logic
+        if is_binary:
             is_categorical = True
+        elif unique_count < 10:  # 🟢 INCREASED THRESHOLD from 5 to 10
+            # Check if mostly integers (likely categorical codes)
+            decimals_count = sum(1 for v in unique_vals if not float(v).is_integer())
+            decimals_pct = decimals_count / len(unique_vals) if unique_vals.size > 0 else 0
             
+            if decimals_pct < 0.3:  # If <30% have decimals, treat as categorical
+                is_categorical = True
+            # else: treat as continuous
+        
+        # Allow user override via metadata
         user_setting = {}
         if var_meta and (col in var_meta or orig_name in var_meta):
             key = col if col in var_meta else orig_name
