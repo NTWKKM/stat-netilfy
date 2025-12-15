@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import NearestNeighbors
+from sklearn.preprocessing import StandardScaler # 🟢 เพิ่ม StandardScaler
 import io, base64
 import html as _html
 
@@ -11,32 +12,37 @@ import html as _html
 def calculate_ps(df, treatment_col, covariate_cols):
     """ 
     Estimate propensity scores and their logit (log-odds) for a binary treatment using logistic regression.
-    
-    Parameters:
-        df (pandas.DataFrame): Input dataset. Must contain the treatment column and all covariate columns; missing values should be handled and categorical variables already encoded.
-        treatment_col (str): Name of the binary treatment column (expected values 0 and 1).
-        covariate_cols (list[str]): List of column names to use as covariates in the propensity model.
-    
-    Returns:
-        tuple: data (pandas.DataFrame): A copy of the input with rows containing NA in treatment or covariates dropped and two new columns:
-            - ps_score: predicted probability of treatment (clipped to (1e-10, 1-1e-10)).
-            - ps_logit: log-odds of the propensity score.
-        clf (sklearn.linear_model.LogisticRegression): Fitted logistic regression model.
-    
-    Raises:
-        ValueError: If the treatment column is not of a numeric dtype.
+    Includes Robust Scaling for continuous variables to ensure model stability.
     """
     # Drop NA ในคอลัมน์ที่เกี่ยวข้อง
     data = df.dropna(subset=[treatment_col, *covariate_cols]).copy()
     
-    # X และ y
-    X = data[covariate_cols]
+    # 🟢 ROBUST UPDATE: Separate Numeric vs Binary for Scaling
+    # Sklearn LogisticRegression applies L2 Regularization by default.
+    # Unscaled continuous variables can distort the model.
+    X_processed = data[covariate_cols].copy()
+    
+    # Identify continuous columns to scale
+    cont_cols = []
+    for col in covariate_cols:
+        if pd.api.types.is_numeric_dtype(X_processed[col]):
+            # If > 2 unique values, treat as continuous/ordinal and scale it
+            # (Keep binary variables 0/1 as is for interpretability/stability)
+            if X_processed[col].nunique() > 2:
+                cont_cols.append(col)
+    
+    if cont_cols:
+        scaler = StandardScaler()
+        X_processed[cont_cols] = scaler.fit_transform(X_processed[cont_cols])
+    
+    X = X_processed
     y = data[treatment_col]
     
     # ตรวจสอบ Data Type อีกครั้งเพื่อความชัวร์
     if not np.issubdtype(y.dtype, np.number):
         raise ValueError(f"Treatment column '{treatment_col}' must be numeric (0/1).")
     
+    # Use liblinear with L2 penalty (Robust default)
     clf = LogisticRegression(solver='liblinear', random_state=42, max_iter=1000)
     clf.fit(X, y)
     
@@ -54,18 +60,7 @@ def calculate_ps(df, treatment_col, covariate_cols):
 def perform_matching(df, treatment_col, ps_col='ps_logit', caliper=0.2):
     """ 
     Perform 1:1 greedy nearest-neighbor matching of treated and control units based on a propensity score logit.
-    Matches each treated unit to the nearest control within a caliper defined as (caliper * standard deviation of ps_col); 
-    matched pairs are assigned a sequential `match_id`.
-    
-    Parameters:
-        df (pandas.DataFrame): DataFrame containing treatment indicator and propensity score column.
-        treatment_col (str): Column name for binary treatment indicator (expected values 0 and 1).
-        ps_col (str): Column name containing the propensity score logit to use for matching. Defaults to 'ps_logit'.
-        caliper (float): Multiplier of the standard deviation of `ps_col` that defines the maximum allowable distance for a match.
-    
-    Returns:
-        tuple: df_matched (pandas.DataFrame) — DataFrame with matched treated and control rows concatenated and a `match_id` column labeling pairs; `None` if matching failed.
-            message (str) — Status message describing the result or the reason for failure (e.g., number of matched pairs or error reason).
+    Matches each treated unit to the nearest control within a caliper defined as (caliper * standard deviation of ps_col).
     """
     # แยกกลุ่ม (ต้องเป็น 0 กับ 1 เท่านั้น)
     treated = df[df[treatment_col] == 1].copy()
@@ -78,8 +73,11 @@ def perform_matching(df, treatment_col, ps_col='ps_logit', caliper=0.2):
     
     # Caliper Calculation
     sd_logit = df[ps_col].std()
-    if not np.isfinite(sd_logit) or sd_logit == 0:
-        return None, f"Error: {ps_col} has zero/undefined variance; cannot apply caliper matching."
+    
+    # 🟢 Safety Check for zero variance
+    if not np.isfinite(sd_logit) or sd_logit < 1e-9:
+        return None, f"Error: {ps_col} has zero or undefined variance; cannot apply caliper matching."
+        
     caliper_width = caliper * sd_logit
     
     # Nearest Neighbors
@@ -135,19 +133,7 @@ def perform_matching(df, treatment_col, ps_col='ps_logit', caliper=0.2):
 # --- 3. SMD Calculation ---
 def calculate_smd(df, treatment_col, covariate_cols):
     """ 
-    Compute standardized mean differences (SMD) for numeric covariates between treated (1) and control (0) groups.
-    Only numeric columns from `covariate_cols` are evaluated. For each numeric covariate, the SMD is the absolute 
-    difference in group means divided by the pooled standard deviation (sqrt((var_treated + var_control) / 2)).
-    If a covariate is constant in either group (resulting in undefined variance) or the pooled standard deviation is zero, 
-    the SMD is set to 0.
-    
-    Parameters:
-        df (pandas.DataFrame): DataFrame containing the treatment indicator and covariates.
-        treatment_col (str): Column name with binary treatment indicator (1 = treated, 0 = control).
-        covariate_cols (Iterable[str]): List of covariate column names to evaluate.
-    
-    Returns:
-        pandas.DataFrame: DataFrame with columns ['Variable', 'SMD'] giving the SMD for each evaluated numeric covariate.
+    Compute standardized mean differences (SMD) for numeric covariates.
     """
     smd_data = []
     treated = df[df[treatment_col] == 1]
@@ -165,29 +151,17 @@ def calculate_smd(df, treatment_col, covariate_cols):
                 smd = 0  # Handle constant columns
             else:
                 pooled_sd = np.sqrt((var_t + var_c) / 2)
-                smd = abs(mean_t - mean_c) / pooled_sd if pooled_sd > 0 else 0
+                smd = abs(mean_t - mean_c) / pooled_sd if pooled_sd > 1e-9 else 0
             
             smd_data.append({'Variable': col, 'SMD': smd})
     
     return pd.DataFrame(smd_data)
 
-# --- 4. Plotting & Report (UPDATED: Plotly instead of Matplotlib) ---
+# --- 4. Plotting & Report (Plotly) ---
 def plot_love_plot(smd_pre, smd_post):
     """ 
-    Create an interactive Love plot comparing covariate standardized mean differences before and after matching
-    using Plotly instead of Matplotlib.
-    
-    This function combines pre- and post-matching SMD data, plots SMD on the x-axis and covariate names on the y-axis,
-    highlights stages ('Unmatched' vs 'Matched') with color and style, and adds a reference line at SMD = 0.1.
-    
-    Parameters:
-        smd_pre (pandas.DataFrame): Pre-matching balance table with columns ['Variable', 'SMD'].
-        smd_post (pandas.DataFrame): Post-matching balance table with columns ['Variable', 'SMD'].
-    
-    Returns:
-        plotly.graph_objects.Figure: Interactive Plotly figure object containing the Love plot.
+    Create an interactive Love plot using Plotly.
     """
-    # 🟢 UPDATED: ใช้ Plotly แทน Matplotlib
     smd_pre = smd_pre.copy()
     smd_pre['Stage'] = 'Unmatched'
     smd_post = smd_post.copy()
@@ -235,7 +209,7 @@ def plot_love_plot(smd_pre, smd_post):
         xaxis_title='Standardized Mean Difference (SMD)',
         yaxis_title='Variable',
         font={'size': 12},
-        height=len(smd_pre) * 40 + 200
+        height=max(400, len(smd_pre) * 40 + 100) # Dynamic height
     )
     
     # ปรับแต่ง marker
@@ -248,17 +222,7 @@ def plot_love_plot(smd_pre, smd_post):
 
 def generate_psm_report(title, elements):
     """ 
-    Generate a styled HTML report from a sequence of text, table, and plot elements.
-    
-    Parameters:
-        title (str): Report title to display at the top of the page.
-        elements (Iterable[dict]): Ordered iterable of elements to include in the report. Each element must be a dict with:
-            - type (str): One of 'text', 'table', or 'plot'.
-            - data: For 'text', a string; for 'table', a pandas.DataFrame; for 'plot', a Plotly or Matplotlib Figure.
-    
-    Returns:
-        html (str): Complete HTML document as a string containing the title and rendered elements 
-        (tables as HTML, plots embedded as base64 PNG images, and text as paragraphs).
+    Generate a styled HTML report.
     """
     css = """
     <style>
