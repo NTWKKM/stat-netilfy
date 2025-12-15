@@ -275,8 +275,9 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     # Format Results
     summary = cph.summary.copy()
     summary['HR'] = np.exp(summary['coef'])
-    summary['95% CI Lower'] = np.exp(summary['lower 95% bound'])
-    summary['95% CI Upper'] = np.exp(summary['upper 95% bound'])
+    ci = cph.confidence_intervals_
+    summary['95% CI Lower'] = np.exp(ci.iloc[:, 0])
+    summary['95% CI Upper'] = np.exp(ci.iloc[:, 1])
     
     # Add Method used to results table
     summary['Method'] = method_used
@@ -337,6 +338,10 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
     """
     
     # 1. Data Cleaning
+    missing = [c for c in [duration_col, event_col, group_col] if c not in df.columns]
+    if missing:
+        return None, None, len(df), 0, f"Missing columns: {missing}"
+
     data = df.dropna(subset=[duration_col, event_col, group_col])
     n_pre_filter = len(data)
 
@@ -436,6 +441,13 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
                 'Method': f'Landmark at {landmark_time}'
             }
         
+        else:
+            stats_data = {
+                'Test': 'None',
+                'Note': 'Single group or no group at landmark',
+                'Method': f'Landmark at {landmark_time}',
+            }
+
     except Exception as e:
         stats_data = {'Test': 'Error', 'Note': str(e), 'Method': f'Landmark at {landmark_time}'}
 
