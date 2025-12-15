@@ -268,6 +268,14 @@ def generate_psm_report(title, elements):
             line-height: 1.6;
             color: #333;
         }
+        .report-footer {
+            text-align: right;
+            font-size: 0.75em;
+            color: #666;
+            margin-top: 20px;
+            border-top: 1px dashed #ccc;
+            padding-top: 10px;
+        }
     </style>
     """
 
