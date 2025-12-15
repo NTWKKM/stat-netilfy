@@ -350,12 +350,27 @@ def generate_table(df, selected_vars, group_col, var_meta):
         html += row_html
         
     html += "</tbody></table>"
-    html += """<div class='footer-note'>
+    
+    # Build footer with dynamic reference group label
+    if show_or:
+        # Find the label for the reference group
+        ref_group_label = None
+        for g in groups:
+            if g['val'] == group_1_val:
+                ref_group_label = g['label']
+                break
+        
+        html += f"""<div class='footer-note'>
     <b>OR (Odds Ratio):</b> <br>
     - Categorical: One-vs-Rest method (Category X vs All Other Categories).<br>
     - Continuous: Univariate Logistic Regression (Odds change per 1 unit increase).<br>
-    Reference group is the first column of the grouping variable. Values are OR (95% CI).
+    Reference group (exposed/case): <b>{_html.escape(str(ref_group_label))}</b> (value: {group_1_val}). Values are OR (95% CI).
     </div>"""
+    else:
+        html += """<div class='footer-note'>
+    Data presented as Mean ± SD or n (%). P-values calculated using automated test selection.
+    </div>"""
+    
     html += "</div>"
     
     html += """<div class='report-footer'>
