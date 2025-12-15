@@ -5,6 +5,7 @@ import time
 import io
 import hashlib
 import streamlit.components.v1 as components
+sys.path.append(os.path.dirname(__file__))
 
 # ==========================================
 # 1. CONFIG & LOADING SCREEN KILLER (Must be First)
