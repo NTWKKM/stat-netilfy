@@ -134,25 +134,8 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         )
         
         # Positive Label Selectors
-        def get_pos_label_settings(df: pd.DataFrame, col_name: str) -> tuple[list[str], int]:
-            """
-            Compute candidate positive-label values for a column and determine a default selection index.
-            
-            Parameters:
-                df (pandas.DataFrame): DataFrame containing the column.
-                col_name (str): Name of the column to inspect.
-            
-            Returns:
-                tuple:
-                    unique_vals (list[str]): Sorted list of the column's unique non-null values as strings.
-                    default_idx (int): Index into `unique_vals` to use as the default positive label (index of value `'1'` if present; otherwise `0`).
-            """
-            unique_vals = [str(x) for x in df[col_name].dropna().unique()]
-            unique_vals.sort()
-            default_idx = 0
-            if '1' in unique_vals:
-                default_idx = unique_vals.index('1')
-            return unique_vals, default_idx
+        # Import ฟังก์ชันที่ย้ายไปไว้ในโมดูลใช้ร่วมกัน
+        from ._common import get_pos_label_settings
 
         c4, c5, c6 = st.columns(3)
         v1_uv, v1_default_idx = get_pos_label_settings(df, v1)
