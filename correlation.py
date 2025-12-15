@@ -295,30 +295,30 @@ def calculate_correlation(df, col1, col2, method='pearson'):
                 y=y_line,
                 mode='lines',
                 name='Linear fit',
-                line=dict(color='red', width=2, dash='dash'),
+                line={'color': 'red', 'width': 2, 'dash': 'dash'},
                 hovertemplate='Fitted line<extra></extra>'
             ))
         except Exception as e:
             fig.add_annotation(
                 text=f"Fit line unavailable: {e}",
                 xref="paper", yref="paper", x=0.5, y=1.08, showarrow=False,
-                font=dict(color="darkred", size=11),
+                font={'color': 'darkred', 'size': 11},
             )
     
     # ปรับแต่งเค้าโครง
     fig.update_layout(
-        title=dict(
-            text=f'{col1} vs {col2}<br><sub>{name} correlation (r={corr:.3f}, p={p:.4f})</sub>',
-            x=0.5,
-            xanchor='center'
-        ),
+        title={
+            'text': f'{col1} vs {col2}<br><sub>{name} correlation (r={corr:.3f}, p={p:.4f})</sub>',
+            'x': 0.5,
+            'xanchor': 'center'
+        },
         xaxis_title=col1,
         yaxis_title=col2,
         hovermode='closest',
         plot_bgcolor='rgba(240, 240, 240, 0.5)',
         height=500,
         width=700,
-        font=dict(size=12),
+        font={'size': 12},
         showlegend=True
     )
     
