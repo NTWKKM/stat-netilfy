@@ -369,8 +369,9 @@ def auc_ci_delong(y_true, y_scores):
         se_auc = np.sqrt((s10 / n_pos) + (s01 / n_neg))
         
         return auc - 1.96*se_auc, auc + 1.96*se_auc, se_auc
-    except Exception:
+    except Exception as e:
         # Fallback if DeLong fails (e.g., singular matrix or data issues)
+        warnings.warn(f"DeLong CI calculation failed: {e}", stacklevel=2)
         return np.nan, np.nan, np.nan
 
 
@@ -643,9 +644,9 @@ def generate_report(title, elements):
         .report-footer {
             text-align: right;
             font-size: 0.75em;
-            color: var(--text-color);
+            color: #666;
             margin-top: 20px;
-            border-top: 1px dashed var(--border-color);
+            border-top: 1px dashed #ccc;
             padding-top: 10px;
         }
     </style>
