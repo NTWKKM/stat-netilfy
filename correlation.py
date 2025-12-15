@@ -127,43 +127,50 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     display_tab.index.name = col1
     
     # 3. Stats
+    msg = "" # 🟢 NEW: Initialize msg for warnings only
     try:
         is_2x2 = (tab_chi2.shape == (2, 2))
         
         if "Fisher" in method:
             if not is_2x2:
                 return display_tab, None, "Error: Fisher's Exact Test requires a 2x2 table.", None
+            
+            # Fisher's Exact Test
             odds_ratio, p_value = stats.fisher_exact(tab_chi2)
             method_name = "Fisher's Exact Test"
-            msg = f"{method_name}: P-value={p_value:.4f}, OR={odds_ratio:.4f}"
+            
             stats_res = {
                 "Test": method_name,
-                "Statistic (OR)": odds_ratio,
-                "P-value": p_value,
+                "Statistic (OR)": f"{odds_ratio:.4f}", # Format Value here
+                "P-value": f"{p_value:.4f}",          # Format Value here
                 "Degrees of Freedom": "-",
                 "N": len(data)
             }
         else:
+            # Chi-Square Test
             use_correction = True if "Yates" in method else False
             chi2, p, dof, ex = stats.chi2_contingency(tab_chi2, correction=use_correction)
             method_name = "Chi-Square"
             if is_2x2:
                 method_name += " (with Yates')" if use_correction else " (Pearson)"
-            msg = f"{method_name}: Chi2={chi2:.4f}, p={p:.4f}"
+            
             stats_res = {
                 "Test": method_name,
-                "Statistic": chi2,
-                "P-value": p,
-                "Degrees of Freedom": dof,
+                "Statistic": f"{chi2:.4f}",           # Format Value here
+                "P-value": f"{p:.4f}",                # Format Value here
+                "Degrees of Freedom": f"{dof}",
                 "N": len(data)
             }
+            
+            # Warning check
             if (ex < 5).any() and is_2x2 and not use_correction:
                 msg += " ⚠️ Warning: Expected count < 5. Consider using Fisher's Exact Test."
         
-        # 4. Risk
+        # 4. Risk Metrics (2x2 only)
         risk_df = None
         if is_2x2:
             try:
+                # ... (Risk calculation logic - เหมือนเดิม)
                 vals = tab_chi2.values
                 a, b = vals[0, 0], vals[0, 1]
                 c, d = vals[1, 0], vals[1, 1]
@@ -177,44 +184,39 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                 risk_unexp = c/(c+d) if (c+d)>0 else 0
                 rr = risk_exp/risk_unexp if risk_unexp>0 else np.nan
                 rd = risk_exp - risk_unexp
+                nnt_abs = abs(1/rd) if rd!=0 else np.inf
+                if rd < 0:
+                    nnt_label = "Number Needed to Treat (NNT)"
+                elif rd > 0:
+                    nnt_label = "Number Needed to Harm (NNH)"
+                else:
+                    nnt_label = "NNT/NNH"
                 odd_ratio, _ = stats.fisher_exact(tab_chi2)
                 
-                # 🟢 MODIFIED: Compute NNT or NNH based on Risk Difference sign
-                nnt_abs = abs(1/rd) if rd!=0 else np.inf
-                nnt_value = f"{nnt_abs:.1f}" if np.isfinite(nnt_abs) else str(np.inf)
-                
-                if rd < 0: # Risk in exposed is lower -> BENEFIT (Number Needed to Treat)
-                    nnt_label = "Number Needed to Treat (NNT)"
-                    nnt_interp = f"Treat {nnt_value} patients with {label_exp} to prevent 1 outcome ('{label_event}')"
-                elif rd > 0: # Risk in exposed is higher -> HARM (Number Needed to Harm)
-                    nnt_label = "Number Needed to Harm (NNH)"
-                    nnt_interp = f"Expose {nnt_value} patients to {label_exp} to cause 1 additional outcome ('{label_event}')"
-                else: # rd == 0
-                    nnt_label = "NNT/NNH"
-                    nnt_value = str(np.inf)
-                    nnt_interp = "Risk Difference is zero (No absolute effect)"
-                # ---------------------
-                
                 risk_data = [
-                    {"Statistic": f"Risk in {label_exp} (R1)", "Value": f"{risk_exp:.4f}", 
+                    {"Statistic": f"Risk in {label_exp} (R1)", "Value": f"{risk_exp:.4f}",
                      "Interpretation": f"Risk of '{label_event}' in group {label_exp}"},
-                    {"Statistic": f"Risk in {label_unexp} (R0)", "Value": f"{risk_unexp:.4f}", 
-                     "Interpretation": f"Baseline Risk of '{label_event}' in group {label_unexp}"},
-                    {"Statistic": "Risk Ratio (RR)", "Value": f"{rr:.4f}", 
-                     "Interpretation": f"Risk in {label_exp} is {rr:.2f} times that of {label_unexp}"},
-                    {"Statistic": "Risk Difference (RD)", "Value": f"{rd:.4f}", 
+                    {"Statistic": f"Risk in {label_unexp} (R0)", "Value": f"{risk_unexp:.4f}",
+                     "Interpretation": f"Baseline risk of '{label_event}' in group {label_unexp}"},
+                    {"Statistic": "Risk Ratio (RR)", "Value": f"{rr:.4f}",
+                     "Interpretation": f"Risk in {label_exp} is {rr:.2f}× that of {label_unexp}"},
+                    {"Statistic": "Risk Difference (RD)", "Value": f"{rd:.4f}",
                      "Interpretation": "Absolute difference (R1 - R0)"},
-                    {"Statistic": nnt_label, "Value": nnt_value, 
-                     "Interpretation": nnt_interp}, # <-- Updated NNT/NNH presentation
-                    {"Statistic": "Odds Ratio (OR)", "Value": f"{odd_ratio:.4f}", 
-                     "Interpretation": "Odds of Event (Exp vs Unexp)"}
+                    {"Statistic": nnt_label, "Value": f"{nnt_abs:.1f}",
+                     "Interpretation": "Patients to treat to prevent/cause 1 outcome"},
+                    {"Statistic": "Odds Ratio (OR)", "Value": f"{odd_ratio:.4f}",
+                     "Interpretation": "Odds of event (Exp vs Unexp)"}
                 ]
                 risk_df = pd.DataFrame(risk_data)
-            except Exception as e: # 🟢 MODIFIED: Catch specific error for visibility
-                msg += f"\n⚠️ Warning: 2x2 risk-metric computation failed: {e}"
+            except Exception as e:
                 risk_df = None
+                msg += f" (Risk metrics unavailable: {e})"
         
-        return display_tab, stats_res, msg, risk_df
+        # 🟢 NEW: Convert stats_res to DataFrame for Report
+        stats_df_for_report = pd.DataFrame(stats_res, index=[0]).T.reset_index()
+        stats_df_for_report.columns = ['Statistic', 'Value']
+
+        return display_tab, stats_df_for_report, msg, risk_df # 🟢 RETURN DF
     
     except Exception as e:
         return display_tab, None, str(e), None
@@ -415,8 +417,12 @@ def generate_report(title, elements):
             html += f"<p>{_html.escape(str(data))}</p>"
         
         elif element_type == 'table':
-            idx = 'Interpretation' not in data.columns
-            html += data.to_html(index=idx, classes='report-table')
+            # 🟢 UPDATED: Force index=False for all statistical result tables (e.g., Chi2 stats, Kappa, ICC)
+            # แต่คงไว้สำหรับ Descriptive/Risk Metrics ที่ใช้ Index เป็นชื่อคอลัมน์
+            idx = 'Statistic' in data.columns and 'Value' in data.columns and data.index.name is None
+            
+            # ถ้าเป็นตารางผลลัพธ์สถิติ (Statistic/Value) ให้ซ่อน Index
+            html += data.to_html(index=not idx, classes='report-table') 
         
         elif element_type == 'contingency_table':
             col_labels = data.columns.tolist()
