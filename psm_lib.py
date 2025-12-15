@@ -1,10 +1,9 @@
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
 import plotly.express as px
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import NearestNeighbors
-from sklearn.preprocessing import StandardScaler # 🟢 เพิ่ม StandardScaler
+from sklearn.preprocessing import StandardScaler  # Added for robust scaling of continuous covariates
 import io, base64
 import html as _html
 
@@ -33,7 +32,7 @@ def calculate_ps(df, treatment_col, covariate_cols):
     
     if cont_cols:
         scaler = StandardScaler()
-        X_processed[cont_cols] = scaler.fit_transform(X_processed[cont_cols])
+        X_processed.loc[:, cont_cols] = scaler.fit_transform(X_processed[cont_cols])
     
     X = X_processed
     y = data[treatment_col]
