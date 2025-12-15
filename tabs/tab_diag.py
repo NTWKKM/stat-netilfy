@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import diag_test # ✅ ใช้ diag_test ตัวเดียว
-import tabs._common as _common
 
 def render(df, _var_meta=None):  # var_meta reserved for future use
     """
@@ -136,7 +135,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         
         # Positive Label Selectors
         # Import ฟังก์ชันที่ย้ายไปไว้ในโมดูลใช้ร่วมกัน
-        from tabs._common import get_pos_label_settings
+        from ._common import get_pos_label_settings
 
         c4, c5, c6 = st.columns(3)
         v1_uv, v1_default_idx = get_pos_label_settings(df, v1)
