@@ -79,8 +79,7 @@ def render(df):
 
         # Helper function to get unique values and set default index
         # Import ฟังก์ชันที่ย้ายไปไว้ในโมดูลใช้ร่วมกัน
-        from ._common import get_pos_label_settings
-
+        from tabs._common import get_pos_label_settings
         # Selector for V1 Positive Label
         cc4, cc5, cc6 = st.columns(3)
         v1_uv, v1_default_idx = get_pos_label_settings(df, v1)
