@@ -95,7 +95,8 @@ def render(df, _var_meta):
         
         # Calculate Max Time (Robust check)
         max_t = df[col_time].dropna().max() if not df.empty and ptypes.is_numeric_dtype(df[col_time]) and df[col_time].notna().any() else 1.0
-        if max_t <= 0: max_t = 1.0 
+        if max_t <= 0: 
+            max_t = 1.0 
         
         st.write(f"**Select Landmark Time (Max: {max_t:.2f})**")
         
@@ -158,8 +159,11 @@ def render(df, _var_meta):
                     report_html = survival_lib.generate_report_survival(f"Landmark Analysis: {col_time} (t >= {landmark_t})", elements)
                     st.download_button("📥 Download Report (Landmark)", report_html, "lm_report.html", "text/html")
                 
+            except (ValueError, KeyError) as e:
+                st.error(f"Analysis error: {e}")
             except Exception as e:
-                st.error(f"An unexpected error occurred: {e}")
+                st.error(f"Unexpected error: {e}")
+                # Consider: import traceback; st.exception(e) for debugging
 
     # ==========================
     # TAB 3: Cox Regression - ใช้โค้ดเดิม
@@ -167,8 +171,10 @@ def render(df, _var_meta):
     with tab_cox:
         covariates = st.multiselect("Select Covariates (Predictors):", [c for c in all_cols if c not in [col_time, col_event]], key='surv_cox_vars')
         
-        if 'cox_res' not in st.session_state: st.session_state.cox_res = None
-        if 'cox_html' not in st.session_state: st.session_state.cox_html = None
+        if 'cox_res' not in st.session_state: 
+            st.session_state.cox_res = None
+        if 'cox_html' not in st.session_state: 
+            st.session_state.cox_html = None
 
         if st.button("🚀 Run Cox Model & Check Assumptions", key='btn_run_cox'):
             if not covariates:
