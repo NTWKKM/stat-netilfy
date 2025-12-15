@@ -76,7 +76,8 @@ def compute_or_for_row(row_series, cat_val, group_series, g1_val):
         
         # Cast to strings to ensure safe comparison
         row_bin = (row_series.astype(str) == str(cat_val))
-        group_bin = (group_series == g1_val) # Group series is already raw/mapped values
+        # Normalize to string to avoid "1" vs 1 mismatches from CSV/object dtypes
+        group_bin = (group_series.astype(str) == str(g1_val))
         
         a = (row_bin & group_bin).sum()
         b = (row_bin & ~group_bin).sum()
@@ -114,7 +115,7 @@ def calculate_or_continuous_logit(df, feature_col, group_col, group1_val):
         y = (df[group_col] == group1_val).astype(int)
         
         # X = Feature (Continuous)
-        X = df[feature_col].apply(clean_numeric)
+        X = df[feature_col].apply(clean_numeric).rename(feature_col)
         
         # Drop NaNs aligned
         mask = X.notna() & y.notna()
@@ -126,7 +127,7 @@ def calculate_or_continuous_logit(df, feature_col, group_col, group1_val):
             return "-" 
         
         # Add constant (intercept)
-        X_const = sm.add_constant(X) 
+        X_const = sm.add_constant(X)
         
         # 🟢 Method 1: Try Standard Newton-Raphson
         try:
@@ -140,8 +141,8 @@ def calculate_or_continuous_logit(df, feature_col, group_col, group1_val):
                 return "-" # Failed all attempts
 
         # Extract OR and CI
-        coef = result.params.iloc[1]
-        conf = result.conf_int().iloc[1]
+        coef = result.params[feature_col]
+        conf = result.conf_int().loc[feature_col]
         
         or_val = np.exp(coef)
         lower = np.exp(conf[0])
@@ -263,7 +264,7 @@ def generate_table(df, selected_vars, group_col, var_meta):
     
     # OR Column Header
     if show_or:
-        html += f"<th>OR (95% CI)<br><span style='font-size:0.8em; font-weight:normal'>(vs Others / Per Unit)</span></th>"
+        html += "<th>OR (95% CI)<br><span style='font-size:0.8em; font-weight:normal'>(vs Others / Per Unit)</span></th>"
         
     html += "<th>P-value</th>"
     html += "<th>Test Used</th>"
@@ -287,19 +288,9 @@ def generate_table(df, selected_vars, group_col, var_meta):
         row_html = f"<tr><td><b>{_html.escape(str(label))}</b></td>"
         
         # --- DATA PREPARATION ---
-        # Handle mapping globally
-        mapped_full_series = df[col].copy()
-        col_mapper = meta.get('map', {})
-        if col_mapper:
-            _m = col_mapper
-            mapped_full_series = mapped_full_series.map(
-                lambda x, m=_m: m.get(x, m.get(float(x), x))
-                if pd.notna(x) and (x in m or (str(x).replace(".", "", 1).isdigit() and float(x) in m))
-                else x
-            )
-
         if is_cat:
-            counts_total, n_total, _ = get_stats_categorical_data(df[col], var_meta, col) 
+            # Single source of truth for mapping: used for totals + per-group stats + OR
+            counts_total, n_total, mapped_full_series = get_stats_categorical_data(df[col], var_meta, col) 
             val_total = get_stats_categorical_str(counts_total, n_total)
         else:
             val_total = get_stats_continuous(df[col])
