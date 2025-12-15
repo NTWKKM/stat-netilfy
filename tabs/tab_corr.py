@@ -132,9 +132,18 @@ def render(df):
             )
             
             if tab is not None:
+                # 🟢 UPDATE 1: จัดการข้อความสถานะ/หมายเหตุ
+                # เมื่อ tab is not None, msg จะมีแค่ข้อความเตือน (Warning/Note) หรือเป็นสตริงว่างเปล่าเท่านั้น
+                if msg.strip():
+                    status_text = f"Note: {msg.strip()}"
+                else:
+                    status_text = "Analysis Status: Completed successfully."
+
                 rep = [
-                    {'type': 'text', 'data': f"<b>Analysis:</b> Chi-Square & Risk<br><b>Variables:</b> {v1} vs {v2}"},
-                    {'type': 'text', 'data': f"<b>Main Result:</b> {msg}"},
+                    # 🟢 FIX: แยกข้อความและลบแท็ก HTML (<b>, <br>) ออก เพื่อให้ถูกแสดงผลเป็นข้อความธรรมดา
+                    {'type': 'text', 'data': f"Analysis: Chi-Square & Risk"},
+                    {'type': 'text', 'data': f"Variables: {v1} vs {v2}"},
+                    {'type': 'text', 'data': status_text}, # แสดงสถานะหรือข้อความเตือน
                     
                     # Contingency Table
                     {'type': 'contingency_table', 'header': 'Contingency Table', 'data': tab, 'outcome_col': v2},
