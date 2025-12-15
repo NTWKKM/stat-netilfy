@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import diag_test # ✅ ใช้ diag_test ตัวเดียว
+from typing import List, Tuple
 
 def render(df, _var_meta=None):  # var_meta reserved for future use
     """
@@ -135,7 +136,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         
         # Positive Label Selectors
         # from ._common import get_pos_label_settings <-- to fix after wthy this code not work properly
-        def get_pos_label_settings(df: pd.DataFrame, col_name: str)
+        def get_pos_label_settings(df: pd.DataFrame, col_name: str) -> Tuple[List[str], int]:
             """
             Helper function to get unique values from a column, convert them to strings, 
             sort them, and determine a default index (preferring '1', then '0').
