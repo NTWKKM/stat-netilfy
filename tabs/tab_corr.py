@@ -55,9 +55,13 @@ def render(df):
         
         v1 = cc1.selectbox("Variable 1 (Exposure/Row):", all_cols, index=v1_idx, key='chi1_corr_tab') 
         v2 = cc2.selectbox("Variable 2 (Outcome/Col):", all_cols, index=v2_idx, key='chi2_corr_tab')
+        # 🟢 FIX: Remove 'return' to allow the rest of the tab (e.g., Continuous Correlation) to render.
+        # We will use the 'v1 != v2' condition to only run the Chi-Square analysis.
+        # Check for invalid inputs
+        inputs_ok = (v1 is not None and v2 is not None and v1 != v2 and df[v1].nunique() > 1 and df[v2].nunique() > 1) # 🟢 UPDATE: ใช้ v1 != v2 ในการกำหนด inputs_ok
         if v1 == v2:
-            st.error("Please select two different variables.")
-            return
+            st.error("Please select two different variables for Categorical Correlation.")
+            # 🟢 NOTE: Do NOT return here. Continue execution to render the rest of the tab UI.
         
         # 🟢 UPDATE: เพิ่ม Fisher's Exact Test
         method_choice = cc3.radio(
