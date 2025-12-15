@@ -74,7 +74,7 @@ def render(df):
         # 🟢 NEW: Positive Label Selectors
 
         # Helper function to get unique values and set default index
-        def get_pos_label_settings(df, col_name):
+        def get_pos_label_settings(df, col_name) -> tuple[list[str], int]:
             # 🟢 NOTE: Need to handle the case where the column might be empty after dropna
             unique_vals = [str(x) for x in df[col_name].dropna().unique()]
             unique_vals.sort()
