@@ -19,11 +19,11 @@ def _standardize_numeric_cols(data, cols):
         if pd.api.types.is_numeric_dtype(data[col]):
             # Check if binary (only 2 unique values, e.g., 0 and 1)
             unique_vals = data[col].dropna().unique()
-            if len(unique_vals) <= 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0}):
+            if len(unique_vals) <= 2 and set(unique_vals).issubset({0, 1}):
                 continue # Skip standardization for binary variables
             
             std = data[col].std()
-            if std == 0:
+            if pd.isna(std) or std == 0:
                 warnings.warn(f"Covariate '{col}' has zero variance", stacklevel=3)
             else:
                 data[col] = (data[col] - data[col].mean()) / std
@@ -36,6 +36,8 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
     """
     data = df.dropna(subset=[duration_col, event_col])
     if group_col:
+        if group_col not in df.columns:
+            raise ValueError(f"Missing group column: {group_col}")
         data = data.dropna(subset=[group_col])
         groups = sorted(data[group_col].unique(), key=lambda v: str(v))
     else:
@@ -72,7 +74,7 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
             ))
 
     fig.update_layout(
-        title=f'Kaplan-Meier Survival Curves',
+        title='Kaplan-Meier Survival Curves',
         xaxis_title='Time',
         yaxis_title='Survival Probability',
         template='plotly_white',
@@ -120,6 +122,8 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
     Returns: (fig, stats_df)
     """
     data = df.dropna(subset=[duration_col, event_col])
+    if len(data) == 0:
+        raise ValueError("No valid data.")
     if group_col:
         data = data.dropna(subset=[group_col])
         groups = sorted(data[group_col].unique(), key=lambda v: str(v))
@@ -141,6 +145,7 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
             label = "Overall"
 
         if len(df_g) > 0:
+            naf = NelsonAalenFitter()
             naf.fit(df_g[duration_col], event_observed=df_g[event_col], label=label)
 
             fig.add_trace(go.Scatter(
@@ -181,12 +186,15 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     data = df.dropna(subset=[duration_col, event_col, *covariate_cols]).copy()
     if len(data) == 0:
         return None, None, data, "No valid data after dropping missing values."
-    
+
+    if data[event_col].sum() == 0:
+        return None, None, data, "No events observed (all censored). CoxPH requires at least one event."  
     # 2. Check variance
     for col in covariate_cols:
          if pd.api.types.is_numeric_dtype(data[col]):
-             if data[col].std() == 0:
-                 return None, None, data, f"Covariate '{col}' has zero variance (constant value)."
+            std = data[col].std()
+            if pd.isna(std) or std == 0:
+                return None, None, data, f"Covariate '{col}' has zero variance (or insufficient rows)."
     
     # 3. Standardize (Skip binary to improve stability)
     _standardize_numeric_cols(data, covariate_cols)
@@ -211,7 +219,7 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
             continue
 
     if cph is None:
-         return None, None, data, f"Model Convergence Failed. Details: {last_error}.\nTry checking for high correlation between variables."
+        return None, None, data, f"Model Convergence Failed. Details: {last_error}.\nTry checking for high correlation between variables."
 
     # Format Results
     summary = cph.summary.copy()
@@ -231,8 +239,7 @@ def check_cph_assumptions(cph, data):
     try:
         # 1. Statistical Test
         results = proportional_hazard_test(cph, data, time_transform='rank')
-        html_output = "Proportional Hazards Test Results:\n"
-        html_output += results.summary.to_string()
+        text_report = "Proportional Hazards Test Results:\n" + results.summary.to_string()
         
         # 2. Schoenfeld Residual Plots
         img_bytes_list = []
@@ -249,7 +256,7 @@ def check_cph_assumptions(cph, data):
                 z = np.polyfit(data[cph.duration_col], scaled_schoenfeld[col], 1)
                 p = np.poly1d(z)
                 ax.plot(data[cph.duration_col], p(data[cph.duration_col]), "r--", alpha=0.8)
-            except:
+            except Exception:
                 pass
                 
             ax.set_title(f"Schoenfeld Residuals: {col}")
@@ -263,7 +270,7 @@ def check_cph_assumptions(cph, data):
             img_bytes_list.append(buf.getvalue())
             plt.close(fig)
 
-        return html_output, img_bytes_list
+        return text_report, img_bytes_list
 
     except Exception as e:
         return f"Assumption check failed: {e}", []
@@ -284,15 +291,16 @@ def generate_report_survival(title, elements):
     
     plotly_js = '<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>'
     
-    html_doc = f"<html><head><meta charset='utf-8'>{css_style}{plotly_js}</head><body><h1>{title}</h1>"
+    safe_title = _html.escape(str(title))
+    html_doc = f"<!DOCTYPE html><html><head><meta charset='utf-8'>{css_style}{plotly_js}</head><body><h1>{safe_title}</h1>"
     
     for el in elements:
         t = el.get('type')
         d = el.get('data')
         
-        if t == 'header': html_doc += f"<h2>{d}</h2>"
-        elif t == 'text': html_doc += f"<p>{d}</p>"
-        elif t == 'preformatted': html_doc += f"<pre>{d}</pre>"
+        if t == 'header': html_doc += f"<h2>{_html.escape(str(d))}</h2>"
+        elif t == 'text': html_doc += f"<p>{_html.escape(str(d))}</p>"
+        elif t == 'preformatted': html_doc += f"<pre>{_html.escape(str(d))}</pre>"
         elif t == 'table': html_doc += d.to_html(classes='table')
         elif t == 'plot': 
              if hasattr(d, 'to_html'):
