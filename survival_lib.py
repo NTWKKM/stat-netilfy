@@ -28,8 +28,7 @@ def _standardize_numeric_cols(data, cols):
             else:
                 data[col] = (data[col] - data[col].mean()) / std
 
-# --- 1. Kaplan-Meier & Log-Rank ---
-# ... (โค้ดส่วนนี้ยังเหมือนเดิม)
+# --- 1. Kaplan-Meier & Log-Rank (With CI) ---
 def fit_km_logrank(df, duration_col, event_col, group_col):
     """
     Fits KM curves and performs Log-rank test.
@@ -64,7 +63,23 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
             kmf = KaplanMeierFitter()
             kmf.fit(df_g[duration_col], df_g[event_col], label=label)
 
-            # Survival Curve
+            # Get Confidence Intervals (CI)
+            ci_lower = kmf.confidence_interval_['KM_estimate_lower_bound']
+            ci_upper = kmf.confidence_interval_['KM_estimate_upper_bound']
+
+            # 1. Add Shaded Area (Confidence Interval)
+            fig.add_trace(go.Scatter(
+                x=list(ci_lower.index) + list(ci_upper.index)[::-1], # Times forward and backward
+                y=list(ci_lower.values) + list(ci_upper.values)[::-1], # CI lower forward, CI upper backward
+                fill='toself',
+                fillcolor=colors[i % len(colors)] + '30', # Add transparency (30)
+                line=dict(color='rgba(255,255,255,0)'), # Invisible line
+                hoverinfo="skip", 
+                name=f'{label} 95% CI',
+                showlegend=False
+            ))
+            
+            # 2. Survival Curve (KM Estimate)
             fig.add_trace(go.Scatter(
                 x=kmf.survival_function_.index,
                 y=kmf.survival_function_.iloc[:, 0],
@@ -73,9 +88,10 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
                 line=dict(color=colors[i % len(colors)], width=2),
                 hovertemplate=f'{label}<br>Time: %{{x:.1f}}<br>Surv: %{{y:.3f}}<extra></extra>'
             ))
+            
 
     fig.update_layout(
-        title='Kaplan-Meier Survival Curves',
+        title='Kaplan-Meier Survival Curves (with 95% CI)',
         xaxis_title='Time',
         yaxis_title='Survival Probability',
         template='plotly_white',
@@ -116,8 +132,7 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
 
     return fig, pd.DataFrame([stats_data])
 
-# --- 2. Nelson-Aalen ---
-# ... (โค้ดส่วนนี้ยังเหมือนเดิม)
+# --- 2. Nelson-Aalen (With CI) ---
 def fit_nelson_aalen(df, duration_col, event_col, group_col):
     """
     Fits Nelson-Aalen cumulative hazard.
@@ -138,8 +153,6 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
     colors = px.colors.qualitative.Plotly
     stats_list = []
 
-    naf = NelsonAalenFitter()
-
     for i, g in enumerate(groups):
         if group_col:
             df_g = data[data[group_col] == g]
@@ -151,7 +164,24 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
         if len(df_g) > 0:
             naf = NelsonAalenFitter()
             naf.fit(df_g[duration_col], event_observed=df_g[event_col], label=label)
+            
+            # Get Confidence Intervals (CI)
+            ci_lower = naf.confidence_interval_['Cumulative_hazard_lower_bound']
+            ci_upper = naf.confidence_interval_['Cumulative_hazard_upper_bound']
 
+            # 1. Add Shaded Area (Confidence Interval)
+            fig.add_trace(go.Scatter(
+                x=list(ci_lower.index) + list(ci_upper.index)[::-1], 
+                y=list(ci_lower.values) + list(ci_upper.values)[::-1], 
+                fill='toself',
+                fillcolor=colors[i % len(colors)] + '30', 
+                line=dict(color='rgba(255,255,255,0)'), 
+                hoverinfo="skip", 
+                name=f'{label} 95% CI',
+                showlegend=False
+            ))
+
+            # 2. Cumulative Hazard Curve (NA Estimate)
             fig.add_trace(go.Scatter(
                 x=naf.cumulative_hazard_.index,
                 y=naf.cumulative_hazard_.iloc[:, 0],
@@ -167,7 +197,7 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
             })
 
     fig.update_layout(
-        title='Nelson-Aalen Cumulative Hazard',
+        title='Nelson-Aalen Cumulative Hazard (with 95% CI)',
         xaxis_title='Time',
         yaxis_title='Cumulative Hazard',
         template='plotly_white',
@@ -177,10 +207,10 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
     return fig, pd.DataFrame(stats_list)
 
 # --- 3. Cox Proportional Hazards (Robust Version with Firth Fallback) ---
+# 🟢 Note: Removed step_size=0.5 to fix the error CoxPHFitter.fit() got an unexpected keyword argument 'step_size'
 def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     """
-    Fits CoxPH model with a robust fitting strategy.
-    Strategy: 1. Standard CoxPH -> 2. Penalized CoxPH (L2/Ridge) -> 3. Firth's Penalizer (More robust for separation)
+    Fits CoxPH model with a robust fitting strategy (Standard -> Penalized L2).
     
     Returns: (cph_object, results_df, model_data, error_message)
     """
@@ -207,52 +237,22 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     _standardize_numeric_cols(data, covariate_cols)
     
     # 4. Fitting Strategy (Progressive Robustness)
-    penalizers_L2 = [0.0, 0.1, 1.0, 10.0] # L2 Penalizer values to try
+    penalizers_L2 = [0.0, 0.1, 1.0, 10.0] 
     cph = None
     last_error = None
     method_used = None
     
-    # --- Try 1: Standard CoxPH (penalizer=0.0) ---
-    try:
-        temp_cph = CoxPHFitter(penalizer=0.0) 
-        temp_cph.fit(data, duration_col=duration_col, event_col=event_col)
-        cph = temp_cph
-        method_used = "Standard CoxPH"
-    except Exception as e:
-        last_error = e
-        
-    # --- Try 2: Penalized CoxPH (L2/Ridge) ---
-    if cph is None:
-        for p in penalizers_L2[1:]: # Start from 0.1
-            try:
-                temp_cph = CoxPHFitter(penalizer=p)
-                temp_cph.fit(data, duration_col=duration_col, event_col=event_col)
-                cph = temp_cph
-                method_used = f"L2 Penalized CoxPH (p={p})"
-                break
-            except Exception as e:
-                last_error = e
-                continue
-
-    # --- Try 3: Firth's Correction (for Separation) ---
-    if cph is None:
+    for p in penalizers_L2:
         try:
-            from firthlogist import FirthLogisticRegression # firthlogist is for Logistic, not CoxPH directly
-            # 💡 Note: Since firthlogist is for Logistic, the most direct way to get Firth-like results for Cox is using the built-in Efron Penalizer (like lifelines does internally with 'ridge' or 'firth' in some other packages)
-            # The official way in lifelines to do Firth-like is through the penalizer term (L2/Ridge).
-            # To simulate Firth's robustness for separation, we rely on the L2 attempts above.
-            # *If the user needs true Firth, they must use a different dedicated package.*
-
-            # However, we can use a highly robust L2 penalizer and report it as a robust method.
-            # Let's try to fit with a large L2 penalizer and a slower step rate, or rely on lifelines default 'ridge' for robustness.
-            # Since the original lifelines has removed the step_size argument, we rely entirely on the penalizer.
-            temp_cph = CoxPHFitter(penalizer=100.0, l1_ratio=0.0) # Highly penalized L2
+            temp_cph = CoxPHFitter(penalizer=p) 
             temp_cph.fit(data, duration_col=duration_col, event_col=event_col)
             cph = temp_cph
-            method_used = "Highly Penalized CoxPH (Firth-like)"
-
+            method_used = f"L2 Penalized CoxPH (p={p})"
+            if p == 0.0: method_used = "Standard CoxPH"
+            break
         except Exception as e:
             last_error = e
+            continue
 
     if cph is None:
         return None, None, data, f"Model Convergence Failed. Last attempt used: {method_used if method_used else 'None'}. Details: {last_error}.\nTry checking for high correlation (multicollinearity) or perfect separation."
@@ -263,7 +263,7 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     summary['95% CI Lower'] = np.exp(summary['lower 95% bound'])
     summary['95% CI Upper'] = np.exp(summary['upper 95% bound'])
     
-    # Add Method used to results table (as index name or extra column)
+    # Add Method used to results table
     summary['Method'] = method_used
     summary.index.name = "Covariate"
     
@@ -271,12 +271,9 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     
     return cph, res_df, data, None
 
+# ... (check_cph_assumptions เหมือนเดิม)
 def check_cph_assumptions(cph, data):
-# ... (โค้ดส่วนนี้ยังเหมือนเดิม)
-    """
-    Checks PH assumptions.
-    Returns: (text_report, list_of_image_bytes)
-    """
+    # ... (โค้ด check_cph_assumptions เดิม)
     try:
         # 1. Statistical Test
         results = proportional_hazard_test(cph, data, time_transform='rank')
@@ -316,9 +313,122 @@ def check_cph_assumptions(cph, data):
     except Exception as e:
         return f"Assumption check failed: {e}", []
 
-# --- 4. Report Generation ---
-# ... (โค้ดส่วนนี้ยังเหมือนเดิม)
+
+# --- 4. Landmark Analysis (KM) 🟢 NEW FUNCTION ---
+def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
+    """
+    Performs Kaplan-Meier Survival Analysis using the Landmark Method.
+    
+    Clinical principle: Only includes patients AT RISK (i.e., survived) up to landmark_time.
+    Duration is re-calculated: New T_start = landmark_time.
+    
+    Returns: (fig, stats_df, n_pre_filter, n_post_filter)
+    """
+    
+    # 1. Data Cleaning
+    data = df.dropna(subset=[duration_col, event_col, group_col])
+    n_pre_filter = len(data)
+
+    # 2. Filtering (The Landmark Step)
+    # หลักการ: ผู้ป่วยต้องรอดชีวิตจนถึงเวลา Landmark Time
+    # Rule: T_Stop >= Landmark Time
+    landmark_data = data[data[duration_col] >= landmark_time].copy()
+    n_post_filter = len(landmark_data)
+    
+    if n_post_filter < 2:
+        return None, None, n_pre_filter, n_post_filter, "Error: Insufficient patients (N < 2) survived until the landmark time."
+    
+    # 3. Recalculate Duration (Crucial Step)
+    # T_new = T_Stop - Landmark Time
+    landmark_data['New_Duration'] = landmark_data[duration_col] - landmark_time
+    
+    # 4. KM Fitting (Standardized Plotting)
+    groups = sorted(landmark_data[group_col].unique(), key=lambda v: str(v))
+    fig = go.Figure()
+    colors = px.colors.qualitative.Plotly
+
+    for i, g in enumerate(groups):
+        df_g = landmark_data[landmark_data[group_col] == g]
+        label = f"{group_col}={g}"
+        
+        if len(df_g) > 0:
+            kmf = KaplanMeierFitter()
+            
+            # Fit using the New_Duration
+            kmf.fit(df_g['New_Duration'], df_g[event_col], label=label)
+
+            # Get Confidence Intervals (CI)
+            ci_lower = kmf.confidence_interval_['KM_estimate_lower_bound']
+            ci_upper = kmf.confidence_interval_['KM_estimate_upper_bound']
+
+            # 1. Add Shaded Area (Confidence Interval)
+            fig.add_trace(go.Scatter(
+                x=list(ci_lower.index) + list(ci_upper.index)[::-1],
+                y=list(ci_lower.values) + list(ci_upper.values)[::-1],
+                fill='toself',
+                fillcolor=colors[i % len(colors)] + '30',
+                line=dict(color='rgba(255,255,255,0)'),
+                hoverinfo="skip",
+                name=f'{label} 95% CI',
+                showlegend=False
+            ))
+            
+            # 2. Survival Curve (KM Estimate)
+            fig.add_trace(go.Scatter(
+                x=kmf.survival_function_.index,
+                y=kmf.survival_function_.iloc[:, 0],
+                mode='lines',
+                name=label,
+                line=dict(color=colors[i % len(colors)], width=2),
+                hovertemplate=f'{label}<br>Time: %{{x:.1f}}<br>Surv: %{{y:.3f}}<extra></extra>'
+            ))
+
+    fig.update_layout(
+        title=f'Kaplan-Meier Survival Curves (Landmark Time: {landmark_time})',
+        xaxis_title=f'Time Since Landmark ({duration_col} - {landmark_time})', # Important X-axis labeling
+        yaxis_title='Survival Probability',
+        template='plotly_white',
+        height=500,
+        hovermode='x unified'
+    )
+    fig.update_yaxes(range=[0, 1.05])
+
+    # 5. Log-Rank Test (using New_Duration)
+    stats_data = {}
+    try:
+        if len(groups) == 2:
+            g1, g2 = groups
+            res = logrank_test(
+                landmark_data[landmark_data[group_col] == g1]['New_Duration'],
+                landmark_data[landmark_data[group_col] == g2]['New_Duration'],
+                event_observed_A=landmark_data[landmark_data[group_col] == g1][event_col],
+                event_observed_B=landmark_data[landmark_data[group_col] == g2][event_col]
+            )
+            stats_data = {
+                'Test': 'Log-Rank (Pairwise)',
+                'Statistic': res.test_statistic,
+                'P-value': res.p_value,
+                'Comparison': f'{g1} vs {g2}',
+                'Method': f'Landmark at {landmark_time}'
+            }
+        elif len(groups) > 2:
+            res = multivariate_logrank_test(landmark_data['New_Duration'], landmark_data[group_col], landmark_data[event_col])
+            stats_data = {
+                'Test': 'Log-Rank (Multivariate)',
+                'Statistic': res.test_statistic,
+                'P-value': res.p_value,
+                'Comparison': 'All groups',
+                'Method': f'Landmark at {landmark_time}'
+            }
+        
+    except Exception as e:
+        stats_data = {'Test': 'Error', 'Note': str(e), 'Method': f'Landmark at {landmark_time}'}
+
+    return fig, pd.DataFrame([stats_data]), n_pre_filter, n_post_filter, None
+
+# --- 5. Report Generation ---
 def generate_report_survival(title, elements):
+# ... (โค้ด generate_report_survival เดิม)
     """
     Generate HTML report (Renamed to match tab_survival.py calls)
     """
