@@ -279,7 +279,7 @@ def generate_psm_report(title, elements):
         if el['type'] == 'text':
             html += f"<p>{_html.escape(str(el['data']))}</p>"
         elif el['type'] == 'table':
-            html += el['data'].to_html(classes='report-table', border=0)
+            html += el['data'].to_html(classes='report-table', border=0, escape=True)
         elif el['type'] == 'plot':
             # ตรวจสอบว่าเป็น Plotly Figure หรือ Matplotlib Figure
             plot_obj = el['data']
