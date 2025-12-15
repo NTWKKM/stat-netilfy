@@ -4,6 +4,7 @@ import numpy as np
 from scipy import stats
 import statsmodels.api as sm
 import html as _html
+import warnings
 
 def clean_numeric(val):
     if pd.isna(val): 
@@ -20,7 +21,9 @@ def check_normality(series):
     if len(clean) < 3 or len(clean) > 5000 or clean.nunique() < 3: 
         return False
     try:
-        _stat, p_sw = stats.shapiro(clean)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            _stat, p_sw = stats.shapiro(clean)
         return p_sw > 0.05
     except Exception:
         return False
@@ -35,7 +38,7 @@ def get_stats_continuous(series):
     if len(clean) == 0: return "-"
     return f"{clean.mean():.1f} \u00B1 {clean.std():.1f}"
 
-# --- 🟢 UPDATED: Return list of cats for OR matching ---
+# --- UPDATED: Return list of cats for OR matching ---
 def get_stats_categorical_data(series, var_meta=None, col_name=None):
     """
     Returns specific counts and labels to be used for both Display and OR calculation alignment.
@@ -53,9 +56,7 @@ def get_stats_categorical_data(series, var_meta=None, col_name=None):
     counts = mapped_series.value_counts().sort_index()
     total = len(mapped_series.dropna())
     
-    # Return list of (Label, Count, Pct, RawValue if possible)
-    # Note: RawValue is tricky after mapping, but for OR we iterate the *labels* or *mapped series*
-    # Strategy: Use the Mapped Series for One-vs-Rest Logic
+    # Return mapped series for later OR calculation usage
     return counts, total, mapped_series
 
 def get_stats_categorical_str(counts, total):
@@ -65,17 +66,13 @@ def get_stats_categorical_str(counts, total):
         res.append(f"{_html.escape(str(cat))}: {count} ({pct:.1f}%)")
     return "<br>".join(res)
 
-# --- 🟢 NEW: Calculate OR & 95% CI (One-vs-Rest) for Categorical ---
+# --- 🟢 UPDATED: Calculate OR & 95% CI (One-vs-Rest) for Categorical ---
 def compute_or_for_row(row_series, cat_val, group_series, g1_val):
     try:
         # Complete-case mask (avoid treating NaN as "not cat" / "group0")
         mask = row_series.notna() & group_series.notna()
         row_series = row_series[mask]
         group_series = group_series[mask]
-        # Construct 2x2 Table
-        #            Group 1   Group 0
-        # Cat Val       a         b
-        # Not Cat       c         d
         
         # Cast to strings to ensure safe comparison
         row_bin = (row_series.astype(str) == str(cat_val))
@@ -86,15 +83,15 @@ def compute_or_for_row(row_series, cat_val, group_series, g1_val):
         c = (~row_bin & group_bin).sum()
         d = (~row_bin & ~group_bin).sum()
         
-        # Use Haldane-Anscombe correction if ANY cell is zero
+        # Haldane-Anscombe correction if ANY cell is zero
         if min(a, b, c, d) == 0:
-            a += 0.5
-            b += 0.5
-            c += 0.5
-            d += 0.5
+            a += 0.5; b += 0.5; c += 0.5; d += 0.5
             
         or_val = (a * d) / (b * c)
         
+        if or_val == 0 or np.isinf(or_val):
+            return "-"
+
         # 95% CI (Natural Log Method)
         ln_or = np.log(or_val)
         se = np.sqrt(1/a + 1/b + 1/c + 1/d)
@@ -105,18 +102,18 @@ def compute_or_for_row(row_series, cat_val, group_series, g1_val):
     except Exception:
         return "-"
 
-# --- 🟢 NEW: Calculate OR & 95% CI for Continuous (Logistic Regression) ---
+# --- 🟢 UPDATED: Calculate OR & 95% CI for Continuous (Robust Logistic Regression) ---
 def calculate_or_continuous_logit(df, feature_col, group_col, group1_val):
     """
-    Calculates OR using Univariate Logistic Regression.
-    Interpretation: OR per 1 unit increase in feature_col.
+    Calculates OR using Univariate Logistic Regression with Fallback Solvers.
+    Includes protection against Perfect Separation.
     """
     try:
         # Prepare Data
         # Y = Target (Binary: 1=Group1, 0=Others)
         y = (df[group_col] == group1_val).astype(int)
         
-        # X = Feature (Continuous) - Use clean_numeric to handle strings
+        # X = Feature (Continuous)
         X = df[feature_col].apply(clean_numeric)
         
         # Drop NaNs aligned
@@ -124,16 +121,25 @@ def calculate_or_continuous_logit(df, feature_col, group_col, group1_val):
         y = y[mask]
         X = X[mask]
         
-        if len(y) < 10 or y.nunique() < 2: return "-" # Not enough data
+        # Minimum sample size check
+        if len(y) < 10 or y.nunique() < 2 or X.nunique() < 2: 
+            return "-" 
         
-        # Logistic Regression using statsmodels
-        # Add constant (intercept) manually as statsmodels doesn't add it by default
+        # Add constant (intercept)
         X_const = sm.add_constant(X) 
-        model = sm.Logit(y, X_const)
-        result = model.fit(disp=0) # disp=0 to silence output
         
+        # 🟢 Method 1: Try Standard Newton-Raphson
+        try:
+            model = sm.Logit(y, X_const)
+            result = model.fit(disp=0)
+        except:
+            # 🟢 Method 2: Try BFGS (Better for some convergence issues)
+            try:
+                result = model.fit(method='bfgs', disp=0)
+            except:
+                return "-" # Failed all attempts
+
         # Extract OR and CI
-        # params[1] is the coefficient for our variable (index 0 is constant)
         coef = result.params.iloc[1]
         conf = result.conf_int().iloc[1]
         
@@ -141,6 +147,11 @@ def calculate_or_continuous_logit(df, feature_col, group_col, group1_val):
         lower = np.exp(conf[0])
         upper = np.exp(conf[1])
         
+        # 🟢 Safety Check: Filter insane values caused by Perfect Separation
+        # e.g. OR > 1000 or OR < 0.001 usually means the model failed to converge properly
+        if or_val > 1000 or or_val < 0.001:
+            return "-"
+            
         return f"{or_val:.2f} ({lower:.2f}-{upper:.2f})"
     except Exception:
         return "-"
@@ -177,8 +188,11 @@ def calculate_p_categorical(df, col, group_col):
         is_2x2 = tab.shape == (2, 2)
         _chi2, p_chi2, _dof, ex = stats.chi2_contingency(tab)
         if is_2x2 and ex.min() < 5:
-            _oddsr, p = stats.fisher_exact(tab)
-            return p, "Fisher's Exact"
+            try:
+                _oddsr, p = stats.fisher_exact(tab)
+                return p, "Fisher's Exact"
+            except:
+                pass
         test_name = "Chi-square"
         if (ex < 5).any(): test_name = "Chi-square (Low N)"
         return p_chi2, test_name
@@ -200,21 +214,19 @@ def generate_table(df, selected_vars, group_col, var_meta):
         raw_groups = df[group_col].dropna().unique().tolist()
         def _group_sort_key(v):
             s = str(v)
-            try:
-                return (0, float(s))
-            except Exception:
-                return (1, s)
+            try: return (0, float(s))
+            except Exception: return (1, s)
         raw_groups.sort(key=_group_sort_key)
         for g in raw_groups:
             label = mapper.get(g, mapper.get(float(g), str(g)) if str(g).replace('.','',1).isdigit() else str(g))
             groups.append({'val': g, 'label': str(label)})
     
-    # 🟢 Check if we can calculate OR (Must be exactly 2 groups)
+    # Check if we can calculate OR (Must be exactly 2 groups)
     show_or = has_group and len(groups) == 2
     group_1_val = None
     if show_or:
-        # Prefer 1 when present; otherwise fall back to the "higher" value
         group_vals = [g["val"] for g in groups]
+        # Auto-detect "Case" group (prefer 1 or higher value)
         group_1_val = 1 if 1 in group_vals else max(group_vals, key=_group_sort_key)
 
     # CSS
@@ -249,7 +261,7 @@ def generate_table(df, selected_vars, group_col, var_meta):
             n_g = len(df[df[group_col] == g['val']])
             html += f"<th>{_html.escape(str(g['label']))} (n={n_g})</th>"
     
-    # 🟢 Add OR Column Header
+    # OR Column Header
     if show_or:
         html += f"<th>OR (95% CI)<br><span style='font-size:0.8em; font-weight:normal'>(vs Others / Per Unit)</span></th>"
         
@@ -275,7 +287,7 @@ def generate_table(df, selected_vars, group_col, var_meta):
         row_html = f"<tr><td><b>{_html.escape(str(label))}</b></td>"
         
         # --- DATA PREPARATION ---
-        # Need to handle mapping globally for the row first to ensure consistency across columns
+        # Handle mapping globally
         mapped_full_series = df[col].copy()
         col_mapper = meta.get('map', {})
         if col_mapper:
@@ -287,7 +299,7 @@ def generate_table(df, selected_vars, group_col, var_meta):
             )
 
         if is_cat:
-            counts_total, n_total, _ = get_stats_categorical_data(df[col], var_meta, col) # Pass raw for internal map
+            counts_total, n_total, _ = get_stats_categorical_data(df[col], var_meta, col) 
             val_total = get_stats_categorical_str(counts_total, n_total)
         else:
             val_total = get_stats_continuous(df[col])
@@ -301,9 +313,8 @@ def generate_table(df, selected_vars, group_col, var_meta):
                 sub_df = df[df[group_col] == g['val']]
                 # Get stats for this group
                 if is_cat:
-                    # We need consistent index with Total
                     counts_g, n_g, _ = get_stats_categorical_data(sub_df[col], var_meta, col)
-                    # Align with total counts index (categories present in total)
+                    # Align with total counts
                     aligned_counts = {cat: counts_g.get(cat, 0) for cat in counts_total.index}
                     val_g = get_stats_categorical_str(aligned_counts, n_g)
                     row_html += f"<td style='text-align: center;'>{val_g}</td>"
@@ -316,16 +327,14 @@ def generate_table(df, selected_vars, group_col, var_meta):
             if show_or:
                 or_cell_content = "-"
                 if is_cat:
-                    # Iterate through each category appearing in the dataset
                     cat_ors = []
                     for cat in counts_total.index:
-                        # Calculate OR: (This Cat vs Others) x (Group 1 vs Group 0)
-                        # We use mapped_full_series to ensure we match the 'cat' label
+                        # Calculate OR One-vs-Rest
                         or_res = compute_or_for_row(mapped_full_series, cat, df[group_col], group_1_val)
                         cat_ors.append(f"{_html.escape(str(cat))}: {or_res}")
                     or_cell_content = "<br>".join(cat_ors)
                 else:
-                    # 🟢 NEW: Continuous Variable OR Calculation
+                    # Robust Continuous OR
                     or_cell_content = calculate_or_continuous_logit(df, col, group_col, group_1_val)
                 
                 row_html += f"<td style='text-align: center; white-space: nowrap;'>{or_cell_content}</td>"
