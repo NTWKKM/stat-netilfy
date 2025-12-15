@@ -399,7 +399,7 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
         y=tpr,
         mode='lines',
         name=f'ROC Curve (AUC={auc_val:.3f})',
-        line=dict(color='darkorange', width=2),
+        line={'color': 'darkorange', 'width': 2},
         hovertemplate='FPR: %{x:.3f}<br>TPR: %{y:.3f}<extra></extra>'
     ))
     
