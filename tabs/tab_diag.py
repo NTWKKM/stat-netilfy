@@ -212,11 +212,27 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
             )
             
             if tab is not None:
-                rep_elements = [
-                    {'type': 'text', 'data': f"<b>Result:</b> {msg}"},
+                # 🟢 UPDATE 1: จัดการข้อความสถานะ/หมายเหตุ (Warning/Note)
+                # เมื่อ tab is not None, msg จะมีแค่ข้อความเตือน (Warning/Note) หรือเป็นสตริงว่างเปล่าเท่านั้น
+                if msg.strip():
+                    status_text = f"Note: {msg.strip()}"
+                else:
+                    status_text = "Analysis Status: Completed successfully."
+                
+                # 🟢 FIX: แยกข้อความและลบแท็ก HTML (<b>, <br>) ออก
+                # และใช้ตัวแปร rep_elements ให้สอดคล้องกับโค้ดส่วนอื่น
+                rep_elements = [ 
+                    {'type': 'text', 'data': f"Analysis: Diagnostic Test / Chi-Square"},
+                    {'type': 'text', 'data': f"Variables: {v1} vs {v2}"},
+                    {'type': 'text', 'data': status_text}, # แสดงสถานะหรือข้อความเตือน
+                    
+                    # Contingency Table
                     {'type': 'contingency_table', 'header': 'Contingency Table', 'data': tab, 'outcome_col': v2},
                 ]
+                
+                # 🟢 NOTE: ใช้โครงสร้างเดิมในการเพิ่ม Statistics และ Risk/Effect Measures
                 if stats is not None:
+                    # เดิม: rep_elements.append({'type': 'table', 'header': 'Statistics', 'data': stats})
                     rep_elements.append({'type': 'table', 'header': 'Statistics', 'data': stats})
                 if risk_df is not None:
                     rep_elements.append({'type': 'table', 'header': 'Risk & Effect Measures (2x2 Table)', 'data': risk_df})
@@ -225,6 +241,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                 st.session_state.html_output_chi = html
                 st.components.v1.html(html, height=600, scrolling=True)
             else: 
+                # กรณีนี้ msg คือ Fatal Error ซึ่งจะถูกแสดงด้วย Streamlit error
                 st.error(msg)
         
         with dl_col:
