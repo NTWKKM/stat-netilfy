@@ -125,6 +125,8 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
     if len(data) == 0:
         raise ValueError("No valid data.")
     if group_col:
+        if group_col not in df.columns:
+            raise ValueError(f"Missing group column: {group_col}")
         data = data.dropna(subset=[group_col])
         groups = sorted(data[group_col].unique(), key=lambda v: str(v))
     else:
@@ -191,7 +193,7 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
         return None, None, data, "No events observed (all censored). CoxPH requires at least one event."  
     # 2. Check variance
     for col in covariate_cols:
-         if pd.api.types.is_numeric_dtype(data[col]):
+        if pd.api.types.is_numeric_dtype(data[col]):
             std = data[col].std()
             if pd.isna(std) or std == 0:
                 return None, None, data, f"Covariate '{col}' has zero variance (or insufficient rows)."
@@ -204,7 +206,6 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     penalizers = [0.0, 0.1, 1.0, 10.0]
     cph = None
     last_error = None
-    success_p = None
 
     for p in penalizers:
         try:
@@ -212,7 +213,6 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
             temp_cph = CoxPHFitter(penalizer=p)
             temp_cph.fit(data, duration_col=duration_col, event_col=event_col, step_size=0.5)
             cph = temp_cph
-            success_p = p
             break
         except Exception as e:
             last_error = e
@@ -256,8 +256,8 @@ def check_cph_assumptions(cph, data):
                 z = np.polyfit(data[cph.duration_col], scaled_schoenfeld[col], 1)
                 p = np.poly1d(z)
                 ax.plot(data[cph.duration_col], p(data[cph.duration_col]), "r--", alpha=0.8)
-            except Exception:
-                pass
+            except Exception as e:
+                warnings.warn(f"Could not fit trend line for {col}: {e}", stacklevel=2)
                 
             ax.set_title(f"Schoenfeld Residuals: {col}")
             ax.set_xlabel("Time")
@@ -298,21 +298,25 @@ def generate_report_survival(title, elements):
         t = el.get('type')
         d = el.get('data')
         
-        if t == 'header': html_doc += f"<h2>{_html.escape(str(d))}</h2>"
-        elif t == 'text': html_doc += f"<p>{_html.escape(str(d))}</p>"
-        elif t == 'preformatted': html_doc += f"<pre>{_html.escape(str(d))}</pre>"
-        elif t == 'table': html_doc += d.to_html(classes='table')
+        if t == 'header':
+            html_doc += f"<h2>{_html.escape(str(d))}</h2>"
+        elif t == 'text':
+            html_doc += f"<p>{_html.escape(str(d))}</p>"
+        elif t == 'preformatted':
+            html_doc += f"<pre>{_html.escape(str(d))}</pre>"
+        elif t == 'table':
+            html_doc += d.to_html(classes='table')
         elif t == 'plot': 
-             if hasattr(d, 'to_html'):
-                 html_doc += d.to_html(full_html=False, include_plotlyjs=False)
-             elif hasattr(d, 'savefig'):
+            if hasattr(d, 'to_html'):
+                html_doc += d.to_html(full_html=False, include_plotlyjs=False)
+            elif hasattr(d, 'savefig'):
                  buf = io.BytesIO()
                  d.savefig(buf, format='png', bbox_inches='tight')
                  b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
                  html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
         elif t == 'image': 
-             b64 = base64.b64encode(d).decode('utf-8')
-             html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
+            b64 = base64.b64encode(d).decode('utf-8')
+            html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
              
     html_doc += "</body></html>"
     return html_doc
