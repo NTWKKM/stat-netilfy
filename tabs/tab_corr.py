@@ -78,16 +78,8 @@ def render(df):
         # 🟢 NEW: Positive Label Selectors
 
         # Helper function to get unique values and set default index
-        def get_pos_label_settings(df, col_name) -> tuple[list[str], int]:
-            # 🟢 NOTE: Need to handle the case where the column might be empty after dropna
-            unique_vals = [str(x) for x in df[col_name].dropna().unique()]
-            unique_vals.sort()
-            default_idx = 0
-            if '1' in unique_vals:
-                default_idx = unique_vals.index('1')
-            elif len(unique_vals) > 0 and '0' in unique_vals:
-                default_idx = unique_vals.index('0')
-            return unique_vals, default_idx
+        # Import ฟังก์ชันที่ย้ายไปไว้ในโมดูลใช้ร่วมกัน
+        from ._common import get_pos_label_settings
 
         # Selector for V1 Positive Label
         cc4, cc5, cc6 = st.columns(3)
