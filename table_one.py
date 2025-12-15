@@ -20,7 +20,7 @@ def check_normality(series):
     if len(clean) < 3 or len(clean) > 5000 or clean.nunique() < 3: 
         return False
     try:
-        stat, p_sw = stats.shapiro(clean)
+        _stat, p_sw = stats.shapiro(clean)
         return p_sw > 0.05
     except Exception:
         return False
@@ -154,17 +154,17 @@ def calculate_p_continuous(data_groups):
     try:
         if all_normal:
             if num_groups == 2:
-                s, p = stats.ttest_ind(clean_groups[0], clean_groups[1], nan_policy='omit')
+                _s, p = stats.ttest_ind(clean_groups[0], clean_groups[1], nan_policy='omit')
                 test_name = "t-test"
             else:
-                s, p = stats.f_oneway(*clean_groups)
+                _s, p = stats.f_oneway(*clean_groups)
                 test_name = "ANOVA"
         else:
             if num_groups == 2:
-                s, p = stats.mannwhitneyu(clean_groups[0], clean_groups[1], alternative='two-sided')
+                _s, p = stats.mannwhitneyu(clean_groups[0], clean_groups[1], alternative='two-sided')
                 test_name = "Mann-Whitney U"
             else:
-                s, p = stats.kruskal(*clean_groups)
+                _s, p = stats.kruskal(*clean_groups)
                 test_name = "Kruskal-Wallis"
         return p, test_name
     except Exception as e:
@@ -175,9 +175,9 @@ def calculate_p_categorical(df, col, group_col):
         tab = pd.crosstab(df[col], df[group_col])
         if tab.size == 0: return np.nan, "-"
         is_2x2 = tab.shape == (2, 2)
-        chi2, p_chi2, dof, ex = stats.chi2_contingency(tab)
+        _chi2, p_chi2, _dof, ex = stats.chi2_contingency(tab)
         if is_2x2 and ex.min() < 5:
-            oddsr, p = stats.fisher_exact(tab)
+            _oddsr, p = stats.fisher_exact(tab)
             return p, "Fisher's Exact"
         test_name = "Chi-square"
         if (ex < 5).any(): test_name = "Chi-square (Low N)"
