@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import time
 import io
 import hashlib
 import streamlit.components.v1 as components
@@ -40,6 +39,30 @@ components.html("""
     }
 </script>
 """, height=0)
+
+# ==========================================
+# 1a. CHECK OPTIONAL DEPENDENCIES (FIX #1)
+# ==========================================
+# 🟢 FIX #1: Check for optional firthlogist dependency
+@st.cache_resource(show_spinner=False)
+def check_optional_deps():
+    """Check and report on optional dependencies"""
+    deps_status = {}
+    
+    try:
+        import firthlogist
+        deps_status['firth'] = {'installed': True, 'msg': '✅ Firth regression enabled'}
+    except ImportError:
+        deps_status['firth'] = {'installed': False, 'msg': '⚠️ Firth regression unavailable - using Standard Logistic Regression (BFGS)'}
+    
+    return deps_status
+
+# Show dependency status at startup if any issues
+if 'checked_deps' not in st.session_state:
+    deps = check_optional_deps()
+    st.session_state.checked_deps = True
+    if not deps['firth']['installed']:
+        st.info(deps['firth']['msg'])
 
 # ==========================================
 # 2. ค่อยเริ่ม IMPORT MODULES (จุดเสี่ยง Error)
@@ -204,16 +227,29 @@ if upl:
             st.session_state.df = new_df
             st.session_state.uploaded_file_name = upl.name
             st.session_state.uploaded_file_sig = file_sig
-            st.session_state.var_meta = {} # Reset meta for new file
             
-            # 🟢 REQUIRED FIX: Add default metadata for new continuous/categorical variables
+            # 🟢 FIX #2: IMPROVED VARIABLE TYPE DETECTION
             current_meta = {}
             for col in new_df.columns:
-                # Determine type automatically
+                # Determine type automatically with better logic
                 if pd.api.types.is_numeric_dtype(new_df[col]):
-                    current_meta[col] = {'type': 'Continuous', 'label': col, 'map': {}}
+                    # For numeric columns, check if it looks categorical
+                    unique_vals = new_df[col].dropna().unique()
+                    unique_count = len(unique_vals)
+                    
+                    # If <10 unique values, check if mostly integers (likely codes)
+                    if unique_count < 10:
+                        decimals_count = sum(1 for v in unique_vals if not float(v).is_integer())
+                        decimals_pct = decimals_count / len(unique_vals) if len(unique_vals) > 0 else 0
+                        
+                        if decimals_pct < 0.3:  # If <30% have decimals, treat as categorical
+                            current_meta[col] = {'type': 'Categorical', 'label': col, 'map': {}, 'confidence': 'auto'}
+                        else:
+                            current_meta[col] = {'type': 'Continuous', 'label': col, 'map': {}, 'confidence': 'auto'}
+                    else:
+                        current_meta[col] = {'type': 'Continuous', 'label': col, 'map': {}, 'confidence': 'auto'}
                 else:
-                    current_meta[col] = {'type': 'Categorical', 'label': col, 'map': {}}
+                    current_meta[col] = {'type': 'Categorical', 'label': col, 'map': {}, 'confidence': 'auto'}
 
             st.session_state.var_meta = current_meta
             st.sidebar.success("File Uploaded and Metadata Initialized!")
@@ -304,6 +340,17 @@ if st.session_state.df is not None:
 # ==========================================
 if st.session_state.df is not None:
     df = st.session_state.df 
+    
+    # Show warning for auto-detected types
+    cols_to_verify = [c for c in st.session_state.var_meta if st.session_state.var_meta[c].get('confidence') == 'auto']
+    if cols_to_verify:
+        with st.expander("⚠️ Auto-Detected Variable Types (Please Verify)", expanded=False):
+            st.info(f"The following {len(cols_to_verify)} column(s) were auto-detected. Please verify they are correct in the Settings tab:")
+            for col in cols_to_verify[:10]:  # Show first 10
+                detected_type = st.session_state.var_meta[col]['type']
+                st.caption(f"  • **{col}**: {detected_type}")
+            if len(cols_to_verify) > 10:
+                st.caption(f"  ... and {len(cols_to_verify) - 10} more")
 
     # 🟢 FIX 2: เตรียมที่สำหรับ Advanced Survival Analysis (Time Cox Regs) ในอนาคต
     t0, t1, t2, t3, t4, t5, t6 = st.tabs([
