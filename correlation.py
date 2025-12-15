@@ -394,9 +394,9 @@ def generate_report(title, elements):
         .report-footer {
             text-align: right;
             font-size: 0.75em;
-            color: var(--text-color);
+            color: #666;
             margin-top: 20px;
-            border-top: 1px dashed var(--border-color);
+            border-top: 1px dashed #ccc;
             padding-top: 10px;
         }
     </style>
