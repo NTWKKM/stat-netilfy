@@ -273,7 +273,7 @@ def calculate_kappa(df, col1, col2):
 
 
 # ========================================
-# 4. ROC CURVE (with Plotly) 🟢 UPDATED
+# 4. ROC CURVE (with Plotly) 🟢 UPDATED ROBUST
 # ========================================
 
 def auc_ci_hanley_mcneil(auc, n1, n2):
@@ -285,64 +285,55 @@ def auc_ci_hanley_mcneil(auc, n1, n2):
 
 
 def auc_ci_delong(y_true, y_scores):
-    """Calculate 95% CI for AUC using DeLong method"""
-    y_true = np.array(y_true)
-    y_scores = np.array(y_scores)
-    
-    desc_score_indices = np.argsort(y_scores, kind="mergesort")[::-1]
-    y_scores = y_scores[desc_score_indices]
-    y_true = y_true[desc_score_indices]
-    
-    distinct_value_indices = np.where(np.diff(y_scores))[0]
-    threshold_idxs = np.r_[distinct_value_indices, y_true.size - 1]
-    tps = np.cumsum(y_true)[threshold_idxs]
-    fps = 1 + threshold_idxs - tps
-    
-    n_pos = tps[-1]
-    n_neg = fps[-1]
-    
-    if n_pos == 0 or n_neg == 0:
+    """Calculate 95% CI for AUC using DeLong method (Robust Version)"""
+    try:
+        y_true = np.array(y_true)
+        y_scores = np.array(y_scores)
+        
+        desc_score_indices = np.argsort(y_scores, kind="mergesort")[::-1]
+        y_scores = y_scores[desc_score_indices]
+        y_true = y_true[desc_score_indices]
+        
+        distinct_value_indices = np.where(np.diff(y_scores))[0]
+        threshold_idxs = np.r_[distinct_value_indices, y_true.size - 1]
+        tps = np.cumsum(y_true)[threshold_idxs]
+        fps = 1 + threshold_idxs - tps
+        
+        n_pos = tps[-1]
+        n_neg = fps[-1]
+        
+        if n_pos == 0 or n_neg == 0:
+            return np.nan, np.nan, np.nan
+        
+        auc = roc_auc_score(y_true, y_scores)
+        
+        pos_scores = y_scores[y_true == 1]
+        neg_scores = y_scores[y_true == 0]
+        
+        v10 = []
+        v01 = []
+        
+        for p in pos_scores:
+            v10.append((np.sum(p > neg_scores) + 0.5*np.sum(p == neg_scores)) / n_neg)
+        
+        for n in neg_scores:
+            v01.append((np.sum(pos_scores > n) + 0.5*np.sum(pos_scores == n)) / n_pos)
+        
+        s10 = np.var(v10, ddof=1)
+        s01 = np.var(v01, ddof=1)
+        se_auc = np.sqrt((s10 / n_pos) + (s01 / n_neg))
+        
+        return auc - 1.96*se_auc, auc + 1.96*se_auc, se_auc
+    except Exception:
+        # Fallback if DeLong fails (e.g., singular matrix or data issues)
         return np.nan, np.nan, np.nan
-    
-    auc = roc_auc_score(y_true, y_scores)
-    
-    pos_scores = y_scores[y_true == 1]
-    neg_scores = y_scores[y_true == 0]
-    
-    v10 = []
-    v01 = []
-    
-    for p in pos_scores:
-        v10.append((np.sum(p > neg_scores) + 0.5*np.sum(p == neg_scores)) / n_neg)
-    
-    for n in neg_scores:
-        v01.append((np.sum(pos_scores > n) + 0.5*np.sum(pos_scores == n)) / n_pos)
-    
-    s10 = np.var(v10, ddof=1)
-    s01 = np.var(v01, ddof=1)
-    se_auc = np.sqrt((s10 / n_pos) + (s01 / n_neg))
-    
-    return auc - 1.96*se_auc, auc + 1.96*se_auc, se_auc
 
 
 @st.cache_data(show_spinner=False)
 def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
     """
     Analyze ROC curve using Plotly for interactive visualization.
-    
-    Parameters:
-        df (pandas.DataFrame): Input dataset
-        truth_col (str): Column with true binary outcome
-        score_col (str): Column with continuous prediction scores
-        method (str): 'delong' or 'hanley' for CI calculation
-        pos_label_user (str): Label for positive class
-    
-    Returns:
-        tuple: (stats_res, error_msg, fig, coords_df)
-            stats_res (dict): AUC, CI, sensitivity, specificity, optimal threshold
-            error_msg (str): Error message if any
-            fig (plotly.graph_objects.Figure): Interactive ROC curve
-            coords_df (pandas.DataFrame): Threshold coordinates (Sens, Spec)
+    Includes robustness checks for constant scores and single-class data.
     """
     data = df[[truth_col, score_col]].dropna()
     y_true_raw = data[truth_col]
@@ -350,15 +341,19 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
     y_true_raw = y_true_raw.loc[y_score.index]
     
     if y_true_raw.nunique() != 2 or pos_label_user is None:
-        return None, "Error: Binary outcome required.", None, None
+        return None, "Error: Binary outcome required (must have exactly 2 unique classes).", None, None
     
     y_true = np.where(y_true_raw.astype(str) == pos_label_user, 1, 0)
     
+    # 🟢 Safety Check: Check if score is constant (single value)
+    if y_score.nunique() < 2:
+         return None, "Error: Prediction score is constant (single value). Cannot compute ROC.", None, None
+
     n1 = int((y_true == 1).sum())
     n0 = int((y_true == 0).sum())
     
     if n1 == 0 or n0 == 0:
-        return None, "Error: Need both classes after dropping NA scores.", None, None
+        return None, "Error: Need both Positive and Negative cases after dropping NA scores.", None, None
     
     fpr, tpr, thresholds = roc_curve(y_true, y_score)
     auc_val = roc_auc_score(y_true, y_score)
@@ -395,7 +390,7 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
         "Positive Label": pos_label_user
     }
     
-    # 🟢 UPDATED: Create Plotly ROC curve
+    # Create Plotly ROC curve
     fig = go.Figure()
     
     # ROC curve
