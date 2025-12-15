@@ -295,4 +295,7 @@ def generate_psm_report(title, elements):
                 html += f'<img src="data:image/png;base64,{b64}" />'
     
     html += "</body>\n</html>"
+    html += """<div class='report-footer'>
+    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM n Donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
+    </div></body></html>"""
     return html
