@@ -202,20 +202,16 @@ def render(df):
                 st.error("Please select different variables.")
             else:
                 m_key = 'pearson' if cm == 'Pearson' else 'spearman'
-                # res: DataFrame (Statistic|Value), err: str, fig: Plotly Figure
+                # res: dict with keys (Method, Coefficient, P-value, N), err: str, fig: Plotly Figure
                 res, err, fig = correlation.calculate_correlation(df, cv1, cv2, method=m_key)
-                
+        
                 if err: 
                     st.error(err)
                 else:
-                    # 🟢 FIX: ใช้ res['Value'].iloc[0] เพื่อดึงค่าแรก (Method Name) จาก DataFrame
-                    method_name = res['Value'].iloc[0] 
-                    
+                    # 🟢 FIX: res เป็น dict จึงต้องใช้ dict access และแปลงเป็น DataFrame สำหรับแสดงในตาราง
                     rep = [
-                        # 🟢 FIX: ใช้ method_name ที่ดึงออกมา
-                        {'type':'text', 'data':f"Method: {method_name}<br>Variables: {cv1} vs {cv2}"},
-                        # 🟢 FIX: res เป็น DataFrame อยู่แล้ว จึงไม่จำเป็นต้องสร้างใหม่
-                        {'type':'table', 'header':'Statistics', 'data':res}, 
+                        {'type':'text', 'data':f"Method: {res['Method']}<br>Variables: {cv1} vs {cv2}"},
+                        {'type':'table', 'header':'Statistics', 'data':pd.DataFrame([res])}, 
                         {'type':'plot', 'header':'Scatter Plot', 'data':fig}
                     ]
                     html = correlation.generate_report(f"Corr: {cv1} vs {cv2}", rep)
