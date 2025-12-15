@@ -104,8 +104,11 @@ def render(df, _var_meta):
         if 'landmark_val' not in st.session_state:
             st.session_state.landmark_val = float(max_t) * 0.1
 
-        def update_from_slider() -> None: st.session_state.landmark_val = st.session_state.lm_slider_widget
-        def update_from_number() -> None: st.session_state.landmark_val = st.session_state.lm_number_widget
+        def update_from_slider() -> None:
+            st.session_state.landmark_val = st.session_state.lm_slider_widget
+        
+        def update_from_number() -> None:
+            st.session_state.landmark_val = st.session_state.lm_number_widget
 
         c_slide, c_num = st.columns([3, 1])
         with c_slide:
@@ -222,9 +225,13 @@ def render(df, _var_meta):
                             report_html = survival_lib.generate_report_survival(f"Cox: {col_time}", elements)
                             st.session_state.cox_html = report_html
 
-                except Exception as e:
-                    st.error(f"An unexpected error occurred: {e}")
+                except (ValueError, KeyError, RuntimeError) as e:
+                    st.error(f"Analysis error: {e}")
                     st.session_state.cox_res = None
+                except Exception as e:
+                    st.error(f"Unexpected error: {e}")
+                    st.session_state.cox_res = None
+                    # Consider: import traceback; st.exception(e) for debugging
 
         if st.session_state.cox_html:
             st.download_button("📥 Download Full Report (Cox)", st.session_state.cox_html, "cox_report.html", "text/html")
