@@ -60,6 +60,32 @@ def calculate_descriptive(df, col):
 def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_pos=None):
     """ 
     Compute a contingency table and perform a Chi-square or Fisher's Exact test between two categorical dataframe columns.
+    Constructs crosstabs (counts, totals, and row percentages), optionally reorders rows/columns based on v1_pos/v2_pos, 
+    and runs the selected statistical test. For 2x2 tables the function also computes common risk metrics 
+    (risk, risk ratio, risk difference, NNT, and odds ratio) when possible.
+    
+    Parameters:
+        df (pandas.DataFrame): Source dataframe containing the columns.
+        col1 (str): Row (exposure) column name to analyze.
+        col2 (str): Column (outcome) column name to analyze.
+        method (str, optional): Test selection string. If it contains "Fisher" the function runs Fisher's Exact Test 
+            (requires a 2x2 table). If it contains "Yates" a Yates-corrected chi-square is used; 
+            otherwise Pearson chi-square is used. Defaults to 'Pearson (Standard)'.
+        v1_pos (str | int, optional): If provided, that row label is moved to the first position in the displayed table 
+            (useful for ordering exposure groups).
+        v2_pos (str | int, optional): If provided, that column label is moved to the first position in the displayed table 
+            (useful for ordering outcome categories).
+    
+    Returns:
+        tuple: (display_tab, stats_res, msg, risk_df)
+            display_tab (pandas.DataFrame): Formatted contingency table for display where each cell is "count (percentage%)", 
+                including totals.
+            stats_res (dict | None): Test results and metadata (e.g., {"Test": ..., "Statistic": ..., "P-value": ..., 
+                "Degrees of Freedom": ..., "N": ...}) or Fisher-specific keys; None on error.
+            msg (str): Human-readable summary of the test result and any warnings (e.g., expected count warnings 
+                or Fisher requirement errors).
+            risk_df (pandas.DataFrame | None): For 2x2 tables, a table of risk metrics (Risk in exposed/unexposed, RR, RD, NNT, OR); 
+                None when not applicable or on failure.
     """
     if col1 not in df.columns or col2 not in df.columns:
         return None, None, "Columns not found", None
@@ -77,19 +103,27 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     base_col_labels = [col for col in all_col_labels if col != 'Total']
     base_row_labels = [row for row in all_row_labels if row != 'Total']
     
+    # 🟢 Helper Functions (ประกาศครั้งเดียว)
     def get_original_label(label_str, df_labels):
+        """ 
+        Find the original label from a collection that matches a given string representation.
+        """
         for lbl in df_labels:
             if str(lbl) == label_str:
                 return lbl
         return label_str
     
     def custom_sort(label):
+        """ 
+        Produce a sort key for a label by converting numeric-like labels to floats and leaving others as strings.
+        Using tuple (priority, value) to handle mixed types safely.
+        """
         try:
-            return (0, float(label))
+            return (0, float(label))  # ให้ตัวเลขมาก่อนเสมอ
         except (ValueError, TypeError):
-            return (1, str(label))
+            return (1, str(label))  # ตามด้วยตัวหนังสือ
     
-    # Reorder columns
+    # --- Reorder Cols ---
     final_col_order_base = base_col_labels[:]
     if v2_pos is not None:
         v2_pos_original = get_original_label(v2_pos, base_col_labels)
@@ -97,11 +131,12 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             final_col_order_base.remove(v2_pos_original)
             final_col_order_base.insert(0, v2_pos_original)
     else:
+        # Intentional: Sort ascending (smallest to largest) for deterministic order.
         final_col_order_base.sort(key=custom_sort)
     
     final_col_order = final_col_order_base + ['Total']
     
-    # Reorder rows
+    # --- Reorder Rows ---
     final_row_order_base = base_row_labels[:]
     if v1_pos is not None:
         v1_pos_original = get_original_label(v1_pos, base_row_labels)
@@ -109,6 +144,7 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             final_row_order_base.remove(v1_pos_original)
             final_row_order_base.insert(0, v1_pos_original)
     else:
+        # Intentional: Sort ascending (smallest to largest) for deterministic order.
         final_row_order_base.sort(key=custom_sort)
     
     final_row_order = final_row_order_base + ['Total']
