@@ -298,9 +298,8 @@ if st.session_state.df is not None:
 if st.session_state.df is not None:
     df = st.session_state.df 
 
-    # 🟢 FIX 2: เพิ่ม Tab t7 สำหรับ Advanced Survival Analysis (Time Cox Regs)
-   # t0, t1, t2, t3, t4, t5, t6, t7 = st.tabs([
-    t0, t1, t2, t3, t4, t5, t6 = st.tabs([ # ⬅️ แก้: นำ t7 ออก
+    # 🟢 FIX 2: เตรียมที่สำหรับ Advanced Survival Analysis (Time Cox Regs) ในอนาคต
+    t0, t1, t2, t3, t4, t5, t6 = st.tabs([
         "📄 Raw Data", 
         "📋 Baseline Table 1", 
         "🔬 Diagnostic Test", 
@@ -308,7 +307,7 @@ if st.session_state.df is not None:
         "📊 Logistic Regression",
         "⏳ Survival Analysis",
         "⚖️ Propensity Score",
-       # "📈 Time Cox Regs" # 🟢 New Tab
+     # "📈 Time Cox Regs"  # 🟢 Enable this label (and t7) when the advanced survival tab is ready
     ])
 
     # Call Modules
