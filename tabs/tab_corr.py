@@ -139,7 +139,7 @@ def render(df):
                     {'type': 'contingency_table', 'header': 'Contingency Table', 'data': tab, 'outcome_col': v2},
                     
                     # Statistics
-                    {'type': 'table', 'header': 'Detailed Statistics', 'data': pd.DataFrame([stats]).T} 
+                    {'type': 'table', 'header': 'Detailed Statistics', 'data': result}
                 ]
                 
                 # 🟢 UPDATE 2: เพิ่ม Risk Table ลงใน Report ถ้ามีข้อมูล
