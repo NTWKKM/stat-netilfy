@@ -133,11 +133,11 @@ def calculate_or_continuous_logit(df, feature_col, group_col, group1_val):
         try:
             model = sm.Logit(y, X_const)
             result = model.fit(disp=0)
-        except:
+        except (np.linalg.LinAlgError, ValueError, RuntimeError):
             # 🟢 Method 2: Try BFGS (Better for some convergence issues)
             try:
                 result = model.fit(method='bfgs', disp=0)
-            except:
+            except (np.linalg.LinAlgError, ValueError, RuntimeError):
                 return "-" # Failed all attempts
 
         # Extract OR and CI
@@ -192,7 +192,8 @@ def calculate_p_categorical(df, col, group_col):
             try:
                 _oddsr, p = stats.fisher_exact(tab)
                 return p, "Fisher's Exact"
-            except:
+            except Exception:
+                # Fisher's exact failed, fall back to Chi-square
                 pass
         test_name = "Chi-square"
         if (ex < 5).any(): test_name = "Chi-square (Low N)"
@@ -215,8 +216,10 @@ def generate_table(df, selected_vars, group_col, var_meta):
         raw_groups = df[group_col].dropna().unique().tolist()
         def _group_sort_key(v):
             s = str(v)
-            try: return (0, float(s))
-            except Exception: return (1, s)
+            try:
+                return (0, float(s))
+            except (ValueError, TypeError):
+                return (1, s)
         raw_groups.sort(key=_group_sort_key)
         for g in raw_groups:
             label = mapper.get(g, mapper.get(float(g), str(g)) if str(g).replace('.','',1).isdigit() else str(g))
