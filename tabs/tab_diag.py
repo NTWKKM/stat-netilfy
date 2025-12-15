@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import diag_test # ✅ ใช้ diag_test ตัวเดียว
+import tabs._common as _common
 
 def render(df, _var_meta=None):  # var_meta reserved for future use
     """
