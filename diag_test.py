@@ -60,8 +60,6 @@ def calculate_descriptive(df, col):
 def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_pos=None):
     """ 
     Compute a contingency table and perform a Chi-square or Fisher's Exact test between two categorical dataframe columns.
-    Constructs crosstabs (counts, totals, and row percentages), optionally reorders rows/columns based on v1_pos/v2_pos, 
-    and runs the selected statistical test. For 2x2 tables the function also computes common risk metrics.
     """
     if col1 not in df.columns or col2 not in df.columns:
         return None, None, "Columns not found", None
@@ -73,7 +71,7 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     tab_raw = pd.crosstab(data[col1], data[col2], margins=True, margins_name="Total")
     tab_row_pct = pd.crosstab(data[col1], data[col2], normalize='index', margins=True, margins_name="Total") * 100
     
-    # --- REORDERING LOGIC ---
+    # --- REORDERING LOGIC --- (เหมือนเดิม)
     all_col_labels = tab_raw.columns.tolist()
     all_row_labels = tab_raw.index.tolist()
     base_col_labels = [col for col in all_col_labels if col != 'Total']
@@ -140,43 +138,50 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     display_tab.index.name = col1
     
     # 3. Stats
+    msg = "" # 🟢 NEW: Initialize msg for warnings only
     try:
         is_2x2 = (tab_chi2.shape == (2, 2))
         
         if "Fisher" in method:
             if not is_2x2:
                 return display_tab, None, "Error: Fisher's Exact Test requires a 2x2 table.", None
+            
+            # Fisher's Exact Test
             odds_ratio, p_value = stats.fisher_exact(tab_chi2)
             method_name = "Fisher's Exact Test"
-            msg = f"{method_name}: P-value={p_value:.4f}, OR={odds_ratio:.4f}"
+            
             stats_res = {
                 "Test": method_name,
-                "Statistic (OR)": odds_ratio,
-                "P-value": p_value,
+                "Statistic (OR)": f"{odds_ratio:.4f}", # Format Value here
+                "P-value": f"{p_value:.4f}",          # Format Value here
                 "Degrees of Freedom": "-",
                 "N": len(data)
             }
         else:
+            # Chi-Square Test
             use_correction = True if "Yates" in method else False
             chi2, p, dof, ex = stats.chi2_contingency(tab_chi2, correction=use_correction)
             method_name = "Chi-Square"
             if is_2x2:
                 method_name += " (with Yates')" if use_correction else " (Pearson)"
-            msg = f"{method_name}: Chi2={chi2:.4f}, p={p:.4f}"
+            
             stats_res = {
                 "Test": method_name,
-                "Statistic": chi2,
-                "P-value": p,
-                "Degrees of Freedom": dof,
+                "Statistic": f"{chi2:.4f}",           # Format Value here
+                "P-value": f"{p:.4f}",                # Format Value here
+                "Degrees of Freedom": f"{dof}",
                 "N": len(data)
             }
+            
+            # Warning check
             if (ex < 5).any() and is_2x2 and not use_correction:
                 msg += " ⚠️ Warning: Expected count < 5. Consider using Fisher's Exact Test."
         
-        # 4. Risk
+        # 4. Risk Metrics (2x2 only)
         risk_df = None
         if is_2x2:
             try:
+                # ... (Risk calculation logic - เหมือนเดิม)
                 vals = tab_chi2.values
                 a, b = vals[0, 0], vals[0, 1]
                 c, d = vals[1, 0], vals[1, 1]
@@ -218,7 +223,11 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                 risk_df = None
                 msg += f" (Risk metrics unavailable: {e})"
         
-        return display_tab, stats_res, msg, risk_df
+        # 🟢 NEW: Convert stats_res to DataFrame for Report
+        stats_df_for_report = pd.DataFrame(stats_res, index=[0]).T.reset_index()
+        stats_df_for_report.columns = ['Statistic', 'Value']
+
+        return display_tab, stats_df_for_report, msg, risk_df # 🟢 RETURN DF
     
     except Exception as e:
         return display_tab, None, str(e), None
@@ -621,10 +630,15 @@ def generate_report(title, elements):
             html += f"<p>{_html.escape(str(data))}</p>"
         
         elif element_type == 'table':
-            idx = 'Interpretation' not in data.columns
-            html += data.to_html(index=idx, classes='report-table')
+            # 🟢 UPDATED: Force index=False for all statistical result tables (e.g., Chi2 stats, Kappa, ICC)
+            # แต่คงไว้สำหรับ Descriptive/Risk Metrics ที่ใช้ Index เป็นชื่อคอลัมน์
+            idx = 'Statistic' in data.columns and 'Value' in data.columns and data.index.name is None
+            
+            # ถ้าเป็นตารางผลลัพธ์สถิติ (Statistic/Value) ให้ซ่อน Index
+            html += data.to_html(index=not idx, classes='report-table') 
         
         elif element_type == 'contingency_table':
+            # ... (โค้ด Contingency Table เดิม)
             col_labels = data.columns.tolist()
             row_labels = data.index.tolist()
             exp_name = data.index.name or "Exposure"
