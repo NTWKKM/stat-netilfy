@@ -10,7 +10,7 @@ import io, base64
 import html as _html
 
 # Helper function for standardization
-def _standardize_numeric_cols(data, cols):
+def _standardize_numeric_cols(data, cols) -> None:
     """
     Standardize numeric columns in-place, BUT SKIP BINARY columns (0/1).
     This prevents numerical instability in Cox models.
@@ -29,7 +29,7 @@ def _standardize_numeric_cols(data, cols):
                 data[col] = (data[col] - data[col].mean()) / std
 
 # 🟢 NEW HELPER: Convert Hex to RGBA string for Plotly fillcolor
-def _hex_to_rgba(hex_color, alpha):
+def _hex_to_rgba(hex_color, alpha) -> str:
     hex_color = hex_color.lstrip('#')
     rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
     return f'rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha})'
