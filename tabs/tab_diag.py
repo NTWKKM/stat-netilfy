@@ -217,7 +217,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                     {'type': 'contingency_table', 'header': 'Contingency Table', 'data': tab, 'outcome_col': v2},
                 ]
                 if stats is not None:
-                    rep_elements.append({'type': 'table', 'header': 'Statistics', 'data': pd.DataFrame([stats]).T})
+                    rep_elements.append({'type': 'table', 'header': 'Statistics', 'data': stats})
                 if risk_df is not None:
                     rep_elements.append({'type': 'table', 'header': 'Risk & Effect Measures (2x2 Table)', 'data': risk_df})
                 
