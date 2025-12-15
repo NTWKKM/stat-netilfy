@@ -5,22 +5,33 @@ import io
 import hashlib
 import streamlit.components.v1 as components
 
+# ✅ FIX #7-8: IMPORT CONFIG AND LOGGER (MINIMAL WIRING)
+from config import CONFIG
+from logger import get_logger, LoggerFactory
+
+# Get logger instance
+logger = get_logger(__name__)
+
+# Initialize logging system (once at app start)
+if 'logging_initialized' not in st.session_state:
+    LoggerFactory.configure()
+    st.session_state.logging_initialized = True
+    logger.info("📱 Streamlit app started")
+
 # ==========================================
 # 1. CONFIG & LOADING SCREEN KILLER (Must be First)
 # ==========================================
 st.set_page_config(
-    page_title="Medical Stat Tool", 
-    layout="wide", 
+    page_title=CONFIG.get('ui.page_title', 'Medical Stat Tool'),  # ✅ USE CONFIG
+    layout=CONFIG.get('ui.layout', 'wide'),  # ✅ USE CONFIG
     menu_items={
         'Get Help': 'https://ntwkkm.github.io/pl/infos/stat_manual.html',
-        # 🟢 แก้จุดที่ 1: เปลี่ยนลิงก์เป็น GitHub Issues ของคุณ (หรือลบบรรทัดนี้ทิ้งถ้ายังไม่มี)
         'Report a bug': "https://github.com/NTWKKM/stat-netilfy/issues", 
     }
 )
 
 st.title("🏥 Medical Statistical Tool")
 
-# 🟢 แก้จุดที่ 2: ใช้ try-catch เพื่อความปลอดภัย (Safe Loader Removal)
 components.html("""
 <script>
     try {
@@ -34,7 +45,6 @@ components.html("""
             }, 500);
         }
     } catch (e) {
-        // no-op (ถ้ามี error ก็ปล่อยผ่าน เว็บจะไม่พัง)
         console.log("Loader removal error: " + e);
     }
 </script>
@@ -43,7 +53,6 @@ components.html("""
 # ==========================================
 # 1a. CHECK OPTIONAL DEPENDENCIES (FIX #1)
 # ==========================================
-# 🟢 FIX #1: Check for optional firthlogist dependency
 @st.cache_resource(show_spinner=False)
 def check_optional_deps():
     """Check and report on optional dependencies"""
@@ -57,7 +66,6 @@ def check_optional_deps():
     
     return deps_status
 
-# Show dependency status at startup if any issues
 if 'checked_deps' not in st.session_state:
     deps = check_optional_deps()
     st.session_state.checked_deps = True
@@ -65,14 +73,14 @@ if 'checked_deps' not in st.session_state:
         st.info(deps['firth']['msg'])
 
 # ==========================================
-# 2. ค่อยเริ่ม IMPORT MODULES (จุดเสี่ยง Error)
+# 2. คำ่อยเริ่ม IMPORT MODULES
 # ==========================================
 try:
-    # พยายาม import ไฟล์ ถ้าไฟล์ไหนมีปัญหามันจะแจ้งเตือนให้เห็นบนหน้าจอแทนการหมุนค้าง
     from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival, tab_psm, tab_adv_survival
 except (KeyboardInterrupt, SystemExit):
     raise
 except Exception as e:
+    logger.error(f"Failed to import tabs: {e}", exc_info=True)  # ✅ LOG ERROR
     st.exception(e)
     st.stop()
 
@@ -81,174 +89,170 @@ if 'df' not in st.session_state:
     st.session_state.df = None
 if 'var_meta' not in st.session_state:
     st.session_state.var_meta = {}
-# 🟢 เพิ่ม State สำหรับการติดตามไฟล์ที่อัปโหลด (เพื่อป้องกันการโหลดซ้ำ)
 if 'uploaded_file_name' not in st.session_state:
     st.session_state.uploaded_file_name = None
     
-# --- SIDEBAR (ยังคงไว้ใน app.py เพราะเป็น Global Control) ---
+# --- SIDEBAR ---
 st.sidebar.title("MENU")
 st.sidebar.header("1. Data Management")
 
 # Example Data Generator
 if st.sidebar.button("📄 Load Example Data"):
-    np.random.seed(999) # Fixed seed
-    n = 600 
+    logger.log_operation("example_data", "started", n_rows=600)  # ✅ LOG START
     
-    # --- 1. Demographics & Confounders ---
-    age = np.random.normal(55, 12, n).astype(int).clip(20, 90)
-    sex = np.random.binomial(1, 0.55, n)
-    bmi = np.random.normal(24, 4, n).round(1).clip(10, 60)
-    
-    # Comorbidity
-    logit_comorb = -5 + 0.05*age + 0.1*bmi
-    p_comorb = 1 / (1 + np.exp(-logit_comorb))
-    comorbidity = np.random.binomial(1, p_comorb)
+    try:
+        with logger.track_time("generate_example_data", log_level="debug"):  # ✅ TRACK TIMING
+            np.random.seed(999)
+            n = 600 
+            
+            # --- 1. Demographics & Confounders ---
+            age = np.random.normal(55, 12, n).astype(int).clip(20, 90)
+            sex = np.random.binomial(1, 0.55, n)
+            bmi = np.random.normal(24, 4, n).round(1).clip(10, 60)
+            
+            # Comorbidity
+            logit_comorb = -5 + 0.05*age + 0.1*bmi
+            p_comorb = 1 / (1 + np.exp(-logit_comorb))
+            comorbidity = np.random.binomial(1, p_comorb)
 
-    # --- 2. Treatment Assignment (Selection Bias) ---
-    logit_treat = -2 + 1.5*comorbidity - 0.02*age
-    p_treat = 1 / (1 + np.exp(-logit_treat))
-    group = np.random.binomial(1, p_treat) 
+            # --- 2. Treatment Assignment (Selection Bias) ---
+            logit_treat = -2 + 1.5*comorbidity - 0.02*age
+            p_treat = 1 / (1 + np.exp(-logit_treat))
+            group = np.random.binomial(1, p_treat) 
 
-    # --- 3. Survival Outcome ---
-    lambda_base = 0.02
-    hazard = lambda_base * np.exp(0.4*comorbidity - 0.8*group)
-    surv_time = np.random.exponential(1/hazard)
-    
-    censor_time = np.random.uniform(0, 100, n)
-    time_obs = np.minimum(surv_time, censor_time).round(1)
-    time_obs = np.maximum(time_obs, 0.1) # avoid zero/invalid durations
-    event_death = (surv_time <= censor_time).astype(int)
+            # --- 3. Survival Outcome ---
+            lambda_base = 0.02
+            hazard = lambda_base * np.exp(0.4*comorbidity - 0.8*group)
+            surv_time = np.random.exponential(1/hazard)
+            
+            censor_time = np.random.uniform(0, 100, n)
+            time_obs = np.minimum(surv_time, censor_time).round(1)
+            time_obs = np.maximum(time_obs, 0.1)
+            event_death = (surv_time <= censor_time).astype(int)
 
-    # --- 4. Logistic Regression Outcome [NEW] ---
-    # Outcome: Cured (1=หาย, 0=ไม่หาย)
-    # ปัจจัย: ยาใหม่ (Group 1) ช่วยให้หายง่ายขึ้น, แต่อายุมากและโรคประจำตัวทำให้หายยาก
-    logit_cure = 0.5 + 1.2*group - 0.03*age - 0.8*comorbidity
-    p_cure = 1 / (1 + np.exp(-logit_cure))
-    outcome_cured = np.random.binomial(1, p_cure)
+            # --- 4. Logistic Regression Outcome ---
+            logit_cure = 0.5 + 1.2*group - 0.03*age - 0.8*comorbidity
+            p_cure = 1 / (1 + np.exp(-logit_cure))
+            outcome_cured = np.random.binomial(1, p_cure)
 
-    # --- 5. Diagnostic Test ---
-    gold_std = np.random.binomial(1, 0.3, n)
-    
-    # Rapid Test (Continuous)
-    rapid_test_val = np.where(gold_std==1, 
-                              np.random.normal(55, 15, n), 
-                              np.random.normal(35, 10, n))
-    rapid_test_val = np.maximum(rapid_test_val, 0).round(1)
-    
-    # Kappa Raters
-    dr_a = np.where(gold_std==1, np.random.binomial(1, 0.9, n), np.random.binomial(1, 0.1, n))
-    agree_noise = np.random.binomial(1, 0.85, n)
-    dr_b = np.where(agree_noise==1, dr_a, 1-dr_a)
+            # --- 5. Diagnostic Test ---
+            gold_std = np.random.binomial(1, 0.3, n)
+            rapid_test_val = np.where(gold_std==1, 
+                                      np.random.normal(55, 15, n), 
+                                      np.random.normal(35, 10, n))
+            rapid_test_val = np.maximum(rapid_test_val, 0).round(1)
+            
+            # Kappa Raters
+            dr_a = np.where(gold_std==1, np.random.binomial(1, 0.9, n), np.random.binomial(1, 0.1, n))
+            agree_noise = np.random.binomial(1, 0.85, n)
+            dr_b = np.where(agree_noise==1, dr_a, 1-dr_a)
 
-    # --- 6. Correlation ---
-    lab_alb = np.random.normal(3.5, 0.5, n).round(2)
-    lab_ca = 2 + 1.5*lab_alb + np.random.normal(0, 0.3, n)
-    lab_ca = lab_ca.round(2)
+            # --- 6. Correlation ---
+            lab_alb = np.random.normal(3.5, 0.5, n).round(2)
+            lab_ca = 2 + 1.5*lab_alb + np.random.normal(0, 0.3, n)
+            lab_ca = lab_ca.round(2)
 
-    # --- 7. ICC Data ---
-    icc_rater1 = np.random.normal(50, 10, n).round(1)
-    icc_rater2 = icc_rater1 + np.random.normal(0, 3, n)
-    icc_rater2 = icc_rater2.round(1)
+            # --- 7. ICC Data ---
+            icc_rater1 = np.random.normal(50, 10, n).round(1)
+            icc_rater2 = icc_rater1 + np.random.normal(0, 3, n)
+            icc_rater2 = icc_rater2.round(1)
 
-    # Create DataFrame
-    data = {
-        'ID': range(1, n+1),
-        'Group_Treatment': group, 
-        'Age': age,
-        'Sex': sex,
-        'BMI': bmi,
-        'Comorbidity': comorbidity,
-        # Logistic Outcome [NEW]
-        'Outcome_Cured': outcome_cured,
-        # Survival
-        'Time_Months': time_obs,
-        'Status_Death': event_death,
-        # Diagnostic
-        'Gold_Standard': gold_std,
-        'Rapid_Test_Score': rapid_test_val, 
-        'Diagnosis_Dr_A': dr_a,
-        'Diagnosis_Dr_B': dr_b,
-        # Correlation
-        'Lab_Albumin': lab_alb,
-        'Lab_Calcium': lab_ca,
-        # ICC
-        'ICC_Rater1': icc_rater1,
-        'ICC_Rater2': icc_rater2,
-        # Time Cox
-        'T_Start': np.zeros(n, dtype=float),
-        'T_Stop': time_obs.astype(float)
-    }
-    
-    st.session_state.df = pd.DataFrame(data)
-    
-    # Set Metadata
-    st.session_state.var_meta = {
-        'Group_Treatment': {'type':'Categorical', 'map':{0:'Standard Care', 1:'New Drug'}},
-        'Sex': {'type':'Categorical', 'map':{0:'Female', 1:'Male'}},
-        'Comorbidity': {'type':'Categorical', 'map':{0:'No', 1:'Yes'}},
-        'Outcome_Cured': {'type':'Categorical', 'map':{0:'Not Cured', 1:'Cured'}}, # Added Metadata
-        'Status_Death': {'type':'Categorical', 'map':{0:'Censored', 1:'Dead'}},
-        'Gold_Standard': {'type':'Categorical', 'map':{0:'Healthy', 1:'Disease'}},
-        'Diagnosis_Dr_A': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}},
-        'Diagnosis_Dr_B': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}},
-        # 🟢 Initialize continuous variables explicitly too, matching the file upload logic
-        'Age': {'type': 'Continuous', 'label': 'Age', 'map': {}},
-        'BMI': {'type': 'Continuous', 'label': 'BMI', 'map': {}},
-        'Time_Months': {'type': 'Continuous', 'label': 'Time (Months)', 'map': {}},
-        'Rapid_Test_Score': {'type': 'Continuous', 'label': 'Rapid Test Score', 'map': {}},
-        'Lab_Albumin': {'type': 'Continuous', 'label': 'Albumin (g/dL)', 'map': {}},
-        'Lab_Calcium': {'type': 'Continuous', 'label': 'Calcium (mg/dL)', 'map': {}},
-        'ICC_Rater1': {'type': 'Continuous', 'label': 'ICC Rater 1', 'map': {}},
-        'ICC_Rater2': {'type': 'Continuous', 'label': 'ICC Rater 2', 'map': {}},
-        'T_Start': {'type': 'Continuous', 'label': 'Time Start', 'map': {}},
-        'T_Stop': {'type': 'Continuous', 'label': 'Time Stop', 'map': {}},
-    }
-    st.session_state.uploaded_file_name = "Example Data" # Mark as loaded example data
-    
-    st.sidebar.success(f"Loaded {n} Example Patients! (Includes Logistic Outcome)")
-    st.rerun()
+            # Create DataFrame
+            data = {
+                'ID': range(1, n+1),
+                'Group_Treatment': group, 
+                'Age': age,
+                'Sex': sex,
+                'BMI': bmi,
+                'Comorbidity': comorbidity,
+                'Outcome_Cured': outcome_cured,
+                'Time_Months': time_obs,
+                'Status_Death': event_death,
+                'Gold_Standard': gold_std,
+                'Rapid_Test_Score': rapid_test_val, 
+                'Diagnosis_Dr_A': dr_a,
+                'Diagnosis_Dr_B': dr_b,
+                'Lab_Albumin': lab_alb,
+                'Lab_Calcium': lab_ca,
+                'ICC_Rater1': icc_rater1,
+                'ICC_Rater2': icc_rater2,
+                'T_Start': np.zeros(n, dtype=float),
+                'T_Stop': time_obs.astype(float)
+            }
+            
+            st.session_state.df = pd.DataFrame(data)
+        
+        # Set Metadata
+        st.session_state.var_meta = {
+            'Group_Treatment': {'type':'Categorical', 'map':{0:'Standard Care', 1:'New Drug'}},
+            'Sex': {'type':'Categorical', 'map':{0:'Female', 1:'Male'}},
+            'Comorbidity': {'type':'Categorical', 'map':{0:'No', 1:'Yes'}},
+            'Outcome_Cured': {'type':'Categorical', 'map':{0:'Not Cured', 1:'Cured'}},
+            'Status_Death': {'type':'Categorical', 'map':{0:'Censored', 1:'Dead'}},
+            'Gold_Standard': {'type':'Categorical', 'map':{0:'Healthy', 1:'Disease'}},
+            'Diagnosis_Dr_A': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}},
+            'Diagnosis_Dr_B': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}},
+            'Age': {'type': 'Continuous', 'label': 'Age', 'map': {}},
+            'BMI': {'type': 'Continuous', 'label': 'BMI', 'map': {}},
+            'Time_Months': {'type': 'Continuous', 'label': 'Time (Months)', 'map': {}},
+            'Rapid_Test_Score': {'type': 'Continuous', 'label': 'Rapid Test Score', 'map': {}},
+            'Lab_Albumin': {'type': 'Continuous', 'label': 'Albumin (g/dL)', 'map': {}},
+            'Lab_Calcium': {'type': 'Continuous', 'label': 'Calcium (mg/dL)', 'map': {}},
+            'ICC_Rater1': {'type': 'Continuous', 'label': 'ICC Rater 1', 'map': {}},
+            'ICC_Rater2': {'type': 'Continuous', 'label': 'ICC Rater 2', 'map': {}},
+            'T_Start': {'type': 'Continuous', 'label': 'Time Start', 'map': {}},
+            'T_Stop': {'type': 'Continuous', 'label': 'Time Stop', 'map': {}},
+        }
+        st.session_state.uploaded_file_name = "Example Data"
+        
+        logger.log_operation("example_data", "completed",   # ✅ LOG COMPLETION
+                           rows=len(st.session_state.df),
+                           columns=len(st.session_state.df.columns))
+        st.sidebar.success(f"Loaded {n} Example Patients! (Includes Logistic Outcome)")
+        st.rerun()
+        
+    except Exception as e:
+        logger.log_operation("example_data", "failed", error=str(e))  # ✅ LOG ERROR
+        st.sidebar.error(f"Error loading example data: {e}")
+        raise
     
 # File Uploader
 upl = st.sidebar.file_uploader("Upload CSV/Excel", type=['csv', 'xlsx'])
 if upl:
+    logger.log_operation("file_upload", "started",   # ✅ LOG START
+                       filename=upl.name, 
+                       size=f"{len(upl.getvalue())/1e6:.1f}MB")
+    
     try:
         data_bytes = upl.getvalue()
-        
-        # ใช้ SHA-256 แทน MD5 เพื่อหลีกเลี่ยง insecure-hash lint และเพิ่มความแข็งแรง
-        # เดิม: file_sig = (upl.name, hash(data_bytes))  หรือ MD5
         file_sig = (upl.name, hashlib.sha256(data_bytes).hexdigest())
         
         if st.session_state.get('uploaded_file_sig') != file_sig:
-            if upl.name.lower().endswith('.csv'):
-                new_df = pd.read_csv(io.BytesIO(data_bytes))
-            else:
-                new_df = pd.read_excel(io.BytesIO(data_bytes))
+            with logger.track_time("file_parse", log_level="debug"):  # ✅ TRACK TIMING
+                if upl.name.lower().endswith('.csv'):
+                    new_df = pd.read_csv(io.BytesIO(data_bytes))
+                else:
+                    new_df = pd.read_excel(io.BytesIO(data_bytes))
             
             st.session_state.df = new_df
             st.session_state.uploaded_file_name = upl.name
             st.session_state.uploaded_file_sig = file_sig
             
-            # 🟢 FIX #6: PRESERVE METADATA ON UPLOAD
-            # Instead of resetting to empty dict, preserve existing user settings and add new ones
+            # FIX #6: PRESERVE METADATA ON UPLOAD
             current_meta = {}
             for col in new_df.columns:
-                # Check if this column already has metadata (preserving user customizations)
                 if col in st.session_state.var_meta:
-                    # Column exists in old metadata - preserve it
                     current_meta[col] = st.session_state.var_meta[col]
                 else:
-                    # Column is new - auto-detect type
                     if pd.api.types.is_numeric_dtype(new_df[col]):
-                        # For numeric columns, check if it looks categorical
                         unique_vals = new_df[col].dropna().unique()
                         unique_count = len(unique_vals)
                         
-                        # If <10 unique values, check if mostly integers (likely codes)
                         if unique_count < 10:
                             decimals_count = sum(1 for v in unique_vals if not float(v).is_integer())
                             decimals_pct = decimals_count / len(unique_vals) if len(unique_vals) > 0 else 0
                             
-                            if decimals_pct < 0.3:  # If <30% have decimals, treat as categorical
+                            if decimals_pct < 0.3:
                                 current_meta[col] = {'type': 'Categorical', 'label': col, 'map': {}, 'confidence': 'auto'}
                             else:
                                 current_meta[col] = {'type': 'Continuous', 'label': col, 'map': {}, 'confidence': 'auto'}
@@ -258,19 +262,24 @@ if upl:
                         current_meta[col] = {'type': 'Categorical', 'label': col, 'map': {}, 'confidence': 'auto'}
 
             st.session_state.var_meta = current_meta
+            
+            logger.log_operation("file_upload", "completed",  # ✅ LOG COMPLETION
+                               rows=len(new_df), columns=len(new_df.columns))
             st.sidebar.success("File Uploaded and Metadata Initialized!")
-            st.rerun() # Rerun to update the main page and sidebar controls
+            st.rerun()
         
         else:
             st.sidebar.info("File already loaded.")
             
     except (ValueError, UnicodeDecodeError, pd.errors.ParserError, ImportError) as e:  
+        logger.log_operation("file_upload", "failed", error=str(e))  # ✅ LOG ERROR
         st.sidebar.error(f"Error: {e}")
         st.session_state.df = None
         st.session_state.uploaded_file_name = None
         st.session_state.uploaded_file_sig = None
 
 if st.sidebar.button("⚠️ Reset All Data", type="primary"):
+    logger.info("🔄 User reset all data")  # ✅ LOG RESET
     st.session_state.clear()
     st.rerun()
 
@@ -279,21 +288,17 @@ if st.session_state.df is not None:
     st.sidebar.header("2. Settings")
     cols = st.session_state.df.columns.tolist()
     
-    # 🟢 Use a default value of 'Auto-detect' if the key doesn't exist, which is safer
     auto_detect_meta = {c: st.session_state.var_meta.get(c, {'type': 'Auto-detect', 'map': {}}).get('type', 'Auto-detect') for c in cols}
     
     s_var = st.sidebar.selectbox("Edit Var:", ["Select...", *cols])
     if s_var != "Select...":
-        # Ensure metadata for s_var exists before accessing
         if s_var not in st.session_state.var_meta:
-            # Fallback to auto-detect if metadata is missing (shouldn't happen with fix, but safer)
             is_numeric = pd.api.types.is_numeric_dtype(st.session_state.df[s_var]) if s_var in st.session_state.df.columns else False
             initial_type = 'Continuous' if is_numeric else 'Categorical'
             st.session_state.var_meta[s_var] = {'type': initial_type, 'label': s_var, 'map': {}}
 
         meta = st.session_state.var_meta.get(s_var, {})
         
-        # Determine current type for radio button display
         current_type = meta.get('type', 'Auto-detect')
         if current_type == 'Auto-detect':
             is_numeric = pd.api.types.is_numeric_dtype(st.session_state.df[s_var]) if s_var in st.session_state.df.columns else False
@@ -319,7 +324,6 @@ if st.session_state.df is not None:
                     k, v = line.split('=', 1)
                     try:
                         k = k.strip()
-                        # Try numeric parse (supports negatives, floats, sci-notation)
                         try:
                             k_num = float(k)
                             k = int(k_num) if k_num.is_integer() else k_num
@@ -329,15 +333,14 @@ if st.session_state.df is not None:
                     except (TypeError, ValueError) as e:
                         st.sidebar.warning(f"Skipping invalid map line '{line}': {e}")
             
-            # Ensure the key exists
             if s_var not in st.session_state.var_meta: 
                 st.session_state.var_meta[s_var] = {}
             
-            # Update meta
             st.session_state.var_meta[s_var]['type'] = n_type
             st.session_state.var_meta[s_var]['map'] = new_map
-            st.session_state.var_meta[s_var].setdefault('label', s_var)  # don't clobber existing labels
+            st.session_state.var_meta[s_var].setdefault('label', s_var)
             
+            logger.info(f"✅ Variable '{s_var}' configured as {n_type}")  # ✅ LOG CONFIG
             st.sidebar.success("Saved!")
             st.rerun()
 
@@ -347,18 +350,16 @@ if st.session_state.df is not None:
 if st.session_state.df is not None:
     df = st.session_state.df 
     
-    # Show warning for auto-detected types
     cols_to_verify = [c for c in st.session_state.var_meta if st.session_state.var_meta[c].get('confidence') == 'auto']
     if cols_to_verify:
         with st.expander("⚠️ Auto-Detected Variable Types (Please Verify)", expanded=False):
             st.info(f"The following {len(cols_to_verify)} column(s) were auto-detected. Please verify they are correct in the Settings tab:")
-            for col in cols_to_verify[:10]:  # Show first 10
+            for col in cols_to_verify[:10]:
                 detected_type = st.session_state.var_meta[col]['type']
                 st.caption(f"  • **{col}**: {detected_type}")
             if len(cols_to_verify) > 10:
                 st.caption(f"  ... and {len(cols_to_verify) - 10} more")
 
-    # 🟢 FIX 2: เตรียมที่สำหรับ Advanced Survival Analysis (Time Cox Regs) ในอนาคต
     t0, t1, t2, t3, t4, t5, t6 = st.tabs([
         "📄 Raw Data", 
         "📋 Baseline Table 1", 
@@ -367,10 +368,8 @@ if st.session_state.df is not None:
         "📊 Logistic Regression",
         "⏳ Survival Analysis",
         "⚖️ Propensity Score",
-     # "📈 Time Cox Regs"  # 🟢 Enable this label (and t7) when the advanced survival tab is ready
     ])
 
-    # Call Modules
     with t0:
         st.session_state.df = tab_data.render(df) 
         custom_na = st.session_state.get('custom_na_list', [])
@@ -388,8 +387,6 @@ if st.session_state.df is not None:
         tab_survival.render(df_clean, st.session_state.var_meta)
     with t6:
         tab_psm.render(df_clean, st.session_state.var_meta)
- #   with t7:
- #       tab_adv_survival.render(df_clean, st.session_state.var_meta)
         
 else:
     st.info("👈 Please load example data or upload a file to start.")
@@ -411,7 +408,6 @@ else:
 
 st.markdown("""
 <style>
-/* โค้ดสำหรับซ่อน Streamlit footer เดิม (ยังจำเป็นต้องมี) */
 footer {
     visibility: hidden;
     height: 0px;
