@@ -9,5 +9,4 @@ lifelines==0.30.0
 formulaic
 scikit-learn
 firthlogist
-plotly-express
 plotly
