@@ -262,7 +262,8 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
             temp_cph.fit(data, duration_col=duration_col, event_col=event_col)
             cph = temp_cph
             method_used = f"L2 Penalized CoxPH (p={p})"
-            if p == 0.0: method_used = "Standard CoxPH"
+            if p == 0.0:
+                method_used = "Standard CoxPH"
             break
         except Exception as e:
             last_error = e
