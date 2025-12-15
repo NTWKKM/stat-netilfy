@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import survival_lib
-import matplotlib.pyplot as plt
-import html
+import time
+import pandas.api.types as ptypes # 🟢 Import เพื่อความชัดเจนในการใช้ types
 
 def render(df, _var_meta):
     """
@@ -15,7 +16,6 @@ def render(df, _var_meta):
 * **Hazard Ratio (HR):** >1 Increased Hazard (Risk), <1 Decreased Hazard (Protective).
 """)
     
-    # [จุดสำคัญ] ต้องประกาศ all_cols ตรงนี้ก่อนนำไปใช้คำนวณข้างล่าง
     all_cols = df.columns.tolist()
     
     if len(all_cols) < 2:
@@ -25,11 +25,9 @@ def render(df, _var_meta):
     # Global Selectors
     c1, c2 = st.columns(2)
     
-    # Auto-detect logic: ให้ความสำคัญกับ Time_Stop หรือ stop ก่อน
+    # Auto-detect logic (ใช้โค้ดเดิม)
     time_idx = 0
-    # เรียงลำดับความสำคัญ keywords: 'stop' > 'time' > 'dur'
     for k in ['stop', 'time', 'dur']:
-        # บรรทัดนี้จะไม่ Error แล้วเพราะ all_cols ถูกประกาศไว้ด้านบนแล้ว
         found = next((i for i, c in enumerate(all_cols) if k in c.lower()), None)
         if found is not None:
             time_idx = found
@@ -44,7 +42,7 @@ def render(df, _var_meta):
     tab_curves, tab_landmark, tab_cox = st.tabs(["📉 Survival Curves (KM/NA)", "📍 Landmark Analysis", "📊 Cox Regression"])
     
     # ==========================
-    # TAB 1: Curves (KM & Nelson-Aalen)
+    # TAB 1: Curves (KM & Nelson-Aalen) - ใช้โค้ดเดิม
     # ==========================
     with tab_curves:
         c1, c2 = st.columns([1, 2])
@@ -57,7 +55,8 @@ def render(df, _var_meta):
                 if "Kaplan-Meier" in plot_type:
                     # Run KM
                     fig, stats_df = survival_lib.fit_km_logrank(df, col_time, col_event, grp)
-                    st.pyplot(fig) 
+                    
+                    st.plotly_chart(fig, use_container_width=True)
                     
                     st.markdown("##### Log-Rank / Statistics")
                     st.dataframe(stats_df)
@@ -69,7 +68,8 @@ def render(df, _var_meta):
                 else:
                     # Run Nelson-Aalen
                     fig, stats_df = survival_lib.fit_nelson_aalen(df, col_time, col_event, grp)
-                    st.pyplot(fig)
+                    
+                    st.plotly_chart(fig, use_container_width=True)
                     
                     st.markdown("##### Summary Statistics (N / Events)")
                     st.dataframe(stats_df)
@@ -88,107 +88,95 @@ def render(df, _var_meta):
                 st.error(f"Error: {e}")
 
     # ==========================
-    # TAB 2: Landmark Analysis
+    # TAB 2: Landmark Analysis 🟢 UPDATED
     # ==========================
-    with tab_landmark:   
-        # Calculate Max Time
-        max_t = df[col_time].dropna().max() if not df.empty and pd.api.types.is_numeric_dtype(df[col_time]) and df[col_time].notna().any() else 100.0
+    with tab_landmark:    
+        st.caption("Principle: Exclude patients who had an event or were censored before the Landmark Time.")
         
-        # ป้องกัน Error หาก max_t เป็น 0 (เช่น กรณีเลือก Time_Start)
-        if max_t <= 0: 
+        # Calculate Max Time (Robust check)
+        max_t = df[col_time].dropna().max() if not df.empty and ptypes.is_numeric_dtype(df[col_time]) and df[col_time].notna().any() else 1.0
+        if max_t <= 0:
             max_t = 1.0 
         
-        st.write(f"**Select Landmark Time ({col_time})**")
+        st.write(f"**Select Landmark Time (Max: {max_t:.2f})**")
         
-        # Landmark Interactive Input (Slider + Number Box Sync)
-        # Initialize Session State
+        # State Management for Landmark Time
         if 'landmark_val' not in st.session_state:
             st.session_state.landmark_val = float(max_t) * 0.1
 
-        # Functions to Sync
         def update_from_slider() -> None:
             st.session_state.landmark_val = st.session_state.lm_slider_widget
+        
         def update_from_number() -> None:
             st.session_state.landmark_val = st.session_state.lm_number_widget
 
         c_slide, c_num = st.columns([3, 1])
-        
         with c_slide:
-            st.slider(
-                "Use Slider:", 
-                min_value=0.0, 
-                max_value=float(max_t), 
-                key='lm_slider_widget',
-                value=st.session_state.landmark_val,
-                on_change=update_from_slider,
-                label_visibility="collapsed"
-            )
+            # ใช้ st.session_state.landmark_val เป็น default value
+            st.slider("Use Slider:", min_value=0.0, max_value=float(max_t) * 0.99, key='lm_slider_widget', value=min(st.session_state.landmark_val, float(max_t) * 0.99), on_change=update_from_slider, label_visibility="collapsed")
         with c_num:
-            st.number_input(
-                "Enter Value:", 
-                min_value=0.0, 
-                max_value=float(max_t), 
-                key='lm_number_widget',
-                value=st.session_state.landmark_val,
-                on_change=update_from_number,
-                step=1.0, 
-                label_visibility="collapsed"
-            )
+            # ใช้ st.session_state.landmark_val เป็น default value
+            st.number_input("Enter Value:", min_value=0.0, max_value=float(max_t) * 0.99, key='lm_number_widget', value=min(st.session_state.landmark_val, float(max_t) * 0.99), on_change=update_from_number, step=1.0, label_visibility="collapsed")
             
         landmark_t = st.session_state.landmark_val
-        st.caption(f"Current Landmark: **{landmark_t:.2f}**")
+        st.info(f"📍 Current Landmark Time: **{landmark_t:.2f}** ({col_time})")
         
-        col_group = st.selectbox("Compare Group (Optional):", ["None", *all_cols], key='lm_group_sur')
+        col_group = st.selectbox("Compare Group:", [c for c in all_cols if c not in [col_time, col_event]], key='lm_group_sur')
 
         if st.button("Run Landmark Analysis", key='btn_lm_sur'):
-            if not pd.api.types.is_numeric_dtype(df[col_time]) or not pd.api.types.is_numeric_dtype(df[col_event]):
-                st.error(f"Time column ('{col_time}') and Event column ('{col_event}') must be numeric.")
+            if col_group is None:
+                st.error("Please select a Group Variable for comparison.")
                 return
 
-            # Filter Data
-            mask = df[col_time] >= landmark_t
-            df_lm = df[mask].copy()
-            # Optional: re-zero time to show survival FROM the landmark
-            df_lm[col_time] = df_lm[col_time] - landmark_t
-            
-            n_excl = len(df) - len(df_lm)
-            st.success(f"**Included:** {len(df_lm)} patients. (**Excluded:** {n_excl} early events/censored)")
-            
-            if len(df_lm) < 5:
-                st.error("Sample size too small after filtering.")
-            else:
-                grp = None if col_group == "None" else col_group
-                fig, stats = survival_lib.fit_km_logrank(df_lm, col_time, col_event, grp)
+            try:
+                with st.spinner(f"Running Landmark Analysis at t={landmark_t:.2f}..."):
+                    # 🟢 CALL NEW LANDMARK FUNCTION: ให้ฟังก์ชันจัดการ Filtering และ Time Reset เอง
+                    fig, stats, n_pre, n_post, err = survival_lib.fit_km_landmark(
+                        df, col_time, col_event, col_group, landmark_t
+                    )
                 
-                # Plot Line
-                ax = fig.gca()
-                ax.axvline(0.0, color='red', linestyle='--', label=f'Landmark t={landmark_t}')
-                ax.legend()
-                ax.set_title(f"Landmark Analysis (Survival from landmark t={landmark_t})")
+                if err:
+                    st.error(err)
+                elif fig:
+                    # Show Filtering Results
+                    st.markdown(f"""
+                    <p style='font-size:1em;'>
+                    Total N before filter: <b>{n_pre}</b> | 
+                    N Included (Survived $\\ge$ {landmark_t:.2f}): <b>{n_post}</b> | 
+                    N Excluded: <b>{n_pre - n_post}</b>
+                    </p>
+                    """, unsafe_allow_html=True)
+                    
+                    # 🟢 Graph is now correctly zero-based and filtered
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.markdown("##### Log-Rank Test Results (Post-Landmark)")
+                    st.dataframe(stats)
+                    
+                    elements = [
+                        {'type':'header','data':f'Landmark Analysis (Survival from t={landmark_t:.2f})'},
+                        {'type':'text', 'data': f"N Included: {n_post}, N Excluded: {n_pre - n_post}"},
+                        {'type':'plot','data':fig},
+                        {'type':'table','data':stats}
+                    ]
+                    
+                    report_html = survival_lib.generate_report_survival(f"Landmark Analysis: {col_time} (t >= {landmark_t})", elements)
+                    st.download_button("📥 Download Report (Landmark)", report_html, "lm_report.html", "text/html")
                 
-                st.pyplot(fig)
-                st.dataframe(stats)
-                
-                elements = [
-                    {'type':'header','data':f'Landmark Analysis (t >= {landmark_t})'},
-                    {'type':'plot','data':fig},
-                    {'type':'table','data':stats}
-                ]
-                
-                report_html = survival_lib.generate_report_survival(f"Landmark Analysis: {col_time} (t >= {landmark_t})", elements)
-                st.download_button("📥 Download Report (Landmark)", report_html, "lm_report.html", "text/html")
-                plt.close(fig)
-    
+            except (ValueError, KeyError) as e:
+                st.error(f"Analysis error: {e}")
+            except Exception as e:
+                st.error(f"Unexpected error: {e}")
+                # Consider: import traceback; st.exception(e) for debugging
+
     # ==========================
-    # TAB 3: Cox Regression
+    # TAB 3: Cox Regression - ใช้โค้ดเดิม
     # ==========================
     with tab_cox:
         covariates = st.multiselect("Select Covariates (Predictors):", [c for c in all_cols if c not in [col_time, col_event]], key='surv_cox_vars')
         
-        # State Management
-        if 'cox_res' not in st.session_state:
+        if 'cox_res' not in st.session_state: 
             st.session_state.cox_res = None
-        if 'cox_html' not in st.session_state:
+        if 'cox_html' not in st.session_state: 
             st.session_state.cox_html = None
 
         if st.button("🚀 Run Cox Model & Check Assumptions", key='btn_run_cox'):
@@ -197,7 +185,6 @@ def render(df, _var_meta):
             else:
                 try:
                     with st.spinner("Fitting Cox Model and Checking Assumptions..."):
-                        # 1. Run Cox Model
                         cph, res, model_data, err = survival_lib.fit_cox_ph(df, col_time, col_event, covariates)
                         
                         if err:
@@ -205,70 +192,50 @@ def render(df, _var_meta):
                             st.session_state.cox_res = None
                             st.session_state.cox_html = None
                         else:
-                            # 2. Check Assumptions (Auto Run)
-                            # 🟢 UPDATE: รับค่าเป็น fig_images (List of bytes) แทน Figure objects
                             txt_report, fig_images = survival_lib.check_cph_assumptions(cph, model_data)
                             
                             st.session_state.cox_res = res
                             st.success("Analysis Complete!")
                             
-                            # --- Display Results ---
                             st.dataframe(res.style.format("{:.4f}"))
-                            
                             st.markdown("##### 🔍 Proportional Hazards Assumption Check")
                             
-                            # Show Text Report
                             if txt_report:
                                 with st.expander("View Assumption Advice (Text)", expanded=False):
                                     st.text(txt_report)
                             
-                            # Show Plots
                             if fig_images:
                                 st.write("**Schoenfeld Residuals Plots:**")
                                 for img_bytes in fig_images:
-                                    # 🟢 UPDATE: ใช้ st.image แสดงผลรูปภาพจาก bytes โดยตรง
                                     st.image(img_bytes, caption="Assumption Check Plot", use_column_width=True)
                             else:
-                                st.info("No assumption plots generated (maybe model is valid or too simple).")
+                                st.info("No assumption plots generated.")
 
-                            # --- Generate Report for Download ---
                             elements = [
                                 {'type':'header','data':'Cox Proportional Hazards'},
                                 {'type':'table','data':res},
                                 {'type':'header','data':'Assumption Check (Schoenfeld Residuals)'},
-                                # ใช้ preformatted ถ้าแก้ตามรอบก่อน หรือใช้ text แบบเดิม
                                 {'type':'preformatted','data':txt_report} 
                             ]
                             
                             if fig_images:
                                 for img_bytes in fig_images:
-                                    # 🟢 UPDATE: ส่ง Type ใหม่ 'image' พร้อมข้อมูล bytes
                                     elements.append({'type':'image','data':img_bytes})
                             
                             report_html = survival_lib.generate_report_survival(f"Cox: {col_time}", elements)
                             st.session_state.cox_html = report_html
 
-                except (ValueError, TypeError) as e:
-                    st.error(f"Data validation error: {e}")
+                except (ValueError, KeyError, RuntimeError) as e:
+                    st.error(f"Analysis error: {e}")
                     st.session_state.cox_res = None
-                    st.session_state.cox_html = None
-                except KeyError as e:
-                    st.error(f"Missing required column: {e}")
-                    st.session_state.cox_res = None
-                    st.session_state.cox_html = None
-                except (RuntimeError, AttributeError) as e:
-                    st.error(f"Model fitting error: {e}")
-                    st.session_state.cox_res = None
-                    st.session_state.cox_html = None
                 except Exception as e:
-                    # Log unexpected exceptions for debugging
-                    import traceback
-                    st.error(f"An unexpected error occurred: {e}")
-                    with st.expander("🐛 Debug Info (click to expand)"):
-                        st.code(traceback.format_exc())
+                    st.error(f"Unexpected error: {e}")
                     st.session_state.cox_res = None
-                    st.session_state.cox_html = None
+                    # Consider: import traceback; st.exception(e) for debugging
 
-        # Show Download Button (if result exists)
         if st.session_state.cox_html:
             st.download_button("📥 Download Full Report (Cox)", st.session_state.cox_html, "cox_report.html", "text/html")
+
+# ฟังก์ชัน render ต้องถูกเรียกใช้จาก app.py หรือไฟล์หลัก
+# if __name__ == '__main__':
+#     render(pd.DataFrame(), {})

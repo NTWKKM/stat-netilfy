@@ -1,10 +1,13 @@
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+import plotly.express as px
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import NearestNeighbors
-import seaborn as sns
+from sklearn.preprocessing import StandardScaler  # Added for robust scaling of continuous covariates
+from sklearn.pipeline import Pipeline    # 🟢 NEW: สำหรับสร้างโมเดลแบบรวมขั้นตอน
+from sklearn.compose import ColumnTransformer # 🟢 NEW: สำหรับระบุคอลัมน์ที่จะปรับขนาด
 import io, base64
+import html as _html
 
 # --- 1. Propensity Score Calculation ---
 def calculate_ps(df, treatment_col, covariate_cols):
@@ -24,23 +27,51 @@ def calculate_ps(df, treatment_col, covariate_cols):
             clf (sklearn.linear_model.LogisticRegression): Fitted logistic regression model.
     
     Raises:
-        ValueError: If the treatment column is not of a numeric dtype.
+        ValueError: If the treatment column is not of a numeric dtype.      
+    Includes Robust Scaling for continuous variables to ensure model stability.
     """
     # Drop NA ในคอลัมน์ที่เกี่ยวข้อง
     data = df.dropna(subset=[treatment_col, *covariate_cols]).copy()
     
-    # X และ y
+    # 🟢 NEW: Define X and identify columns for scaling vs passing through
     X = data[covariate_cols]
     y = data[treatment_col]
+    
+    # Identify continuous columns to scale (numeric with > 2 unique values)
+    cont_cols = [
+        col for col in covariate_cols
+        if pd.api.types.is_numeric_dtype(X[col]) and X[col].nunique() > 2
+    ]
+    
+    # Identify binary/categorical columns to pass through without scaling
+    pass_through_cols = [col for col in covariate_cols if col not in cont_cols]
+    
+    # 🟢 NEW: Create ColumnTransformer for preprocessing
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('scaler', StandardScaler(), cont_cols), # Scale continuous columns
+            ('pass_through', 'passthrough', pass_through_cols) # Leave binary/categorical columns as is
+        ],
+        remainder='drop', # Drop any other unexpected columns
+        verbose_feature_names_out=False # NEW: Improves feature naming in Pipeline
+    )
     
     # ตรวจสอบ Data Type อีกครั้งเพื่อความชัวร์
     if not np.issubdtype(y.dtype, np.number):
         raise ValueError(f"Treatment column '{treatment_col}' must be numeric (0/1).")
-        
-    clf = LogisticRegression(solver='liblinear', random_state=42, max_iter=1000)
+
+    # 🟢 NEW: Create the full Pipeline (preprocessor + classifier)
+    # ใช้ liblinear with L2 penalty (Robust default)
+    clf = Pipeline(steps=[
+        ('preprocessor', preprocessor),
+        ('classifier', LogisticRegression(solver='liblinear', random_state=42, max_iter=1000))
+    ])
+    
+    # Fit the Pipeline (จะทำการ scale ข้อมูลก่อน fit classifier)
     clf.fit(X, y)
     
     # Get Probability (Score of class 1)
+    # Pipeline handles the scaling automatically before prediction
     data['ps_score'] = clf.predict_proba(X)[:, 1]
     
     # Get Logit Score (ป้องกัน Error log(0))
@@ -52,21 +83,9 @@ def calculate_ps(df, treatment_col, covariate_cols):
 
 # --- 2. Matching Algorithm ---
 def perform_matching(df, treatment_col, ps_col='ps_logit', caliper=0.2):
-    """
+    """ 
     Perform 1:1 greedy nearest-neighbor matching of treated and control units based on a propensity score logit.
-    
-    Matches each treated unit to the nearest control within a caliper defined as (caliper * standard deviation of ps_col); matched pairs are assigned a sequential `match_id`.
-    
-    Parameters:
-        df (pandas.DataFrame): DataFrame containing treatment indicator and propensity score column.
-        treatment_col (str): Column name for binary treatment indicator (expected values 0 and 1).
-        ps_col (str): Column name containing the propensity score logit to use for matching. Defaults to 'ps_logit'.
-        caliper (float): Multiplier of the standard deviation of `ps_col` that defines the maximum allowable distance for a match.
-    
-    Returns:
-        tuple:
-            df_matched (pandas.DataFrame) — DataFrame with matched treated and control rows concatenated and a `match_id` column labeling pairs; `None` if matching failed.
-            message (str) — Status message describing the result or the reason for failure (e.g., number of matched pairs or error reason).
+    Matches each treated unit to the nearest control within a caliper defined as (caliper * standard deviation of ps_col).
     """
     # แยกกลุ่ม (ต้องเป็น 0 กับ 1 เท่านั้น)
     treated = df[df[treatment_col] == 1].copy()
@@ -76,9 +95,14 @@ def perform_matching(df, treatment_col, ps_col='ps_logit', caliper=0.2):
         return None, "Error: Treated group (1) is empty."
     if len(control) == 0:
         return None, "Error: Control group (0) is empty."
-
+    
     # Caliper Calculation
     sd_logit = df[ps_col].std()
+    
+    # 🟢 Safety Check for zero variance
+    if not np.isfinite(sd_logit) or sd_logit < 1e-9:
+        return None, f"Error: {ps_col} has zero or undefined variance; cannot apply caliper matching."
+        
     caliper_width = caliper * sd_logit
     
     # Nearest Neighbors
@@ -104,18 +128,22 @@ def perform_matching(df, treatment_col, ps_col='ps_logit', caliper=0.2):
     # Perform Matching (Without Replacement)
     matched_pairs = []
     used_control = set()
-    
     for row in match_candidates.itertuples():
         c_idx = row.control_idx
         if c_idx not in used_control:
-            matched_pairs.append({'treated_idx': row.treated_idx, 'control_idx': c_idx, 'distance': row.distance, 'control_iloc': row.control_iloc})
+            matched_pairs.append({
+                'treated_idx': row.treated_idx,
+                'control_idx': c_idx,
+                'distance': row.distance,
+                'control_iloc': row.control_iloc
+            })
             used_control.add(c_idx)
     
     matched_df_info = pd.DataFrame(matched_pairs)
     
     if len(matched_df_info) == 0:
         return None, "No matches found within caliper. Try increasing caliper width."
-        
+    
     # Retrieve Data
     matched_treated_ids = matched_df_info['treated_idx'].values
     matched_control_ids = matched_df_info['control_idx'].values
@@ -129,18 +157,8 @@ def perform_matching(df, treatment_col, ps_col='ps_logit', caliper=0.2):
 
 # --- 3. SMD Calculation ---
 def calculate_smd(df, treatment_col, covariate_cols):
-    """
-    Compute standardized mean differences (SMD) for numeric covariates between treated (1) and control (0) groups.
-    
-    Only numeric columns from `covariate_cols` are evaluated. For each numeric covariate, the SMD is the absolute difference in group means divided by the pooled standard deviation (sqrt((var_treated + var_control) / 2)). If a covariate is constant in either group (resulting in undefined variance) or the pooled standard deviation is zero, the SMD is set to 0.
-    
-    Parameters:
-        df (pandas.DataFrame): DataFrame containing the treatment indicator and covariates.
-        treatment_col (str): Column name with binary treatment indicator (1 = treated, 0 = control).
-        covariate_cols (Iterable[str]): List of covariate column names to evaluate.
-    
-    Returns:
-        pandas.DataFrame: DataFrame with columns ['Variable', 'SMD'] giving the SMD for each evaluated numeric covariate.
+    """ 
+    Compute standardized mean differences (SMD) for numeric covariates.
     """
     smd_data = []
     treated = df[df[treatment_col] == 1]
@@ -154,67 +172,165 @@ def calculate_smd(df, treatment_col, covariate_cols):
             var_t = treated[col].var()
             var_c = control[col].var()
             
-            if pd.isna(var_t) or pd.isna(var_c): 
-                smd = 0 # Handle constant columns
+            if pd.isna(var_t) or pd.isna(var_c):
+                smd = 0  # Handle constant columns
             else:
                 pooled_sd = np.sqrt((var_t + var_c) / 2)
-                smd = abs(mean_t - mean_c) / pooled_sd if pooled_sd > 0 else 0
-                
-            smd_data.append({'Variable': col, 'SMD': smd})
+                smd = abs(mean_t - mean_c) / pooled_sd if pooled_sd > 1e-9 else 0
             
+            smd_data.append({'Variable': col, 'SMD': smd})
+    
     return pd.DataFrame(smd_data)
 
-# --- 4. Plotting & Report ---
+# --- 4. Plotting & Report (Plotly) ---
 def plot_love_plot(smd_pre, smd_post):
-    """
-    Create a Love plot comparing covariate standardized mean differences before and after matching.
-    
-    This function combines pre- and post-matching SMD data, plots SMD on the x-axis and covariate names on the y-axis, highlights stages ('Unmatched' vs 'Matched') with color and style, and adds a reference line at SMD = 0.1.
-    
-    Parameters:
-        smd_pre (pandas.DataFrame): Pre-matching balance table with columns ['Variable', 'SMD'].
-        smd_post (pandas.DataFrame): Post-matching balance table with columns ['Variable', 'SMD'].
-    
-    Returns:
-        matplotlib.figure.Figure: Figure object containing the Love plot.
+    """ 
+    Create an interactive Love plot using Plotly.
     """
     smd_pre = smd_pre.copy()
     smd_pre['Stage'] = 'Unmatched'
     smd_post = smd_post.copy()
     smd_post['Stage'] = 'Matched'
-    
     df_plot = pd.concat([smd_pre, smd_post])
     
-    fig, ax = plt.subplots(figsize=(8, len(smd_pre) * 0.5 + 3))
-    sns.scatterplot(data=df_plot, x='SMD', y='Variable', hue='Stage', style='Stage', s=100, ax=ax, palette={'Unmatched':'red', 'Matched':'blue'})
+    # สร้าง Plotly scatter plot
+    fig = px.scatter(
+        df_plot,
+        x='SMD',
+        y='Variable',
+        color='Stage',
+        symbol='Stage',
+        title='Covariate Balance (Love Plot)',
+        labels={
+            'SMD': 'Standardized Mean Difference (SMD)',
+            'Variable': 'Variable',
+            'Stage': 'Stage'
+        },
+        color_discrete_map={
+            'Unmatched': 'red',
+            'Matched': 'blue'
+        },
+        # 🟢 FIX: เปลี่ยน 'Matched' เป็น 'diamond' เพื่อให้แตกต่างทางสายตา
+        symbol_map={ 
+            'Unmatched': 'circle',
+            'Matched': 'diamond' 
+        },
+        size_max=10
+    )
     
-    ax.axvline(0.1, color='gray', linestyle='--', alpha=0.5)
-    ax.set_title('Covariate Balance (Love Plot)')
-    ax.set_xlabel('Standardized Mean Difference (SMD)')
-    ax.grid(visible=True, alpha=0.3)
+    # เพิ่มเส้นอ้างอิง (SMD = 0.1)
+    fig.add_vline(
+        x=0.1,
+        line_dash='dash',
+        line_color='gray',
+        opacity=0.5,
+        annotation_text='SMD = 0.1',
+        annotation_position='top right'
+    )
+    
+    # ปรับแต่งเค้าโครง
+    fig.update_layout(
+        hovermode='closest',
+        plot_bgcolor='rgba(240,240,240,0.5)',
+        xaxis_title='Standardized Mean Difference (SMD)',
+        yaxis_title='Variable',
+        font={'size': 12},
+        height=max(400, len(smd_pre) * 40 + 100) # Dynamic height
+    )
+    
+    # ปรับแต่ง marker
+    fig.update_traces(
+        marker={'size': 8, 'opacity': 0.7},
+        selector={'mode': 'markers'}
+    )
+    
     return fig
 
 def generate_psm_report(title, elements):
+    """ 
+    Generate a styled HTML report.
     """
-    Generate a styled HTML report from a sequence of text, table, and plot elements.
-    
-    Parameters:
-        title (str): Report title to display at the top of the page.
-        elements (Iterable[dict]): Ordered iterable of elements to include in the report. Each element must be a dict with:
-            - type (str): One of 'text', 'table', or 'plot'.
-            - data: For 'text', a string; for 'table', a pandas.DataFrame; for 'plot', a Matplotlib Figure.
-    
-    Returns:
-        html (str): Complete HTML document as a string containing the title and rendered elements (tables as HTML, plots embedded as base64 PNG images, and text as paragraphs).
+    css = """
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #0066cc;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #0066cc;
+            margin-top: 30px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 20px 0;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        table th, table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        table th {
+            background-color: #0066cc;
+            color: white;
+        }
+        table tr:hover {
+            background-color: #f0f0f0;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        p {
+            line-height: 1.6;
+            color: #333;
+        }
+        .report-footer {
+            text-align: right;
+            font-size: 0.75em;
+            color: #666;
+            margin-top: 20px;
+            border-top: 1px dashed #ccc;
+            padding-top: 10px;
+        }
+    </style>
     """
-    css = """<style>body{font-family:'Segoe UI';padding:20px;} table{border-collapse:collapse;width:100%;} th,td{border:1px solid #ddd;padding:8px;text-align:center;} th{background:#f2f2f2;}</style>"""
-    html = f"<html><head>{css}</head><body><h2>{title}</h2>"
+
+    plotly_cdn = "<script src='https://cdn.plot.ly/plotly-latest.min.js'></script>"
+    html = f"<!DOCTYPE html>\n<html>\n<head><meta charset='utf-8'>{css}{plotly_cdn}</head>\n<body>"
+    html += f"<h1>{_html.escape(str(title))}</h1>"
+    
     for el in elements:
-        if el['type'] == 'text': html += f"<p>{el['data']}</p>"
-        elif el['type'] == 'table': html += el['data'].to_html()
+        if el['type'] == 'text':
+            html += f"<p>{_html.escape(str(el['data']))}</p>"
+        elif el['type'] == 'table':
+            html += el['data'].to_html(classes='report-table', border=0, escape=True)
         elif el['type'] == 'plot':
-            buf = io.BytesIO()
-            el['data'].savefig(buf, format='png', bbox_inches='tight')
-            b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-            html += f'<br><img src="data:image/png;base64,{b64}" style="max-width:100%"><br>'
+            # ตรวจสอบว่าเป็น Plotly Figure หรือ Matplotlib Figure
+            plot_obj = el['data']
+            
+            # ถ้าเป็น Plotly Figure
+            if hasattr(plot_obj, 'to_html'):
+                html += plot_obj.to_html(full_html=False, include_plotlyjs=False, div_id=f"plot_{id(plot_obj)}")
+            else:
+                # ถ้าเป็น Matplotlib Figure - แปลงเป็น PNG และ embed
+                buf = io.BytesIO()
+                plot_obj.savefig(buf, format='png', bbox_inches='tight')
+                b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+                html += f'<img src="data:image/png;base64,{b64}" />'
+    
+    html += """<div class='report-footer'>
+    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM n Donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
+    </div>"""
+    html += "</body>\n</html>"
     return html

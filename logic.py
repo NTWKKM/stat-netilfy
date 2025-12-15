@@ -98,27 +98,34 @@ def run_binary_logit(y, X, method='default'):
 
 def get_label(col_name, var_meta):
     """
-    Create an HTML label for a variable by deriving a display name from the column name and optional metadata.
-    
-    Parameters:
-    	col_name (str): Column identifier; if it contains an underscore, the substring after the first underscore is used as the variable name shown.
-    	var_meta (dict or None): Optional mapping from variable name to metadata dict. If metadata for the variable contains a 'label' entry, that value is used as the secondary (grey) label.
-    
-    Returns:
-    	html_label (str): An HTML string with the variable name in bold on the first line and a secondary grey label on the second line.
+    Create an HTML label. 
+    FIX: Use full column name instead of splitting by '_' to prevent weird names like 'of_birth'
     """
-    parts = col_name.split('_', 1)
-    orig_name = parts[1] if len(parts) > 1 else col_name
+    # 1. ใช้ชื่อเต็มเป็นค่าเริ่มต้น (ไม่ตัด _ ทิ้งแล้ว)
+    display_name = col_name 
     
-    label = orig_name 
-    # [แก้ไข] ย่อหน้าบรรทัด 105 และ 106 ให้ถูกต้อง
-    if var_meta and orig_name in var_meta:
-        if 'label' in var_meta[orig_name]:          # <--- ย่อหน้าเข้ามา 8 spaces
-            label = var_meta[orig_name]['label']    # <--- ย่อหน้าเข้ามา 12 spaces
-             
-    safe_name = _html.escape(str(orig_name))
-    safe_label = _html.escape(str(label))
-    return f"<b>{safe_name}</b><br><span style='color:#666; font-size:0.9em'>{safe_label}</span>"
+    # 2. ค้นหาคำอธิบาย (Label) ใน Metadata
+    secondary_label = ""
+    if var_meta:
+        # ลองหาด้วยชื่อเต็มก่อน
+        if col_name in var_meta and 'label' in var_meta[col_name]:
+            secondary_label = var_meta[col_name]['label']
+        # (Optional) ลองหาด้วยชื่อย่อ เผื่อ config เก่าตั้งไว้
+        elif '_' in col_name:
+            parts = col_name.split('_', 1)
+            if len(parts) > 1:
+                short_name = parts[1]
+                if short_name in var_meta and 'label' in var_meta[short_name]:
+                    secondary_label = var_meta[short_name]['label']
+
+    safe_name = _html.escape(str(display_name))
+    
+    # 3. ถ้ามี Label ให้แสดงบรรทัดล่าง, ถ้าไม่มีให้แสดงแค่ชื่อตัวแปร
+    if secondary_label:
+        safe_label = _html.escape(str(secondary_label))
+        return f"<b>{safe_name}</b><br><span style='color:#666; font-size:0.9em'>{safe_label}</span>"
+    else:
+        return f"<b>{safe_name}</b>"
 
 # ✅ CACHE DATA: ช่วยให้เว็บเร็วขึ้น ไม่ต้องคำนวณใหม่ทุกครั้งที่กดปุ่มอื่น
 # 🟢 NOTE: ต้องเพิ่ม method ลงใน argument เพื่อให้ cache แยกกันตาม method ที่เลือก
@@ -149,9 +156,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     results_db = {} 
     sorted_cols = sorted(df.columns)
 
-    # 2. แก้ไข Logic การเลือก Method ในฟังก์ชัน analyze_outcome (ประมาณบรรทัด 148)
-    # 🟢 Logic การเลือก Method ตามที่ User สั่ง
-    preferred_method = 'bfgs' # Default fallback
+    preferred_method = 'bfgs' 
     
     if method == 'auto':
         preferred_method = 'firth' if HAS_FIRTH else 'bfgs'
@@ -159,9 +164,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         preferred_method = 'firth' if HAS_FIRTH else 'bfgs'
     elif method == 'bfgs':
         preferred_method = 'bfgs'
-    elif method == 'default':  # <--- 🟢 เพิ่มบรรทัดนี้
+    elif method == 'default':  
         preferred_method = 'default'
 
+    # --- CALCULATION LOOP ---
     for col in sorted_cols:
         if col == outcome_name: continue
         if df_aligned[col].isnull().all(): continue
@@ -173,10 +179,8 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         X_neg = X_raw[y == 0]
         X_pos = X_raw[y == 1]
         
-        # ชื่อตัวแปร
         orig_name = col.split('_', 1)[1] if len(col.split('_', 1)) > 1 else col
         
-        # --- TYPE DETECTION ---
         unique_vals = X_num.dropna().unique()
         unique_count = len(unique_vals)
         
@@ -185,7 +189,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         if is_binary or unique_count < 5:
             is_categorical = True
             
-        # User Override
         user_setting = {}
         if var_meta and (col in var_meta or orig_name in var_meta):
             key = col if col in var_meta else orig_name
@@ -196,7 +199,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             elif user_setting.get('type') == 'Continuous':
                 is_categorical = False
         
-        # --- DESCRIPTIVE ANALYSIS ---
         if is_categorical:
             n_used = len(X_raw.dropna())
             mapper = user_setting.get('map', {})
@@ -219,19 +221,19 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 if str(lvl).endswith('.0'): lvl_str = str(int(float(lvl)))
                 
                 def count_val(series, v_str):
-                     """
-                     Count how many elements in a pandas Series equal a given string after normalizing numeric-like values.
-                     
-                     This converts each element to string; if the string represents a number (allowing one decimal point) a trailing ".0" is removed (e.g., "1.0" -> "1") before comparing to v_str. The comparison is string equality performed after this normalization.
-                     
-                     Parameters:
-                         series (pandas.Series): Series whose values will be normalized and compared.
-                         v_str (str): Target string to match against each normalized series element.
-                     
-                     Returns:
-                         int: Number of elements equal to v_str after normalization.
-                     """
-                     return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
+                    """
+                    Count how many elements in a pandas Series equal a given string after normalizing numeric-like values.
+                    
+                    This converts each element to string; if the string represents a number (allowing one decimal point) a trailing ".0" is removed (e.g., "1.0" -> "1") before comparing to v_str. The comparison is string equality performed after this normalization.
+                    
+                    Parameters:
+                        series (pandas.Series): Series whose values will be normalized and compared.
+                        v_str (str): Target string to match against each normalized series element.
+                    
+                    Returns:
+                        int: Number of elements equal to v_str after normalization.
+                    """
+                    return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
 
                 c_all = count_val(X_raw, lvl_str)
                 if c_all == 0:
@@ -282,8 +284,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 res['p_comp'] = np.nan
                 res['test_name'] = "-"
 
-        # --- UNIVARIATE REGRESSION (Crude OR) ---
-        # 🟢 ใช้ Method ที่ User เลือก
+        # --- UNIVARIATE REGRESSION ---
         data_uni = pd.DataFrame({'y': y, 'x': X_num}).dropna()
         if not data_uni.empty and data_uni['x'].nunique() > 1:
             params, conf, pvals, status = run_binary_logit(data_uni['y'], data_uni[['x']], method=preferred_method)
@@ -303,7 +304,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
 
         results_db[col] = res
         
-        # Screening P < 0.20
         p_screen = res.get('p_comp', np.nan)
         if pd.isna(p_screen): p_screen = res.get('p_or', np.nan)
         if pd.notna(p_screen) and p_screen < 0.20:
@@ -322,7 +322,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         final_n_multi = len(multi_data)
         
         if not multi_data.empty and final_n_multi > 10:
-            # 🟢 ใช้ Method ที่ User เลือก สำหรับ Multivariate
             params, conf, pvals, status = run_binary_logit(multi_data['y'], multi_data[cand_valid], method=preferred_method)
             
             if status == "OK":
@@ -337,8 +336,21 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     # --- HTML BUILD ---
     html_rows = []
     current_sheet = ""
-    for col in sorted_cols:
-        if col == outcome_name or col not in results_db: continue
+    
+    # 🟢 1. เตรียมรายชื่อคอลัมน์ที่มีผลลัพธ์
+    valid_cols_for_html = [c for c in sorted_cols if c in results_db]
+
+    # 🟢 2. ฟังก์ชันเรียงลำดับ (Group -> Name)
+    def sort_key_for_grouping(col_name) -> tuple[str, str]:
+        group = col_name.split('_')[0] if '_' in col_name else "Variables"
+        return (group, col_name)
+
+    # 🟢 3. เรียงลำดับ
+    grouped_cols = sorted(valid_cols_for_html, key=sort_key_for_grouping)
+
+    for col in grouped_cols:
+        if col == outcome_name:
+            continue
         res = results_db[col]
         
         sheet = col.split('_')[0] if '_' in col else "Variables"
@@ -381,12 +393,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     
     # Update Footer Note
     if preferred_method == 'firth':
-        # 🟢 แก้ไข: แยกแยะระหว่าง Auto กับ User Selected
         suffix = "(Auto-detected)" if method == 'auto' else "(User Selected)"
         method_note = f"Firth's Penalized Likelihood {suffix}"
 
     elif preferred_method == 'bfgs':
-        # เพิ่มกรณี bfgs ถูกเลือกผ่าน auto ได้เหมือนกัน (ถ้าไม่มี firth)
         suffix = "(Auto-fallback)" if method == 'auto' else "(MLE)"
         method_note = f"Standard Binary Logistic Regression {suffix}"
 
@@ -396,6 +406,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     else:
         method_note = "Binary Logistic Regression"
 
+    # 🟢 4. ส่วน Return HTML (เพิ่มสัญลักษณ์ †)
     return f"""
     <div id='{outcome_name}' class='table-container'>
     <div class='outcome-title'>Outcome: {outcome_name} (Total n={total_n})</div>
@@ -408,7 +419,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 <th>Group 1</th>
                 <th>Crude OR (95% CI)</th>
                 <th>Test Used</th> <th>Crude P-value</th>
-                <th>aOR (95% CI)<br><span style='font-size:0.8em; font-weight:normal'>(n={final_n_multi})</span></th>
+                <th>aOR (95% CI) <sup style='color:#d32f2f; font-weight:bold;'>†</sup><br><span style='font-size:0.8em; font-weight:normal'>(n={final_n_multi})</span></th>
                 <th>aP-value</th>
             </tr>
         </thead>
@@ -417,24 +428,28 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     <div class='summary-box'>
         <b>Method:</b> {method_note}. Complete Case Analysis.<br>
         <i>Univariate comparison uses Chi-square test (Categorical) or Mann-Whitney U test (Continuous).</i>
+        <div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee; font-size: 0.9em; color: #666;'>
+            <sup style='color:#d32f2f; font-weight:bold;'>†</sup> <b>Note on aOR:</b> Adjusted Odds Ratios are calculated only for variables with a <b>Crude P-value < 0.20</b> 
+            (Screening criteria) and sufficient data quality to prevent overfitting.
+        </div>
     </div>
     </div><br>
     """
 
-# 🟢 UPDATE: เพิ่ม method='auto' ใน parameter
 def process_data_and_generate_html(df, target_outcome, var_meta=None, method='auto'):
     """
-    Builds a complete HTML analysis report for a binary outcome from the provided DataFrame.
-    
+    Primary entry point to run univariate/multivariate logistic regression analysis 
+    on a DataFrame and generate a complete HTML report.
+
     Parameters:
-    	df (pandas.DataFrame): Source data containing the outcome and predictor columns.
-    	target_outcome (str): Column name of the binary outcome to analyze.
-    	var_meta (dict | None): Optional variable metadata mapping used to override labels or force variable types.
-    	method (str): Regression method to use for modeling; one of 'auto', 'firth', 'bfgs', or 'default'. 'auto' selects a suitable method based on availability.
-    
+        df (pandas.DataFrame): The input data.
+        target_outcome (str): The column name of the binary outcome variable.
+        var_meta (dict, optional): Metadata mapping for variable types and labels. Defaults to None.
+        method (str, optional): The logistic regression estimation method ('auto', 'firth', 'bfgs', 'default').
+
     Returns:
-    	html (str): A complete HTML document (string) containing the analysis table, method notes, and footer.
-    """
+        str: The complete HTML report string.
+    """ # 🟢 MODIFIED: Restored Docstring
     css_style = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; }
@@ -461,7 +476,6 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None, method='au
     
     html = f"<!DOCTYPE html><html><head>{css_style}</head><body>"
     html += "<h1>Analysis Report</h1>"
-    # 🟢 ส่งต่อ method ไปยัง analyze_outcome
     html += analyze_outcome(target_outcome, df, var_meta, method=method)
     
     html += """<div class='report-footer'>

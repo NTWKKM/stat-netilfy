@@ -79,18 +79,20 @@
     <script>
       stlite.mount({
         requirements: [
-            "streamlit>=1.42.0",
-            "pandas>=2.1.0", 
-            "numpy>=1.20.0,<2.0", 
-            "scipy>=1.7.0",
-            "statsmodels",
+            "streamlit", // ลบข้อจำกัดเวอร์ชัน
+            "pandas", // ลบข้อจำกัดเวอร์ชัน
+            "numpy", 
+            "scipy", // ลบข้อจำกัดเวอร์ชัน
+            "statsmodels>=0.14.0",
             "openpyxl",
             "matplotlib", 
-            "lifelines==0.30.0",
-            "formulaic",      // 🟢 ต้องมีตัวนี้สำหรับ Time-Dependent Cox
+            "lifelines==0.30.0", // คงเวอร์ชันเฉพาะเจาะจงตามที่คุณต้องการ
+            "formulaic",      // จำเป็นสำหรับ lifelines
             "scikit-learn",
-            "seaborn",
-            "firthlogist"
+            // "seaborn", 
+            "firthlogist",
+            "plotly-express",
+            "plotly" // ลบข้อจำกัดเวอร์ชัน
         ],
         entrypoint: "app.py",
         files: {

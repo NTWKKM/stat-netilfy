@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import diag_test # ✅ ใช้ diag_test ตัวเดียว
+from typing import List, Tuple
 
 def render(df, _var_meta=None):  # var_meta reserved for future use
     """
@@ -48,7 +49,10 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         
         def_idx = 0
         for i, c in enumerate(all_cols):
-            if 'outcome' in c.lower() or 'died' in c.lower(): def_idx = i; break
+            cl = c.lower()
+            if "gold" in cl or "standard" in cl:
+                def_idx = i
+                break
         
         truth = rc1.selectbox("Gold Standard (Binary):", all_cols, index=def_idx, key='roc_truth_diag')
         
@@ -114,8 +118,8 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         c1, c2, c3 = st.columns(3)
         
         # Auto-select V1 and V2
-        v1_default_name = 'Hypertension'
-        v2_default_name = 'Outcome_Disease'
+        v1_default_name = 'Group_Treatment'
+        v2_default_name = 'Status_Death'
         v1_idx = next((i for i, c in enumerate(all_cols) if c == v1_default_name), 0)
         v2_idx = next((i for i, c in enumerate(all_cols) if c == v2_default_name), min(1, len(all_cols)-1))
         
@@ -131,24 +135,36 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         )
         
         # Positive Label Selectors
-        def get_pos_label_settings(df: pd.DataFrame, col_name: str) -> tuple[list[str], int]:
+        # from ._common import get_pos_label_settings <-- to fix after wthy this code not work properly
+        def get_pos_label_settings(df: pd.DataFrame, col_name: str) -> Tuple[List[str], int]:
             """
-            Compute candidate positive-label values for a column and determine a default selection index.
-            
-            Parameters:
-                df (pandas.DataFrame): DataFrame containing the column.
-                col_name (str): Name of the column to inspect.
-            
+            Helper function to get unique values from a column, convert them to strings, 
+            sort them, and determine a default index (preferring '1', then '0').
+
+            Handles the case where the column might be empty after dropna.
+
+            Args:
+                df: The DataFrame containing the data.
+                col_name: The name of the column to process.
+
             Returns:
-                tuple:
-                    unique_vals (list[str]): Sorted list of the column's unique non-null values as strings.
-                    default_idx (int): Index into `unique_vals` to use as the default positive label (index of value `'1'` if present; otherwise `0`).
+                A tuple containing:
+                1. A sorted list of unique non-null string values.
+                2. The default index for selection (0, or index of '1'/'0').
             """
+            # 🟢 NOTE: Need to handle the case where the column might be empty after dropna
+            # Convert to string and drop NA values before getting unique values
             unique_vals = [str(x) for x in df[col_name].dropna().unique()]
             unique_vals.sort()
+    
             default_idx = 0
             if '1' in unique_vals:
+                # Default to '1' if available
                 default_idx = unique_vals.index('1')
+            elif len(unique_vals) > 0 and '0' in unique_vals:
+                # Otherwise, default to '0' if available and there are unique values
+                default_idx = unique_vals.index('0')
+        
             return unique_vals, default_idx
 
         c4, c5, c6 = st.columns(3)
@@ -209,12 +225,28 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
             )
             
             if tab is not None:
-                rep_elements = [
-                    {'type': 'text', 'data': f"<b>Result:</b> {msg}"},
+                # 🟢 UPDATE 1: จัดการข้อความสถานะ/หมายเหตุ (Warning/Note)
+                # เมื่อ tab is not None, msg จะมีแค่ข้อความเตือน (Warning/Note) หรือเป็นสตริงว่างเปล่าเท่านั้น
+                if msg.strip():
+                    status_text = f"Note: {msg.strip()}"
+                else:
+                    status_text = "Analysis Status: Completed successfully."
+                
+                # 🟢 FIX: แยกข้อความและลบแท็ก HTML (<b>, <br>) ออก
+                # และใช้ตัวแปร rep_elements ให้สอดคล้องกับโค้ดส่วนอื่น
+                rep_elements = [ 
+                    {'type': 'text', 'data': "Analysis: Diagnostic Test / Chi-Square"},
+                    {'type': 'text', 'data': f"Variables: {v1} vs {v2}"},
+                    {'type': 'text', 'data': status_text}, # แสดงสถานะหรือข้อความเตือน
+                    
+                    # Contingency Table
                     {'type': 'contingency_table', 'header': 'Contingency Table', 'data': tab, 'outcome_col': v2},
                 ]
+                
+                # 🟢 NOTE: ใช้โครงสร้างเดิมในการเพิ่ม Statistics และ Risk/Effect Measures
                 if stats is not None:
-                    rep_elements.append({'type': 'table', 'header': 'Statistics', 'data': pd.DataFrame([stats]).T})
+                    # เดิม: rep_elements.append({'type': 'table', 'header': 'Statistics', 'data': stats})
+                    rep_elements.append({'type': 'table', 'header': 'Statistics', 'data': stats})
                 if risk_df is not None:
                     rep_elements.append({'type': 'table', 'header': 'Risk & Effect Measures (2x2 Table)', 'data': risk_df})
                 
@@ -222,6 +254,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                 st.session_state.html_output_chi = html
                 st.components.v1.html(html, height=600, scrolling=True)
             else: 
+                # กรณีนี้ msg คือ Fatal Error ซึ่งจะถูกแสดงด้วย Streamlit error
                 st.error(msg)
         
         with dl_col:
@@ -314,17 +347,20 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         numeric_cols = df.select_dtypes(include="number").columns.tolist()
         
         # Auto-select columns with 'measurement' or 'rater' or 'machine'
-        default_icc_cols = [c for c in all_cols if any(k in c.lower() for k in ['measure', 'machine', 'rater', 'score', 'read'])]
+        default_icc_cols = [c for c in numeric_cols if any(k in c.lower() for k in ['measure', 'machine', 'rater', 'score', 'read'])]
         if len(default_icc_cols) < 2:
             default_icc_cols = numeric_cols[:2] if len(numeric_cols) >= 2 else []
         
-        icc_cols = st.multiselect("Select Variables (Raters/Methods):", all_cols, default=default_icc_cols, key='icc_vars_diag')
+        icc_cols = st.multiselect("Select Variables (Raters/Methods):", numeric_cols, default=default_icc_cols, key='icc_vars_diag')
         
         icc_run, icc_dl = st.columns([1, 1])
         if 'html_output_icc' not in st.session_state: 
             st.session_state.html_output_icc = None
         
         if icc_run.button("📏 Calculate ICC", key='btn_icc_run'):
+            if len(icc_cols) < 2:
+                st.error("Please select at least 2 numeric columns for ICC.")
+                st.stop()
             res_df, err, anova_df = diag_test.calculate_icc(df, icc_cols)
             
             if err:

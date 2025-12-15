@@ -2,7 +2,9 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import time
-import streamlit.components.v1 as components 
+import io
+import hashlib
+import streamlit.components.v1 as components
 
 # ==========================================
 # 1. CONFIG & LOADING SCREEN KILLER (Must be First)
@@ -11,7 +13,7 @@ st.set_page_config(
     page_title="Medical Stat Tool", 
     layout="wide", 
     menu_items={
-        'Get Help': 'https://ntwkkm.github.io/infos/stat_manual.html',
+        'Get Help': 'https://ntwkkm.github.io/pl/infos/stat_manual.html',
         # 🟢 แก้จุดที่ 1: เปลี่ยนลิงก์เป็น GitHub Issues ของคุณ (หรือลบบรรทัดนี้ทิ้งถ้ายังไม่มี)
         'Report a bug': "https://github.com/NTWKKM/stat-netilfy/issues", 
     }
@@ -52,131 +54,180 @@ except Exception as e:
     st.stop()
 
 # --- INITIALIZE STATE ---
-if 'df' not in st.session_state: st.session_state.df = None
-if 'var_meta' not in st.session_state: st.session_state.var_meta = {}
-
+if 'df' not in st.session_state:
+    st.session_state.df = None
+if 'var_meta' not in st.session_state:
+    st.session_state.var_meta = {}
+# 🟢 เพิ่ม State สำหรับการติดตามไฟล์ที่อัปโหลด (เพื่อป้องกันการโหลดซ้ำ)
+if 'uploaded_file_name' not in st.session_state:
+    st.session_state.uploaded_file_name = None
+    
 # --- SIDEBAR (ยังคงไว้ใน app.py เพราะเป็น Global Control) ---
 st.sidebar.title("MENU")
 st.sidebar.header("1. Data Management")
 
 # Example Data Generator
 if st.sidebar.button("📄 Load Example Data"):
-    np.random.seed(42)
-    n = 500 # 🟢 เพิ่ม N เป็น 500 เพื่อให้ p-value significant ง่ายขึ้น
+    np.random.seed(999) # Fixed seed
+    n = 600 
     
-    # --- 1. Baseline Characteristics (Predictors) ---
-    # Age: Normal Dist
-    age = np.random.normal(60, 12, n).astype(int)
+    # --- 1. Demographics & Confounders ---
+    age = np.random.normal(55, 12, n).astype(int).clip(20, 90)
+    sex = np.random.binomial(1, 0.55, n)
+    bmi = np.random.normal(24, 4, n).round(1).clip(10, 60)
     
-    # Sex: 0/1 (Balanced)
-    sex = np.random.binomial(1, 0.5, n)
-    
-    # BMI: Normal Dist
-    bmi = np.random.normal(25, 4, n).round(1)
-    
-    # Hypertension (Confounder): สัมพันธ์กับ Age และ BMI อย่างชัดเจน (Logistic)
-    # logit = -10 + 0.1*Age + 0.1*BMI
-    p_hyp = 1 / (1 + np.exp(-( -10 + 0.1*age + 0.15*bmi )))
-    hypertension = np.random.binomial(1, p_hyp)
+    # Comorbidity
+    logit_comorb = -5 + 0.05*age + 0.1*bmi
+    p_comorb = 1 / (1 + np.exp(-logit_comorb))
+    comorbidity = np.random.binomial(1, p_comorb)
 
-    # --- 2. Treatment Assignment (Selection Bias for PSM) ---
-    # กำหนดให้ Group สัมพันธ์กับทุกตัวแปร (Age, Sex, BMI, HT) เพื่อให้ Table 1 Significant (Imbalanced)
-    # และเพื่อให้ PSM มีหน้าที่ในการแก้ Bias นี้
-    logit_treat = -3 + 0.05*age + 0.5*sex + 0.1*bmi + 1.2*hypertension
+    # --- 2. Treatment Assignment (Selection Bias) ---
+    logit_treat = -2 + 1.5*comorbidity - 0.02*age
     p_treat = 1 / (1 + np.exp(-logit_treat))
     group = np.random.binomial(1, p_treat) 
-    
-    # --- 3. Outcome & Risk Score ---
-    # Risk Score: สร้างให้ต่างกันชัดเจนระหว่างกลุ่ม (T-test Sig)
-    # Group 1 (New Drug) ควรจะมี Risk Score ต่ำกว่า Group 0 (Standard) หรือกลับกัน
-    base_score = np.where(group == 1, 3.5, 6.0) # Mean ต่างกันเยอะ
-    risk_score = base_score + np.random.normal(0, 1.5, n) + 0.02*age
-    risk_score = risk_score.round(2)
-    
-    # Outcome Disease (Binary): สัมพันธ์กับ Risk Score และ Group อย่างชัดเจน (Logistic/Chi2 Sig)
-    # ใส่ effect ของ Hypertension เข้าไปด้วยเพื่อให้ Chi-Square (HT vs Outcome) significant
-    logit_outcome = -4 + 0.8*risk_score - 1.5*group + 1.0*hypertension
-    p_outcome = 1 / (1 + np.exp(-logit_outcome))
-    outcome_disease = np.random.binomial(1, p_outcome)
-    
-    # --- 4. Correlation Variable ---
-    # Inflammation Marker: สัมพันธ์กับ BMI แบบ Linear (Pearson r สูง)
-    inflammation_marker = 10 + 1.5 * bmi + np.random.normal(0, 5, n)
-    inflammation_marker = inflammation_marker.round(1)
 
-    # --- 5. Survival Analysis ---
-    # Time: Group 1 อยู่ได้นานกว่า Group 0 ชัดเจน (Log-rank Sig)
-    # Scale (Mean survival time): Group 0=200 days, Group 1=500 days
-    scale_param = np.where(group == 0, 200, 500)
-    time_days = np.random.exponential(scale=scale_param, size=n)
-    time_days = time_days.clip(min=1, max=1800).astype(int)
+    # --- 3. Survival Outcome ---
+    lambda_base = 0.02
+    hazard = lambda_base * np.exp(0.4*comorbidity - 0.8*group)
+    surv_time = np.random.exponential(1/hazard)
     
-    # Event: สัมพันธ์กับ Time (ยิ่งนานยิ่งตายน้อยลง? หรือตัด Censored)
-    # ให้ Group 0 ตายเยอะกว่า (Event rate สูง)
-    p_event = np.where(group == 0, 0.7, 0.3) 
-    event_death = np.random.binomial(1, p_event)
+    censor_time = np.random.uniform(0, 100, n)
+    time_obs = np.minimum(surv_time, censor_time).round(1)
+    time_obs = np.maximum(time_obs, 0.1) # avoid zero/invalid durations
+    event_death = (surv_time <= censor_time).astype(int)
+
+    # --- 4. Logistic Regression Outcome [NEW] ---
+    # Outcome: Cured (1=หาย, 0=ไม่หาย)
+    # ปัจจัย: ยาใหม่ (Group 1) ช่วยให้หายง่ายขึ้น, แต่อายุมากและโรคประจำตัวทำให้หายยาก
+    logit_cure = 0.5 + 1.2*group - 0.03*age - 0.8*comorbidity
+    p_cure = 1 / (1 + np.exp(-logit_cure))
+    outcome_cured = np.random.binomial(1, p_cure)
+
+    # --- 5. Diagnostic Test ---
+    gold_std = np.random.binomial(1, 0.3, n)
     
-    # For Time-Dependent Cox (Structure only)
-    time_start = np.zeros(n, dtype=int)
-    time_stop = time_days # ใช้เวลาตายเป็นจุดสิ้นสุด
+    # Rapid Test (Continuous)
+    rapid_test_val = np.where(gold_std==1, 
+                              np.random.normal(55, 15, n), 
+                              np.random.normal(35, 10, n))
+    rapid_test_val = np.maximum(rapid_test_val, 0).round(1)
     
-    # --- 6. Reliability & Agreement ---
-    # Cohen's Kappa: Dr A vs Dr B (High Agreement)
-    diag_dr_a = np.random.binomial(1, 0.4, n)
-    diag_dr_b = diag_dr_a.copy()
-    # Flip 5% of data to create minor disagreement (High Kappa)
-    mismatch_idx = np.random.choice(n, int(0.05*n), replace=False)
-    diag_dr_b[mismatch_idx] = 1 - diag_dr_b[mismatch_idx]
-    
-    # ICC: Machine 1 vs Machine 2 (High Correlation)
-    sbp_m1 = np.random.normal(130, 15, n).round(0)
-    sbp_m2 = sbp_m1 + np.random.normal(0, 2, n) # Noise น้อยมาก
-    sbp_m2 = sbp_m2.round(0)
+    # Kappa Raters
+    dr_a = np.where(gold_std==1, np.random.binomial(1, 0.9, n), np.random.binomial(1, 0.1, n))
+    agree_noise = np.random.binomial(1, 0.85, n)
+    dr_b = np.where(agree_noise==1, dr_a, 1-dr_a)
+
+    # --- 6. Correlation ---
+    lab_alb = np.random.normal(3.5, 0.5, n).round(2)
+    lab_ca = 2 + 1.5*lab_alb + np.random.normal(0, 0.3, n)
+    lab_ca = lab_ca.round(2)
+
+    # --- 7. ICC Data ---
+    icc_rater1 = np.random.normal(50, 10, n).round(1)
+    icc_rater2 = icc_rater1 + np.random.normal(0, 3, n)
+    icc_rater2 = icc_rater2.round(1)
 
     # Create DataFrame
     data = {
         'ID': range(1, n+1),
-        'Group_Treatment': np.where(group == 0, 'Standard Care', 'New Drug'), 
+        'Group_Treatment': group, 
         'Age': age,
         'Sex': sex,
         'BMI': bmi,
-        'Hypertension': hypertension, 
-        'Risk_Score': risk_score, 
-        'Inflammation_Marker': inflammation_marker, 
-        'Outcome_Disease': outcome_disease,
-        # Survival Cols
-        'Time_Start': time_start, # เพิ่มเพื่อรองรับ Time Cox Tab
-        'Time_Stop': time_stop,
-        'Event_Death': event_death,
-        # Diag/Rel Cols
-        'Diagnosis_Dr_A': diag_dr_a,
-        'Diagnosis_Dr_B': diag_dr_b,
-        'SBP_Machine_1': sbp_m1,
-        'SBP_Machine_2': sbp_m2
+        'Comorbidity': comorbidity,
+        # Logistic Outcome [NEW]
+        'Outcome_Cured': outcome_cured,
+        # Survival
+        'Time_Months': time_obs,
+        'Status_Death': event_death,
+        # Diagnostic
+        'Gold_Standard': gold_std,
+        'Rapid_Test_Score': rapid_test_val, 
+        'Diagnosis_Dr_A': dr_a,
+        'Diagnosis_Dr_B': dr_b,
+        # Correlation
+        'Lab_Albumin': lab_alb,
+        'Lab_Calcium': lab_ca,
+        # ICC
+        'ICC_Rater1': icc_rater1,
+        'ICC_Rater2': icc_rater2,
+        # Time Cox
+        'T_Start': np.zeros(n, dtype=float),
+        'T_Stop': time_obs.astype(float)
     }
     
     st.session_state.df = pd.DataFrame(data)
-    st.session_state.var_meta = {
-        'Sex': {'type':'Categorical', 'map':{0:'Female', 1:'Male'}},
-        'Hypertension': {'type':'Categorical', 'map':{0:'No', 1:'Yes'}},
-        'Outcome_Disease': {'type':'Categorical', 'map':{0:'Healthy', 1:'Disease'}},
-        'Event_Death': {'type':'Categorical', 'map':{0:'Censored', 1:'Event (Death)'}},
-        'Diagnosis_Dr_A': {'type':'Categorical', 'map':{0:'Negative', 1:'Positive'}},
-        'Diagnosis_Dr_B': {'type':'Categorical', 'map':{0:'Negative', 1:'Positive'}}
-    }
     
-    st.sidebar.success(f"Loaded {n} Example Patients!")
+    # Set Metadata
+    st.session_state.var_meta = {
+        'Group_Treatment': {'type':'Categorical', 'map':{0:'Standard Care', 1:'New Drug'}},
+        'Sex': {'type':'Categorical', 'map':{0:'Female', 1:'Male'}},
+        'Comorbidity': {'type':'Categorical', 'map':{0:'No', 1:'Yes'}},
+        'Outcome_Cured': {'type':'Categorical', 'map':{0:'Not Cured', 1:'Cured'}}, # Added Metadata
+        'Status_Death': {'type':'Categorical', 'map':{0:'Censored', 1:'Dead'}},
+        'Gold_Standard': {'type':'Categorical', 'map':{0:'Healthy', 1:'Disease'}},
+        'Diagnosis_Dr_A': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}},
+        'Diagnosis_Dr_B': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}},
+        # 🟢 Initialize continuous variables explicitly too, matching the file upload logic
+        'Age': {'type': 'Continuous', 'label': 'Age', 'map': {}},
+        'BMI': {'type': 'Continuous', 'label': 'BMI', 'map': {}},
+        'Time_Months': {'type': 'Continuous', 'label': 'Time (Months)', 'map': {}},
+        'Rapid_Test_Score': {'type': 'Continuous', 'label': 'Rapid Test Score', 'map': {}},
+        'Lab_Albumin': {'type': 'Continuous', 'label': 'Albumin (g/dL)', 'map': {}},
+        'Lab_Calcium': {'type': 'Continuous', 'label': 'Calcium (mg/dL)', 'map': {}},
+        'ICC_Rater1': {'type': 'Continuous', 'label': 'ICC Rater 1', 'map': {}},
+        'ICC_Rater2': {'type': 'Continuous', 'label': 'ICC Rater 2', 'map': {}},
+        'T_Start': {'type': 'Continuous', 'label': 'Time Start', 'map': {}},
+        'T_Stop': {'type': 'Continuous', 'label': 'Time Stop', 'map': {}},
+    }
+    st.session_state.uploaded_file_name = "Example Data" # Mark as loaded example data
+    
+    st.sidebar.success(f"Loaded {n} Example Patients! (Includes Logistic Outcome)")
     st.rerun()
-
+    
 # File Uploader
 upl = st.sidebar.file_uploader("Upload CSV/Excel", type=['csv', 'xlsx'])
 if upl:
     try:
-        if upl.name.endswith('.csv'): st.session_state.df = pd.read_csv(upl)
-        else: st.session_state.df = pd.read_excel(upl)
-        st.sidebar.success("File Uploaded!")
-    except Exception as e: st.sidebar.error(f"Error: {e}")
+        data_bytes = upl.getvalue()
         
+        # ใช้ SHA-256 แทน MD5 เพื่อหลีกเลี่ยง insecure-hash lint และเพิ่มความแข็งแรง
+        # เดิม: file_sig = (upl.name, hash(data_bytes))  หรือ MD5
+        file_sig = (upl.name, hashlib.sha256(data_bytes).hexdigest())
+        
+        if st.session_state.get('uploaded_file_sig') != file_sig:
+            if upl.name.lower().endswith('.csv'):
+                new_df = pd.read_csv(io.BytesIO(data_bytes))
+            else:
+                new_df = pd.read_excel(io.BytesIO(data_bytes))
+            
+            st.session_state.df = new_df
+            st.session_state.uploaded_file_name = upl.name
+            st.session_state.uploaded_file_sig = file_sig
+            st.session_state.var_meta = {} # Reset meta for new file
+            
+            # 🟢 REQUIRED FIX: Add default metadata for new continuous/categorical variables
+            current_meta = {}
+            for col in new_df.columns:
+                # Determine type automatically
+                if pd.api.types.is_numeric_dtype(new_df[col]):
+                    current_meta[col] = {'type': 'Continuous', 'label': col, 'map': {}}
+                else:
+                    current_meta[col] = {'type': 'Categorical', 'label': col, 'map': {}}
+
+            st.session_state.var_meta = current_meta
+            st.sidebar.success("File Uploaded and Metadata Initialized!")
+            st.rerun() # Rerun to update the main page and sidebar controls
+        
+        else:
+            st.sidebar.info("File already loaded.")
+            
+    except (ValueError, UnicodeDecodeError, pd.errors.ParserError, ImportError) as e:  
+        st.sidebar.error(f"Error: {e}")
+        st.session_state.df = None
+        st.session_state.uploaded_file_name = None
+        st.session_state.uploaded_file_sig = None
+
 if st.sidebar.button("⚠️ Reset All Data", type="primary"):
     st.session_state.clear()
     st.rerun()
@@ -185,11 +236,37 @@ if st.sidebar.button("⚠️ Reset All Data", type="primary"):
 if st.session_state.df is not None:
     st.sidebar.header("2. Settings")
     cols = st.session_state.df.columns.tolist()
-    s_var = st.sidebar.selectbox("Edit Var:", ["Select..."] + cols)
+    
+    # 🟢 Use a default value of 'Auto-detect' if the key doesn't exist, which is safer
+    auto_detect_meta = {c: st.session_state.var_meta.get(c, {'type': 'Auto-detect', 'map': {}}).get('type', 'Auto-detect') for c in cols}
+    
+    s_var = st.sidebar.selectbox("Edit Var:", ["Select...", *cols])
     if s_var != "Select...":
+        # Ensure metadata for s_var exists before accessing
+        if s_var not in st.session_state.var_meta:
+            # Fallback to auto-detect if metadata is missing (shouldn't happen with fix, but safer)
+            is_numeric = pd.api.types.is_numeric_dtype(st.session_state.df[s_var]) if s_var in st.session_state.df.columns else False
+            initial_type = 'Continuous' if is_numeric else 'Categorical'
+            st.session_state.var_meta[s_var] = {'type': initial_type, 'label': s_var, 'map': {}}
+
         meta = st.session_state.var_meta.get(s_var, {})
-        n_type = st.sidebar.radio("Type:", ['Auto-detect', 'Categorical', 'Continuous'], 
-                                  index=['Auto-detect', 'Categorical', 'Continuous'].index(meta.get('type','Auto-detect')))
+        
+        # Determine current type for radio button display
+        current_type = meta.get('type', 'Auto-detect')
+        if current_type == 'Auto-detect':
+            is_numeric = pd.api.types.is_numeric_dtype(st.session_state.df[s_var]) if s_var in st.session_state.df.columns else False
+            current_type = 'Continuous' if is_numeric else 'Categorical'
+
+        allowed_types = ['Categorical', 'Continuous']
+        if current_type not in allowed_types:
+            current_type = 'Categorical'
+
+        n_type = st.sidebar.radio(
+            "Type:",
+            allowed_types,
+            index=allowed_types.index(current_type),
+        )
+                                  
         st.sidebar.markdown("Labels (0=No):")
         map_txt = st.sidebar.text_area("Map", value="\n".join([f"{k}={v}" for k,v in meta.get('map',{}).items()]), height=80)
         
@@ -198,14 +275,27 @@ if st.session_state.df is not None:
             for line in map_txt.split('\n'):
                 if '=' in line:
                     k, v = line.split('=', 1)
-                    try: 
-                        k=k.strip()
-                        if k.replace('.','',1).isdigit(): k = float(k) if '.' in k else int(k)
+                    try:
+                        k = k.strip()
+                        # Try numeric parse (supports negatives, floats, sci-notation)
+                        try:
+                            k_num = float(k)
+                            k = int(k_num) if k_num.is_integer() else k_num
+                        except ValueError:
+                            pass
                         new_map[k] = v.strip()
-                    except: pass
-            if s_var not in st.session_state.var_meta: st.session_state.var_meta[s_var]={}
+                    except (TypeError, ValueError) as e:
+                        st.sidebar.warning(f"Skipping invalid map line '{line}': {e}")
+            
+            # Ensure the key exists
+            if s_var not in st.session_state.var_meta: 
+                st.session_state.var_meta[s_var] = {}
+            
+            # Update meta
             st.session_state.var_meta[s_var]['type'] = n_type
             st.session_state.var_meta[s_var]['map'] = new_map
+            st.session_state.var_meta[s_var].setdefault('label', s_var)  # don't clobber existing labels
+            
             st.sidebar.success("Saved!")
             st.rerun()
 
@@ -215,8 +305,8 @@ if st.session_state.df is not None:
 if st.session_state.df is not None:
     df = st.session_state.df 
 
-    # 🟢 FIX 2: เพิ่ม Tab t7 สำหรับ Advanced Survival Analysis
-    t0, t1, t2, t3, t4, t5, t6, t7 = st.tabs([
+    # 🟢 FIX 2: เตรียมที่สำหรับ Advanced Survival Analysis (Time Cox Regs) ในอนาคต
+    t0, t1, t2, t3, t4, t5, t6 = st.tabs([
         "📄 Raw Data", 
         "📋 Baseline Table 1", 
         "🔬 Diagnostic Test", 
@@ -224,7 +314,7 @@ if st.session_state.df is not None:
         "📊 Logistic Regression",
         "⏳ Survival Analysis",
         "⚖️ Propensity Score",
-        "📈 Time Cox Regs" # 🟢 New Tab
+     # "📈 Time Cox Regs"  # 🟢 Enable this label (and t7) when the advanced survival tab is ready
     ])
 
     # Call Modules
@@ -245,8 +335,8 @@ if st.session_state.df is not None:
         tab_survival.render(df_clean, st.session_state.var_meta)
     with t6:
         tab_psm.render(df_clean, st.session_state.var_meta)
-    with t7:
-        tab_adv_survival.render(df_clean, st.session_state.var_meta)
+ #   with t7:
+ #       tab_adv_survival.render(df_clean, st.session_state.var_meta)
         
 else:
     st.info("👈 Please load example data or upload a file to start.")

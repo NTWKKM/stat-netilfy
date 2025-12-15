@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import correlation # Import from root
+from typing import List, Tuple
 
 def render(df):
     """
@@ -25,6 +26,9 @@ def render(df):
     ])
     
     all_cols = df.columns.tolist()
+    if not all_cols:
+        st.warning("No columns available for correlation analysis.")
+        return
 
     # ==================================================
     # SUB-TAB 1: Chi-Square & Risk Measures (Categorical)
@@ -44,21 +48,27 @@ def render(df):
         cc1, cc2, cc3 = st.columns(3)
         
         # 🟢 UPDATE 1: Auto-select V1 and V2
-        v1_default_name = 'Hypertension'
-        v2_default_name = 'Outcome_Disease'
+        v1_default_name = 'Group_Treatment'
+        v2_default_name = 'Status_Death'
         
         v1_idx = next((i for i, c in enumerate(all_cols) if c == v1_default_name), 0)
         v2_idx = next((i for i, c in enumerate(all_cols) if c == v2_default_name), min(1, len(all_cols)-1))
         
         v1 = cc1.selectbox("Variable 1 (Exposure/Row):", all_cols, index=v1_idx, key='chi1_corr_tab') 
         v2 = cc2.selectbox("Variable 2 (Outcome/Col):", all_cols, index=v2_idx, key='chi2_corr_tab')
+        # 🟢 FIX: Remove 'return' to allow the rest of the tab (e.g., Continuous Correlation) to render.
+        # We will use the 'v1 != v2' condition to only run the Chi-Square analysis.
+        # Check for invalid inputs
+        inputs_ok = (v1 is not None and v2 is not None and v1 != v2 and df[v1].nunique() > 1 and df[v2].nunique() > 1) # 🟢 UPDATE: ใช้ v1 != v2 ในการกำหนด inputs_ok
+        if v1 == v2:
+            st.error("Please select two different variables for Categorical Correlation.")
+            # 🟢 NOTE: Do NOT return here. Continue execution to render the rest of the tab UI.
         
         # 🟢 UPDATE: เพิ่ม Fisher's Exact Test
         method_choice = cc3.radio(
             "Test Method (for 2x2):", 
             ['Pearson (Standard)', "Yates' correction", "Fisher's Exact Test"], 
             index=0, 
-            # สังเกต 2: เปลี่ยน key เป็น _diag เพื่อไม่ให้ซ้ำ
             key='chi_corr_method_tab',
             help="""
                 - Pearson: Best for large samples. 
@@ -68,15 +78,39 @@ def render(df):
         
         # 🟢 NEW: Positive Label Selectors
 
-        # Helper function to get unique values and set default index (Duplicated for tab_corr)
-        def get_pos_label_settings(df, col_name):
+        # Helper function to get unique values and set default index
+        # from ._common import get_pos_label_settings <-- to fix after wthy this code not work properly
+        def get_pos_label_settings(df: pd.DataFrame, col_name: str) -> Tuple[List[str], int]:
+            """
+            Helper function to get unique values from a column, convert them to strings, 
+            sort them, and determine a default index (preferring '1', then '0').
+
+            Handles the case where the column might be empty after dropna.
+
+            Args:
+                df: The DataFrame containing the data.
+                col_name: The name of the column to process.
+
+            Returns:
+                A tuple containing:
+                1. A sorted list of unique non-null string values.
+                2. The default index for selection (0, or index of '1'/'0').
+            """
+            # 🟢 NOTE: Need to handle the case where the column might be empty after dropna
+            # Convert to string and drop NA values before getting unique values
             unique_vals = [str(x) for x in df[col_name].dropna().unique()]
             unique_vals.sort()
+    
             default_idx = 0
             if '1' in unique_vals:
+                # Default to '1' if available
                 default_idx = unique_vals.index('1')
+            elif len(unique_vals) > 0 and '0' in unique_vals:
+                # Otherwise, default to '0' if available and there are unique values
+                default_idx = unique_vals.index('0')
+        
             return unique_vals, default_idx
-
+    
         # Selector for V1 Positive Label
         cc4, cc5, cc6 = st.columns(3)
         v1_uv, v1_default_idx = get_pos_label_settings(df, v1)
@@ -98,8 +132,8 @@ def render(df):
         else:
             v2_pos_label = cc5.selectbox(f"Positive Label (Col: {v2}):", v2_uv, index=v2_default_idx, key='chi_v2_pos_corr')
         
-        # 🛑 จุดเพิ่ม: ถ้าเลือกค่าไม่ได้ ให้หยุดการทำงาน
-        inputs_ok = not (v1_pos_label is None or v2_pos_label is None)
+        # Combine variable validity with positive label validity
+        inputs_ok = inputs_ok and (v1_pos_label is not None) and (v2_pos_label is not None)
         if not inputs_ok:
             st.warning("Chi-Square disabled: one of the selected columns has no non-null values.")
         
@@ -116,8 +150,8 @@ def render(df):
             df_calc[v1] = df_calc[v1].astype("string")
             df_calc[v2] = df_calc[v2].astype("string")
 
-            # 🟢 UPDATE: ส่ง df_calc แทน df
-            tab, stats, msg, risk_df = correlation.calculate_chi2(
+            # tab: Contingency table (DF), stats: Statistical results (DF), msg: Error/Warning (str), risk_df: Risk metrics (DF)
+            tab, stats, msg, risk_df = correlation.calculate_chi2( 
                 df_calc, v1, v2,   # <--- ใช้ df_calc ที่แปลงแล้ว
                 method=method_choice, 
                 v1_pos=v1_pos_label,
@@ -125,15 +159,25 @@ def render(df):
             )
             
             if tab is not None:
+                # 🟢 UPDATE 1: จัดการข้อความสถานะ/หมายเหตุ
+                # เมื่อ tab is not None, msg จะมีแค่ข้อความเตือน (Warning/Note) หรือเป็นสตริงว่างเปล่าเท่านั้น
+                if msg.strip():
+                    status_text = f"Note: {msg.strip()}"
+                else:
+                    status_text = "Analysis Status: Completed successfully."
+
                 rep = [
-                    {'type': 'text', 'data': f"<b>Analysis:</b> Chi-Square & Risk<br><b>Variables:</b> {v1} vs {v2}"},
-                    {'type': 'text', 'data': f"<b>Main Result:</b> {msg}"},
+                    # 🟢 FIX: แยกข้อความและลบแท็ก HTML (<b>, <br>) ออก เพื่อให้ถูกแสดงผลเป็นข้อความธรรมดา
+                    {'type': 'text', 'data': "Analysis: Chi-Square & Risk"},
+                    {'type': 'text', 'data': f"Variables: {v1} vs {v2}"},
+                    {'type': 'text', 'data': status_text}, # แสดงสถานะหรือข้อความเตือน
                     
                     # Contingency Table
                     {'type': 'contingency_table', 'header': 'Contingency Table', 'data': tab, 'outcome_col': v2},
                     
                     # Statistics
-                    {'type': 'table', 'header': 'Detailed Statistics', 'data': pd.DataFrame([stats]).T} 
+                    # บรรทัดนี้เคยเป็น {'data': result} ซึ่งทำให้เกิด NameError และอาจเกิด ValueError
+                    {'type': 'table', 'header': 'Detailed Statistics', 'data': stats} # 🟢 FIX: ใช้ 'data': stats ตรงๆ
                 ]
                 
                 # 🟢 UPDATE 2: เพิ่ม Risk Table ลงใน Report ถ้ามีข้อมูล
@@ -163,12 +207,11 @@ def render(df):
 
     * **Pearson (r):** Assesses **linear** correlation; best for normally distributed data.
     * **Spearman (rho):** Assesses **monotonic** (directional) correlation; best for non-normal data or ranks/outliers.
-
+    
     **Interpretation of Coefficient (r/rho):**
     * **Close to +1:** Strong positive association (Both variables increase together).
     * **Close to -1:** Strong negative association (One increases as the other decreases).
     * **Close to 0:** Weak or no association.
-
     **X/Y Axis (for Plotting):**
     * The coefficient (r/rho) is **symmetrical** (X,Y is the same as Y,X).
     * For visual clarity, the **Predictor (Independent)** should be on the **X-axis** and the **Outcome (Dependent)** on the **Y-axis**.
@@ -177,9 +220,9 @@ def render(df):
         c1, c2, c3 = st.columns(3)
         cm = c1.selectbox("Correlation Coefficient:", ["Pearson", "Spearman"], key='coeff_type_tab')
         
-        # 🟢 UPDATE: Auto-select BMI and Inflammation_Marker
-        cv1_default_name = 'BMI'
-        cv2_default_name = 'Inflammation_Marker'
+        # 🟢 UPDATE: Auto-select default continuous variables
+        cv1_default_name = 'Lab_Calcium'
+        cv2_default_name = 'Lab_Albumin'
         
         cv1_idx = next((i for i, c in enumerate(all_cols) if c == cv1_default_name), 0)
         cv2_idx = next((i for i, c in enumerate(all_cols) if c == cv2_default_name), min(1, len(all_cols)-1))
@@ -195,14 +238,16 @@ def render(df):
                 st.error("Please select different variables.")
             else:
                 m_key = 'pearson' if cm == 'Pearson' else 'spearman'
+                # res: dict with keys (Method, Coefficient, P-value, N), err: str, fig: Plotly Figure
                 res, err, fig = correlation.calculate_correlation(df, cv1, cv2, method=m_key)
-                
+        
                 if err: 
                     st.error(err)
                 else:
+                    # 🟢 FIX: res เป็น dict จึงต้องใช้ dict access และแปลงเป็น DataFrame สำหรับแสดงในตาราง
                     rep = [
                         {'type':'text', 'data':f"Method: {res['Method']}<br>Variables: {cv1} vs {cv2}"},
-                        {'type':'table', 'header':'Statistics', 'data':pd.DataFrame([res])},
+                        {'type':'table', 'header':'Statistics', 'data':pd.DataFrame([res])}, 
                         {'type':'plot', 'header':'Scatter Plot', 'data':fig}
                     ]
                     html = correlation.generate_report(f"Corr: {cv1} vs {cv2}", rep)

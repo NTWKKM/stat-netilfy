@@ -9,6 +9,7 @@ def render(df, var_meta):
     **Presentation:**
     * **Numeric:** Mean ± SD (Normally Distributed Data) or Median (IQR) (**Non**-Normally Distributed Data).
     * **Categorical:** Count (Percentage).
+    * **Odds Ratio (OR):** Automatically calculated for categorical variables when there are **exactly 2 groups** (One-vs-Rest method).
     * **P-value & Test Used:** Tests for statistically significant differences in characteristics across groups.
     * **Automatically selects the appropriate test for P-value** (e.g., t-test, Chi-square, Kruskal-Wallis) based on the variable type and distribution.
 
