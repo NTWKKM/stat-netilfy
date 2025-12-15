@@ -95,7 +95,7 @@ def render(df, _var_meta):
         
         # Calculate Max Time (Robust check)
         max_t = df[col_time].dropna().max() if not df.empty and ptypes.is_numeric_dtype(df[col_time]) and df[col_time].notna().any() else 1.0
-        if max_t <= 0: 
+        if max_t <= 0:
             max_t = 1.0 
         
         st.write(f"**Select Landmark Time (Max: {max_t:.2f})**")
