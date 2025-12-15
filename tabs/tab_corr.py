@@ -132,7 +132,8 @@ def render(df):
         else:
             v2_pos_label = cc5.selectbox(f"Positive Label (Col: {v2}):", v2_uv, index=v2_default_idx, key='chi_v2_pos_corr')
         
-        inputs_ok = not (v1_pos_label is None or v2_pos_label is None)
+        # Combine variable validity with positive label validity
+        inputs_ok = inputs_ok and (v1_pos_label is not None) and (v2_pos_label is not None)
         if not inputs_ok:
             st.warning("Chi-Square disabled: one of the selected columns has no non-null values.")
         
@@ -167,7 +168,7 @@ def render(df):
 
                 rep = [
                     # 🟢 FIX: แยกข้อความและลบแท็ก HTML (<b>, <br>) ออก เพื่อให้ถูกแสดงผลเป็นข้อความธรรมดา
-                    {'type': 'text', 'data': f"Analysis: Chi-Square & Risk"},
+                    {'type': 'text', 'data': "Analysis: Chi-Square & Risk"},
                     {'type': 'text', 'data': f"Variables: {v1} vs {v2}"},
                     {'type': 'text', 'data': status_text}, # แสดงสถานะหรือข้อความเตือน
                     
