@@ -226,7 +226,7 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
 
     return fig, pd.DataFrame(stats_list)
 
-# --- 3. Cox Proportional Hazards (Robust Version with Firth Fallback) ---
+# --- 3. Cox Proportional Hazards (Robust Version with Progressive L2 Penalization) ---
 def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     # 1. Validation
     missing = [c for c in [duration_col, event_col, *covariate_cols] if c not in df.columns]
@@ -251,43 +251,49 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     _standardize_numeric_cols(data, covariate_cols)
     
     # 4. Fitting Strategy (Progressive Robustness)
-    penalizers_L2 = [0.0, 0.1, 1.0, 10.0] 
+    # The order of penalizers defines the fallback: Standard (0.0) -> Mild L2 (0.1) -> Stronger L2 (1.0)
+    # L2 Penalization (Ridge) is an effective alternative to Firth's for convergence issues.
+    penalizers_L2 = [0.0, 0.1, 1.0] 
     cph = None
     last_error = None
     method_used = None
-    
+
     for p in penalizers_L2:
         try:
             temp_cph = CoxPHFitter(penalizer=p) 
             temp_cph.fit(data, duration_col=duration_col, event_col=event_col)
             cph = temp_cph
-            method_used = f"L2 Penalized CoxPH (p={p})"
+            
+            # Capture the method used
             if p == 0.0:
-                method_used = "Standard CoxPH"
-            break
+                method_used = "Standard CoxPH (Maximum Partial Likelihood)"
+            else:
+                method_used = f"L2 Penalized CoxPH (p={p}) - Ridge Regression Fallback"
+            
+            break # หยุดทันทีที่ Fit สำเร็จ
         except Exception as e:
             last_error = e
             continue
 
+    # 5. Error handling
     if cph is None:
-        return None, None, data, f"Model Convergence Failed. Last attempt used: {method_used if method_used else 'None'}. Details: {last_error}.\nTry checking for high correlation (multicollinearity) or perfect separation."
+        return None, None, data, f"Model Convergence Failed after trying Standard and L2 penalization. Last method used: {method_used if method_used else 'None'}. Details: {last_error}.\nTry checking for high correlation (multicollinearity) or perfect separation."
 
-    # Format Results
+    # 6. Format Results
     summary = cph.summary.copy()
     summary['HR'] = np.exp(summary['coef'])
     ci = cph.confidence_intervals_
     summary['95% CI Lower'] = np.exp(ci.iloc[:, 0])
     summary['95% CI Upper'] = np.exp(ci.iloc[:, 1])
-    
+
     # Add Method used to results table
-    summary['Method'] = method_used
+    summary['Method'] = method_used # 🟢 NEW: ระบุวิธีการที่ใช้จริงลงในผลลัพธ์
     summary.index.name = "Covariate"
-    
+
     res_df = summary[['HR', '95% CI Lower', '95% CI Upper', 'p', 'Method']].rename(columns={'p': 'P-value'})
     
     return cph, res_df, data, None
 
-# ... (check_cph_assumptions remains the same)
 def check_cph_assumptions(cph, data):
     try:
         # 1. Statistical Test
