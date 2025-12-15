@@ -453,6 +453,14 @@ def generate_report_survival(title, elements):
         th{background-color:#0066cc;color:white;}
         h1{color:#333;border-bottom:2px solid #0066cc;}
         h2{color:#0066cc;}
+        .report-footer {
+            text-align: right;
+            font-size: 0.75em;
+            color: #666;
+            margin-top: 20px;
+            border-top: 1px dashed #ccc;
+            padding-top: 10px;
+        }
     </style>"""
     
     plotly_js = '<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>'
