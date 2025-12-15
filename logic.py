@@ -6,6 +6,12 @@ import warnings
 import html
 import streamlit as st  # ✅ IMPORT STREAMLIT
 
+# ✅ FIX #7-8: IMPORT LOGGER (MINIMAL WIRING)
+from logger import get_logger
+
+# Get logger instance for this module
+logger = get_logger(__name__)
+
 # ✅ TRY IMPORT FIRTHLOGIST
 try:
     from firthlogist import FirthLogisticRegression
@@ -61,7 +67,6 @@ def run_binary_logit(y, X, method='default'):
         # 🟢 CASE 1: FIRTH'S LOGISTIC REGRESSION (Recommended)
         if method == 'firth':
             if not HAS_FIRTH:
-                # ถ้า User เลือก Firth แต่ไม่มี Library ให้ Return Error
                 return None, None, None, "Library 'firthlogist' not installed. Please define requirements.txt or use Standard method."
             
             # firthlogist: fit_intercept=False เพราะเราใส่ Constant ใน X ไปแล้ว
@@ -94,6 +99,7 @@ def run_binary_logit(y, X, method='default'):
     except (KeyboardInterrupt, SystemExit):
         raise
     except Exception as e:
+        logger.error(f"Logistic regression failed: {e}", exc_info=True)  # ✅ LOG ERROR
         return None, None, None, str(e)
 
 def get_label(col_name, var_meta):
@@ -145,22 +151,34 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     Returns:
         str: An HTML fragment containing a table of variables with descriptive statistics, crude odds ratios (and p-values), and adjusted odds ratios where multivariable modelling was performed. If `outcome_name` is not found in `df`, returns an HTML alert div indicating the missing outcome.
     """
+    # ✅ LOG ANALYSIS START
+    logger.log_analysis(
+        analysis_type="Logistic Regression",
+        outcome=outcome_name,
+        n_vars=len(df.columns) - 1,
+        n_samples=len(df)
+    )
+    
     # ✅ FIX #3: ADD BINARY OUTCOME VALIDATION
     if outcome_name not in df.columns:
-        return f"<div class='alert'>⚠️ Outcome '{outcome_name}' not found.</div>"
+        msg = f"<div class='alert'>⚠️ Outcome '{outcome_name}' not found.</div>"
+        logger.warning(f"Outcome column not found: {outcome_name}")  # ✅ LOG WARNING
+        return msg
     
     # NEW: Validate outcome is binary (exactly 2 unique values)
     y_raw = df[outcome_name].dropna()
     unique_outcomes = set(y_raw.unique())
     
     if len(unique_outcomes) != 2:
-        return f"""
+        msg = f"""
         <div class='alert' style='background:#ffebee; border-left:4px solid #d32f2f; padding:12px; border-radius:4px;'>
             ❌ <b>Invalid Outcome:</b> Expected binary outcome (2 unique values) but found <b>{len(unique_outcomes)}</b>.<br>
             Unique values: {sorted(unique_outcomes)}<br>
             <span style='font-size:0.9em; color:#666; margin-top:8px; display:block;'>💡 Please select a truly binary outcome variable (e.g., Yes/No, Dead/Alive, 0/1)</span>
         </div>
         """
+        logger.error(f"Invalid outcome: {len(unique_outcomes)} unique values instead of 2")  # ✅ LOG ERROR
+        return msg
     
     # NEW: Warn if outcome isn't 0/1
     if not unique_outcomes.issubset({0, 1}):
@@ -186,182 +204,184 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         preferred_method = 'default'
 
     # --- CALCULATION LOOP ---
-    for col in sorted_cols:
-        if col == outcome_name: continue
-        if df_aligned[col].isnull().all(): continue
+    with logger.track_time("univariate_analysis", log_level="debug"):  # ✅ TRACK TIMING
+        for col in sorted_cols:
+            if col == outcome_name: continue
+            if df_aligned[col].isnull().all(): continue
 
-        res = {'var': col}
-        X_raw = df_aligned[col]
-        X_num = X_raw.apply(clean_numeric_value)
-        
-        X_neg = X_raw[y == 0]
-        X_pos = X_raw[y == 1]
-        
-        orig_name = col.split('_', 1)[1] if len(col.split('_', 1)) > 1 else col
-        
-        unique_vals = X_num.dropna().unique()
-        unique_count = len(unique_vals)
-        
-        # ✅ FIX #2: IMPROVE CATEGORICAL/CONTINUOUS DETECTION
-        is_categorical = False
-        is_binary = set(unique_vals).issubset({0, 1})
-        
-        # NEW: Better detection logic
-        if is_binary:
-            is_categorical = True
-        elif unique_count < 10:  # 🟢 INCREASED THRESHOLD from 5 to 10
-            # Check if mostly integers (likely categorical codes)
-            decimals_count = sum(1 for v in unique_vals if not float(v).is_integer())
-            decimals_pct = decimals_count / len(unique_vals) if unique_vals.size > 0 else 0
+            res = {'var': col}
+            X_raw = df_aligned[col]
+            X_num = X_raw.apply(clean_numeric_value)
             
-            if decimals_pct < 0.3:  # If <30% have decimals, treat as categorical
+            X_neg = X_raw[y == 0]
+            X_pos = X_raw[y == 1]
+            
+            orig_name = col.split('_', 1)[1] if len(col.split('_', 1)) > 1 else col
+            
+            unique_vals = X_num.dropna().unique()
+            unique_count = len(unique_vals)
+            
+            # ✅ FIX #2: IMPROVE CATEGORICAL/CONTINUOUS DETECTION
+            is_categorical = False
+            is_binary = set(unique_vals).issubset({0, 1})
+            
+            # NEW: Better detection logic
+            if is_binary:
                 is_categorical = True
-            # else: treat as continuous
-        
-        # Allow user override via metadata
-        user_setting = {}
-        if var_meta and (col in var_meta or orig_name in var_meta):
-            key = col if col in var_meta else orig_name
-            user_setting = var_meta[key]
-            
-            if user_setting.get('type') == 'Categorical':
-                is_categorical = True
-            elif user_setting.get('type') == 'Continuous':
-                is_categorical = False
-        
-        if is_categorical:
-            n_used = len(X_raw.dropna())
-            mapper = user_setting.get('map', {})
-            
-            try: levels = sorted(X_raw.dropna().unique(), key=lambda x: float(x) if str(x).replace('.','',1).isdigit() else str(x))
-            except: levels = sorted(X_raw.astype(str).unique())
-            
-            desc_tot = [f"<span class='n-badge'>n={n_used}</span>"]
-            desc_neg = [f"<span class='n-badge'>n={len(X_neg.dropna())}</span>"]
-            desc_pos = [f"<span class='n-badge'>n={len(X_pos.dropna())}</span>"]
-            
-            for lvl in levels:
-                try: 
-                    if float(lvl).is_integer(): key = int(float(lvl))
-                    else: key = float(lvl)
-                except: key = lvl
+            elif unique_count < 10:  # 🟢 INCREASED THRESHOLD from 5 to 10
+                # Check if mostly integers (likely categorical codes)
+                decimals_count = sum(1 for v in unique_vals if not float(v).is_integer())
+                decimals_pct = decimals_count / len(unique_vals) if unique_vals.size > 0 else 0
                 
-                label_txt = mapper.get(key, str(lvl))
-                lvl_str = str(lvl)
-                if str(lvl).endswith('.0'): lvl_str = str(int(float(lvl)))
+                if decimals_pct < 0.3:  # If <30% have decimals, treat as categorical
+                    is_categorical = True
+                # else: treat as continuous
+            
+            # Allow user override via metadata
+            user_setting = {}
+            if var_meta and (col in var_meta or orig_name in var_meta):
+                key = col if col in var_meta else orig_name
+                user_setting = var_meta[key]
                 
-                def count_val(series, v_str):
-                    """
-                    Count how many elements in a pandas Series equal a given string after normalizing numeric-like values.
+                if user_setting.get('type') == 'Categorical':
+                    is_categorical = True
+                elif user_setting.get('type') == 'Continuous':
+                    is_categorical = False
+            
+            if is_categorical:
+                n_used = len(X_raw.dropna())
+                mapper = user_setting.get('map', {})
+                
+                try: levels = sorted(X_raw.dropna().unique(), key=lambda x: float(x) if str(x).replace('.','',1).isdigit() else str(x))
+                except: levels = sorted(X_raw.astype(str).unique())
+                
+                desc_tot = [f"<span class='n-badge'>n={n_used}</span>"]
+                desc_neg = [f"<span class='n-badge'>n={len(X_neg.dropna())}</span>"]
+                desc_pos = [f"<span class='n-badge'>n={len(X_pos.dropna())}</span>"]
+                
+                for lvl in levels:
+                    try: 
+                        if float(lvl).is_integer(): key = int(float(lvl))
+                        else: key = float(lvl)
+                    except: key = lvl
                     
-                    This converts each element to string; if the string represents a number (allowing one decimal point) a trailing ".0" is removed (e.g., "1.0" -> "1") before comparing to v_str. The comparison is string equality performed after this normalization.
+                    label_txt = mapper.get(key, str(lvl))
+                    lvl_str = str(lvl)
+                    if str(lvl).endswith('.0'): lvl_str = str(int(float(lvl)))
                     
-                    Parameters:
-                        series (pandas.Series): Series whose values will be normalized and compared.
-                        v_str (str): Target string to match against each normalized series element.
-                    
-                    Returns:
-                        int: Number of elements equal to v_str after normalization.
-                    """
-                    return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
+                    def count_val(series, v_str):
+                        """
+                        Count how many elements in a pandas Series equal a given string after normalizing numeric-like values.
+                        
+                        This converts each element to string; if the string represents a number (allowing one decimal point) a trailing ".0" is removed (e.g., "1.0" -> "1") before comparing to v_str. The comparison is string equality performed after this normalization.
+                        
+                        Parameters:
+                            series (pandas.Series): Series whose values will be normalized and compared.
+                            v_str (str): Target string to match against each normalized series element.
+                        
+                        Returns:
+                            int: Number of elements equal to v_str after normalization.
+                        """
+                        return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
 
-                c_all = count_val(X_raw, lvl_str)
-                if c_all == 0:
-                    c_all = (X_raw == lvl).sum()
+                    c_all = count_val(X_raw, lvl_str)
+                    if c_all == 0:
+                        c_all = (X_raw == lvl).sum()
+                    
+                    p_all = (c_all/n_used)*100 if n_used else 0
+                    c_n = count_val(X_neg, lvl_str)
+                    p_n = (c_n/len(X_neg.dropna()))*100 if len(X_neg.dropna()) else 0
+                    c_p = count_val(X_pos, lvl_str)
+                    p_p = (c_p/len(X_pos.dropna()))*100 if len(X_pos.dropna()) else 0
+                    
+                    desc_tot.append(f"{label_txt}: {c_all} ({p_all:.1f}%)")
+                    desc_neg.append(f"{c_n} ({p_n:.1f}%)")
+                    desc_pos.append(f"{c_p} ({p_p:.1f}%)")
                 
-                p_all = (c_all/n_used)*100 if n_used else 0
-                c_n = count_val(X_neg, lvl_str)
-                p_n = (c_n/len(X_neg.dropna()))*100 if len(X_neg.dropna()) else 0
-                c_p = count_val(X_pos, lvl_str)
-                p_p = (c_p/len(X_pos.dropna()))*100 if len(X_pos.dropna()) else 0
+                res['desc_total'] = "<br>".join(desc_tot)
+                res['desc_neg'] = "<br>".join(desc_neg)
+                res['desc_pos'] = "<br>".join(desc_pos)
                 
-                desc_tot.append(f"{label_txt}: {c_all} ({p_all:.1f}%)")
-                desc_neg.append(f"{c_n} ({p_n:.1f}%)")
-                desc_pos.append(f"{c_p} ({p_p:.1f}%)")
-            
-            res['desc_total'] = "<br>".join(desc_tot)
-            res['desc_neg'] = "<br>".join(desc_neg)
-            res['desc_pos'] = "<br>".join(desc_pos)
-            
-            try:
-                contingency = pd.crosstab(X_raw, y)
-                if contingency.size > 0:
-                    chi2, p, dof, ex = stats.chi2_contingency(contingency)
-                    res['p_comp'] = p
-                    res['test_name'] = "Chi-square"
-                else: 
+                try:
+                    contingency = pd.crosstab(X_raw, y)
+                    if contingency.size > 0:
+                        chi2, p, dof, ex = stats.chi2_contingency(contingency)
+                        res['p_comp'] = p
+                        res['test_name'] = "Chi-square"
+                    else: 
+                        res['p_comp'] = np.nan
+                        res['test_name'] = "-"
+                except (ValueError, np.linalg.LinAlgError):
                     res['p_comp'] = np.nan
                     res['test_name'] = "-"
-            except (ValueError, np.linalg.LinAlgError):
-                res['p_comp'] = np.nan
-                res['test_name'] = "-"
-            
-        else:
-            n_used = len(X_num.dropna())
-            m_t, s_t = X_num.mean(), X_num.std()
-            m_n, s_n = pd.to_numeric(X_neg, errors='coerce').mean(), pd.to_numeric(X_neg, errors='coerce').std()
-            m_p, s_p = pd.to_numeric(X_pos, errors='coerce').mean(), pd.to_numeric(X_pos, errors='coerce').std()
-            
-            res['desc_total'] = f"<span class='n-badge'>n={n_used}</span><br>Mean: {m_t:.2f}<br>(SD {s_t:.2f})"
-            res['desc_neg'] = f"{m_n:.2f} ({s_n:.2f})"
-            res['desc_pos'] = f"{m_p:.2f} ({s_p:.2f})"
-            
-            try:
-                _, p = stats.mannwhitneyu(pd.to_numeric(X_neg, errors='coerce').dropna(), pd.to_numeric(X_pos, errors='coerce').dropna())
-                res['p_comp'] = p
-                res['test_name'] = "Mann-Whitney U"
-            except (ValueError, TypeError): 
-                res['p_comp'] = np.nan
-                res['test_name'] = "-"
-
-        # --- UNIVARIATE REGRESSION ---
-        data_uni = pd.DataFrame({'y': y, 'x': X_num}).dropna()
-        if not data_uni.empty and data_uni['x'].nunique() > 1:
-            params, conf, pvals, status = run_binary_logit(data_uni['y'], data_uni[['x']], method=preferred_method)
-            if status == "OK" and 'x' in params:
-                coef = params['x']
-                or_val = np.exp(coef)
                 
-                if 'x' in conf.index:
-                    ci_low, ci_high = np.exp(conf.loc['x'][0]), np.exp(conf.loc['x'][1])
-                else:
-                    ci_low, ci_high = np.nan, np.nan 
-                    
-                res['or'] = f"{or_val:.2f} ({ci_low:.2f}-{ci_high:.2f})"
-                res['p_or'] = pvals['x']
-            else: res['or'] = "-"
-        else: res['or'] = "-"
+            else:
+                n_used = len(X_num.dropna())
+                m_t, s_t = X_num.mean(), X_num.std()
+                m_n, s_n = pd.to_numeric(X_neg, errors='coerce').mean(), pd.to_numeric(X_neg, errors='coerce').std()
+                m_p, s_p = pd.to_numeric(X_pos, errors='coerce').mean(), pd.to_numeric(X_pos, errors='coerce').std()
+                
+                res['desc_total'] = f"<span class='n-badge'>n={n_used}</span><br>Mean: {m_t:.2f}<br>(SD {s_t:.2f})"
+                res['desc_neg'] = f"{m_n:.2f} ({s_n:.2f})"
+                res['desc_pos'] = f"{m_p:.2f} ({s_p:.2f})"
+                
+                try:
+                    _, p = stats.mannwhitneyu(pd.to_numeric(X_neg, errors='coerce').dropna(), pd.to_numeric(X_pos, errors='coerce').dropna())
+                    res['p_comp'] = p
+                    res['test_name'] = "Mann-Whitney U"
+                except (ValueError, TypeError): 
+                    res['p_comp'] = np.nan
+                    res['test_name'] = "-"
 
-        results_db[col] = res
-        
-        p_screen = res.get('p_comp', np.nan)
-        if pd.isna(p_screen): p_screen = res.get('p_or', np.nan)
-        if pd.notna(p_screen) and p_screen < 0.20:
-            candidates.append(col)
+            # --- UNIVARIATE REGRESSION ---
+            data_uni = pd.DataFrame({'y': y, 'x': X_num}).dropna()
+            if not data_uni.empty and data_uni['x'].nunique() > 1:
+                params, conf, pvals, status = run_binary_logit(data_uni['y'], data_uni[['x']], method=preferred_method)
+                if status == "OK" and 'x' in params:
+                    coef = params['x']
+                    or_val = np.exp(coef)
+                    
+                    if 'x' in conf.index:
+                        ci_low, ci_high = np.exp(conf.loc['x'][0]), np.exp(conf.loc['x'][1])
+                    else:
+                        ci_low, ci_high = np.nan, np.nan 
+                        
+                    res['or'] = f"{or_val:.2f} ({ci_low:.2f}-{ci_high:.2f})"
+                    res['p_or'] = pvals['x']
+                else: res['or'] = "-"
+            else: res['or'] = "-"
+
+            results_db[col] = res
+            
+            p_screen = res.get('p_comp', np.nan)
+            if pd.isna(p_screen): p_screen = res.get('p_or', np.nan)
+            if pd.notna(p_screen) and p_screen < 0.20:
+                candidates.append(col)
 
     # --- MULTIVARIATE ANALYSIS ---
-    aor_results = {}
-    cand_valid = [c for c in candidates if df_aligned[c].apply(clean_numeric_value).notna().sum() > 5]
-    final_n_multi = 0
+    with logger.track_time("multivariate_analysis", log_level="debug"):  # ✅ TRACK TIMING
+        aor_results = {}
+        cand_valid = [c for c in candidates if df_aligned[c].apply(clean_numeric_value).notna().sum() > 5]
+        final_n_multi = 0
 
-    if len(cand_valid) > 0:
-        multi_df = pd.DataFrame({'y': y})
-        for c in cand_valid:
-            multi_df[c] = df_aligned[c].apply(clean_numeric_value)
-        multi_data = multi_df.dropna()
-        final_n_multi = len(multi_data)
-        
-        if not multi_data.empty and final_n_multi > 10:
-            params, conf, pvals, status = run_binary_logit(multi_data['y'], multi_data[cand_valid], method=preferred_method)
+        if len(cand_valid) > 0:
+            multi_df = pd.DataFrame({'y': y})
+            for c in cand_valid:
+                multi_df[c] = df_aligned[c].apply(clean_numeric_value)
+            multi_data = multi_df.dropna()
+            final_n_multi = len(multi_data)
             
-            if status == "OK":
-                for var in cand_valid:
-                    if var in params:
-                        coef = params[var]
-                        aor = np.exp(coef)
-                        ci_low, ci_high = np.exp(conf.loc[var][0]), np.exp(conf.loc[var][1])
-                        ap = pvals[var]
-                        aor_results[var] = {'aor': f"{aor:.2f} ({ci_low:.2f}-{ci_high:.2f})", 'ap': ap}
+            if not multi_data.empty and final_n_multi > 10:
+                params, conf, pvals, status = run_binary_logit(multi_data['y'], multi_data[cand_valid], method=preferred_method)
+                
+                if status == "OK":
+                    for var in cand_valid:
+                        if var in params:
+                            coef = params[var]
+                            aor = np.exp(coef)
+                            ci_low, ci_high = np.exp(conf.loc[var][0]), np.exp(conf.loc[var][1])
+                            ap = pvals[var]
+                            aor_results[var] = {'aor': f"{aor:.2f} ({ci_low:.2f}-{ci_high:.2f})", 'ap': ap}
 
     # --- HTML BUILD ---
     html_rows = []
@@ -403,7 +423,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             # Bounds check: p-values must be in [0, 1]
             if val < -0.0001 or val > 1.0001:
                 # Numerical error detected - log warning
-                st.warning(f"⚠️ P-value out of bounds detected: {val:.6f}. Clipping to valid range [0, 1].")
+                logger.warning(f"⚠️ P-value out of bounds detected: {val:.6f}. Clipping to valid range [0, 1].")  # ✅ LOG WARNING
                 val = max(0, min(1, val))  # Clip to [0, 1]
             else:
                 # Safe clipping within tolerance
@@ -458,6 +478,8 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         method_note = "Binary Logistic Regression"
 
     # 🟢 4. ส่วน Return HTML (เพิ่มสัญลักษณ์ †)
+    logger.info(f"✅ Logistic regression analysis completed (n_multi={final_n_multi})")  # ✅ LOG COMPLETION
+    
     return f"""
     <div id='{outcome_name}' class='table-container'>
     <div class='outcome-title'>Outcome: {outcome_name} (Total n={total_n})</div>
