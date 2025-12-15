@@ -4,48 +4,74 @@ import plotly.express as px
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler  # Added for robust scaling of continuous covariates
+from sklearn.pipeline import Pipeline    # 🟢 NEW: สำหรับสร้างโมเดลแบบรวมขั้นตอน
+from sklearn.compose import ColumnTransformer # 🟢 NEW: สำหรับระบุคอลัมน์ที่จะปรับขนาด
 import io, base64
 import html as _html
 
 # --- 1. Propensity Score Calculation ---
 def calculate_ps(df, treatment_col, covariate_cols):
-    """ 
+    """
     Estimate propensity scores and their logit (log-odds) for a binary treatment using logistic regression.
+    
+    Parameters:
+        df (pandas.DataFrame): Input dataset. Must contain the treatment column and all covariate columns; missing values should be handled and categorical variables already encoded.
+        treatment_col (str): Name of the binary treatment column (expected values 0 and 1).
+        covariate_cols (list[str]): List of column names to use as covariates in the propensity model.
+    
+    Returns:
+        tuple:
+            data (pandas.DataFrame): A copy of the input with rows containing NA in treatment or covariates dropped and two new columns:
+                - ps_score: predicted probability of treatment (clipped to (1e-10, 1-1e-10)).
+                - ps_logit: log-odds of the propensity score.
+            clf (sklearn.linear_model.LogisticRegression): Fitted logistic regression model.
+    
+    Raises:
+        ValueError: If the treatment column is not of a numeric dtype.      
     Includes Robust Scaling for continuous variables to ensure model stability.
     """
     # Drop NA ในคอลัมน์ที่เกี่ยวข้อง
     data = df.dropna(subset=[treatment_col, *covariate_cols]).copy()
     
-    # 🟢 ROBUST UPDATE: Separate Numeric vs Binary for Scaling
-    # Sklearn LogisticRegression applies L2 Regularization by default.
-    # Unscaled continuous variables can distort the model.
-    X_processed = data[covariate_cols].copy()
-    
-    # Identify continuous columns to scale
-    cont_cols = []
-    for col in covariate_cols:
-        if pd.api.types.is_numeric_dtype(X_processed[col]):
-            # If > 2 unique values, treat as continuous/ordinal and scale it
-            # (Keep binary variables 0/1 as is for interpretability/stability)
-            if X_processed[col].nunique() > 2:
-                cont_cols.append(col)
-    
-    if cont_cols:
-        scaler = StandardScaler()
-        X_processed.loc[:, cont_cols] = scaler.fit_transform(X_processed[cont_cols])
-    
-    X = X_processed
+    # 🟢 NEW: Define X and identify columns for scaling vs passing through
+    X = data[covariate_cols]
     y = data[treatment_col]
+    
+    # Identify continuous columns to scale (numeric with > 2 unique values)
+    cont_cols = [
+        col for col in covariate_cols
+        if pd.api.types.is_numeric_dtype(X[col]) and X[col].nunique() > 2
+    ]
+    
+    # Identify binary/categorical columns to pass through without scaling
+    pass_through_cols = [col for col in covariate_cols if col not in cont_cols]
+    
+    # 🟢 NEW: Create ColumnTransformer for preprocessing
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('scaler', StandardScaler(), cont_cols), # Scale continuous columns
+            ('pass_through', 'passthrough', pass_through_cols) # Leave binary/categorical columns as is
+        ],
+        remainder='drop', # Drop any other unexpected columns
+        verbose_feature_names_out=False # NEW: Improves feature naming in Pipeline
+    )
     
     # ตรวจสอบ Data Type อีกครั้งเพื่อความชัวร์
     if not np.issubdtype(y.dtype, np.number):
         raise ValueError(f"Treatment column '{treatment_col}' must be numeric (0/1).")
+
+    # 🟢 NEW: Create the full Pipeline (preprocessor + classifier)
+    # ใช้ liblinear with L2 penalty (Robust default)
+    clf = Pipeline(steps=[
+        ('preprocessor', preprocessor),
+        ('classifier', LogisticRegression(solver='liblinear', random_state=42, max_iter=1000))
+    ])
     
-    # Use liblinear with L2 penalty (Robust default)
-    clf = LogisticRegression(solver='liblinear', random_state=42, max_iter=1000)
+    # Fit the Pipeline (จะทำการ scale ข้อมูลก่อน fit classifier)
     clf.fit(X, y)
     
     # Get Probability (Score of class 1)
+    # Pipeline handles the scaling automatically before prediction
     data['ps_score'] = clf.predict_proba(X)[:, 1]
     
     # Get Logit Score (ป้องกัน Error log(0))
@@ -184,9 +210,10 @@ def plot_love_plot(smd_pre, smd_post):
             'Unmatched': 'red',
             'Matched': 'blue'
         },
-        symbol_map={
+        # 🟢 FIX: เปลี่ยน 'Matched' เป็น 'diamond' เพื่อให้แตกต่างทางสายตา
+        symbol_map={ 
             'Unmatched': 'circle',
-            'Matched': 'circle'
+            'Matched': 'diamond' 
         },
         size_max=10
     )
@@ -302,8 +329,8 @@ def generate_psm_report(title, elements):
                 b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
                 html += f'<img src="data:image/png;base64,{b64}" />'
     
-    html += "</body>\n</html>"
     html += """<div class='report-footer'>
     &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM n Donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
-    </div></body></html>"""
+    </div>"""
+    html += "</body>\n</html>"
     return html
