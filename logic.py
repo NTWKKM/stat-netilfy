@@ -391,9 +391,30 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         lbl = get_label(col, var_meta)
         or_s = res.get('or', '-')
         
+        # ✅ FIX #5: P-VALUE BOUNDS CHECKING
         def fmt_p(val):
-            if pd.isna(val): return "-"
-            if val < 0.001: return "<0.001"
+            """
+            Format p-value for display with bounds validation.
+            Clips to valid range [0, 1] and warns if numerical error detected.
+            """
+            if pd.isna(val): 
+                return "-"
+            
+            # Bounds check: p-values must be in [0, 1]
+            if val < -0.0001 or val > 1.0001:
+                # Numerical error detected - log warning
+                st.warning(f"⚠️ P-value out of bounds detected: {val:.6f}. Clipping to valid range [0, 1].")
+                val = max(0, min(1, val))  # Clip to [0, 1]
+            else:
+                # Safe clipping within tolerance
+                val = max(0, min(1, val))
+            
+            # Format the p-value
+            if val < 0.001:
+                return "<0.001"
+            if val > 0.999:
+                return ">0.999"
+            
             return f"{val:.3f}"
 
         p_val = res.get('p_comp', np.nan)
