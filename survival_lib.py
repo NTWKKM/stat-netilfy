@@ -475,13 +475,13 @@ def generate_report_survival(title, elements):
             if hasattr(d, 'to_html'):
                 html_doc += d.to_html(full_html=False, include_plotlyjs=False)
             elif hasattr(d, 'savefig'):
-                 buf = io.BytesIO()
-                 d.savefig(buf, format='png', bbox_inches='tight')
-                 b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-                 html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
-        elif t == 'image': 
+                buf = io.BytesIO()
+                d.savefig(buf, format='png', bbox_inches='tight')
+                b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+                html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
+        elif t == 'image':
             b64 = base64.b64encode(d).decode('utf-8')
             html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
              
     html_doc += "</body></html>"
-    return html
+    return html_doc
