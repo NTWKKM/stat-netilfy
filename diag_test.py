@@ -454,7 +454,7 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
         y=[0, 1],
         mode='lines',
         name='Chance (AUC=0.5)',
-        line=dict(color='gray', width=1, dash='dash'),
+        line={'color': 'gray', 'width': 1, 'dash': 'dash'},
         hoverinfo='skip'
     ))
     
@@ -464,25 +464,25 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
         y=[tpr[best_idx]],
         mode='markers',
         name=f'Optimal (Sens={tpr[best_idx]:.3f}, Spec={1-fpr[best_idx]:.3f})',
-        marker=dict(size=10, color='red'),
+        marker={'size': 10, 'color': 'red'},
         hovertemplate='Sensitivity: %{y:.3f}<br>Specificity: %{customdata:.3f}<extra></extra>',
         customdata=[1 - fpr[best_idx]],
     ))
     
     # Layout
     fig.update_layout(
-        title=dict(
-            text=f'ROC Curve<br><sub>AUC = {auc_val:.4f} (95% CI: {stats_res["95% CI Lower"]:.4f}-{stats_res["95% CI Upper"]:.4f})</sub>',
-            x=0.5,
-            xanchor='center'
-        ),
+        title={
+            'text': f'ROC Curve<br><sub>AUC = {auc_val:.4f} (95% CI: {stats_res["95% CI Lower"]:.4f}-{stats_res["95% CI Upper"]:.4f})</sub>',
+            'x': 0.5,
+            'xanchor': 'center'
+        },
         xaxis_title='1 - Specificity (False Positive Rate)',
         yaxis_title='Sensitivity (True Positive Rate)',
         hovermode='closest',
         template='plotly_white',
         width=700,
         height=600,
-        font=dict(size=12)
+        font={'size': 12}
     )
     
     # Set axis ranges
@@ -666,12 +666,10 @@ def generate_report(title, elements):
             html += f"<p>{_html.escape(str(data))}</p>"
         
         elif element_type == 'table':
-            # 🟢 UPDATED: Force index=False for all statistical result tables (e.g., Chi2 stats, Kappa, ICC)
-            # แต่คงไว้สำหรับ Descriptive/Risk Metrics ที่ใช้ Index เป็นชื่อคอลัมน์
-            idx = 'Statistic' in data.columns and 'Value' in data.columns and data.index.name is None
-            
-            # ถ้าเป็นตารางผลลัพธ์สถิติ (Statistic/Value) ให้ซ่อน Index
-            html += data.to_html(index=not idx, classes='report-table') 
+            # Hide index for standard stats tables (Statistic/Value format with unnamed index)
+            is_stats_table = ('Statistic' in data.columns and 'Value' in data.columns 
+                              and data.index.name is None)
+            html += data.to_html(index=not is_stats_table, classes='report-table', escape=True) 
         
         elif element_type == 'contingency_table':
             # ... (โค้ด Contingency Table เดิม)
