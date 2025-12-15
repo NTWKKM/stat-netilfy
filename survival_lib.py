@@ -28,7 +28,7 @@ def _standardize_numeric_cols(data, cols):
             else:
                 data[col] = (data[col] - data[col].mean()) / std
 
-# --- 1. Kaplan-Meier & Log-Rank (With CI) ---
+# --- 1. Kaplan-Meier & Log-Rank (With Robust CI) 🟢 FIX KM CI ---
 def fit_km_logrank(df, duration_col, event_col, group_col):
     """
     Fits KM curves and performs Log-rank test.
@@ -63,21 +63,25 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
             kmf = KaplanMeierFitter()
             kmf.fit(df_g[duration_col], df_g[event_col], label=label)
 
-            # Get Confidence Intervals (CI)
-            ci_lower = kmf.confidence_interval_['KM_estimate_lower_bound']
-            ci_upper = kmf.confidence_interval_['KM_estimate_upper_bound']
+            # --- 🟢 FIX: Check existence and access CI by position ---
+            ci_exists = hasattr(kmf, 'confidence_interval_') and not kmf.confidence_interval_.empty
+            
+            if ci_exists and kmf.confidence_interval_.shape[1] >= 2:
+                # Use .iloc[:, 0] for lower bound and .iloc[:, 1] for upper bound
+                ci_lower = kmf.confidence_interval_.iloc[:, 0]
+                ci_upper = kmf.confidence_interval_.iloc[:, 1]
 
-            # 1. Add Shaded Area (Confidence Interval)
-            fig.add_trace(go.Scatter(
-                x=list(ci_lower.index) + list(ci_upper.index)[::-1], # Times forward and backward
-                y=list(ci_lower.values) + list(ci_upper.values)[::-1], # CI lower forward, CI upper backward
-                fill='toself',
-                fillcolor=colors[i % len(colors)] + '30', # Add transparency (30)
-                line=dict(color='rgba(255,255,255,0)'), # Invisible line
-                hoverinfo="skip", 
-                name=f'{label} 95% CI',
-                showlegend=False
-            ))
+                # 1. Add Shaded Area (Confidence Interval)
+                fig.add_trace(go.Scatter(
+                    x=list(ci_lower.index) + list(ci_upper.index)[::-1], # Times forward and backward
+                    y=list(ci_lower.values) + list(ci_upper.values)[::-1], # CI lower forward, CI upper backward
+                    fill='toself',
+                    fillcolor=colors[i % len(colors)] + '30', # Add transparency (30)
+                    line=dict(color='rgba(255,255,255,0)'), # Invisible line
+                    hoverinfo="skip", 
+                    name=f'{label} 95% CI',
+                    showlegend=False
+                ))
             
             # 2. Survival Curve (KM Estimate)
             fig.add_trace(go.Scatter(
@@ -132,7 +136,7 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
 
     return fig, pd.DataFrame([stats_data])
 
-# --- 2. Nelson-Aalen (With CI) ---
+# --- 2. Nelson-Aalen (With Robust CI) 🟢 FIX NA CI ---
 def fit_nelson_aalen(df, duration_col, event_col, group_col):
     """
     Fits Nelson-Aalen cumulative hazard.
@@ -165,21 +169,25 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
             naf = NelsonAalenFitter()
             naf.fit(df_g[duration_col], event_observed=df_g[event_col], label=label)
             
-            # Get Confidence Intervals (CI)
-            ci_lower = naf.confidence_interval_['Cumulative_hazard_lower_bound']
-            ci_upper = naf.confidence_interval_['Cumulative_hazard_upper_bound']
+            # --- 🟢 FIX: Check existence and access CI by position ---
+            ci_exists = hasattr(naf, 'confidence_interval_') and not naf.confidence_interval_.empty
 
-            # 1. Add Shaded Area (Confidence Interval)
-            fig.add_trace(go.Scatter(
-                x=list(ci_lower.index) + list(ci_upper.index)[::-1], 
-                y=list(ci_lower.values) + list(ci_upper.values)[::-1], 
-                fill='toself',
-                fillcolor=colors[i % len(colors)] + '30', 
-                line=dict(color='rgba(255,255,255,0)'), 
-                hoverinfo="skip", 
-                name=f'{label} 95% CI',
-                showlegend=False
-            ))
+            if ci_exists and naf.confidence_interval_.shape[1] >= 2:
+                # Use .iloc[:, 0] for lower bound and .iloc[:, 1] for upper bound
+                ci_lower = naf.confidence_interval_.iloc[:, 0]
+                ci_upper = naf.confidence_interval_.iloc[:, 1]
+
+                # 1. Add Shaded Area (Confidence Interval)
+                fig.add_trace(go.Scatter(
+                    x=list(ci_lower.index) + list(ci_upper.index)[::-1], 
+                    y=list(ci_lower.values) + list(ci_upper.values)[::-1], 
+                    fill='toself',
+                    fillcolor=colors[i % len(colors)] + '30', 
+                    line=dict(color='rgba(255,255,255,0)'), 
+                    hoverinfo="skip", 
+                    name=f'{label} 95% CI',
+                    showlegend=False
+                ))
 
             # 2. Cumulative Hazard Curve (NA Estimate)
             fig.add_trace(go.Scatter(
@@ -207,13 +215,8 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
     return fig, pd.DataFrame(stats_list)
 
 # --- 3. Cox Proportional Hazards (Robust Version with Firth Fallback) ---
-# 🟢 Note: Removed step_size=0.5 to fix the error CoxPHFitter.fit() got an unexpected keyword argument 'step_size'
 def fit_cox_ph(df, duration_col, event_col, covariate_cols):
-    """
-    Fits CoxPH model with a robust fitting strategy (Standard -> Penalized L2).
-    
-    Returns: (cph_object, results_df, model_data, error_message)
-    """
+    # ... (โค้ด fit_cox_ph เดิม ถูกต้องแล้ว)
     # 1. Validation
     missing = [c for c in [duration_col, event_col, *covariate_cols] if c not in df.columns]
     if missing:
@@ -314,13 +317,10 @@ def check_cph_assumptions(cph, data):
         return f"Assumption check failed: {e}", []
 
 
-# --- 4. Landmark Analysis (KM) 🟢 NEW FUNCTION ---
+# --- 4. Landmark Analysis (KM) 🟢 FIX LM CI ---
 def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
     """
     Performs Kaplan-Meier Survival Analysis using the Landmark Method.
-    
-    Clinical principle: Only includes patients AT RISK (i.e., survived) up to landmark_time.
-    Duration is re-calculated: New T_start = landmark_time.
     
     Returns: (fig, stats_df, n_pre_filter, n_post_filter)
     """
@@ -330,8 +330,6 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
     n_pre_filter = len(data)
 
     # 2. Filtering (The Landmark Step)
-    # หลักการ: ผู้ป่วยต้องรอดชีวิตจนถึงเวลา Landmark Time
-    # Rule: T_Stop >= Landmark Time
     landmark_data = data[data[duration_col] >= landmark_time].copy()
     n_post_filter = len(landmark_data)
     
@@ -339,7 +337,6 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
         return None, None, n_pre_filter, n_post_filter, "Error: Insufficient patients (N < 2) survived until the landmark time."
     
     # 3. Recalculate Duration (Crucial Step)
-    # T_new = T_Stop - Landmark Time
     landmark_data['New_Duration'] = landmark_data[duration_col] - landmark_time
     
     # 4. KM Fitting (Standardized Plotting)
@@ -357,21 +354,25 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
             # Fit using the New_Duration
             kmf.fit(df_g['New_Duration'], df_g[event_col], label=label)
 
-            # Get Confidence Intervals (CI)
-            ci_lower = kmf.confidence_interval_['KM_estimate_lower_bound']
-            ci_upper = kmf.confidence_interval_['KM_estimate_upper_bound']
+            # --- 🟢 FIX: Check existence and access CI by position ---
+            ci_exists = hasattr(kmf, 'confidence_interval_') and not kmf.confidence_interval_.empty
+            
+            if ci_exists and kmf.confidence_interval_.shape[1] >= 2:
+                # Use .iloc[:, 0] for lower bound and .iloc[:, 1] for upper bound
+                ci_lower = kmf.confidence_interval_.iloc[:, 0]
+                ci_upper = kmf.confidence_interval_.iloc[:, 1]
 
-            # 1. Add Shaded Area (Confidence Interval)
-            fig.add_trace(go.Scatter(
-                x=list(ci_lower.index) + list(ci_upper.index)[::-1],
-                y=list(ci_lower.values) + list(ci_upper.values)[::-1],
-                fill='toself',
-                fillcolor=colors[i % len(colors)] + '30',
-                line=dict(color='rgba(255,255,255,0)'),
-                hoverinfo="skip",
-                name=f'{label} 95% CI',
-                showlegend=False
-            ))
+                # 1. Add Shaded Area (Confidence Interval)
+                fig.add_trace(go.Scatter(
+                    x=list(ci_lower.index) + list(ci_upper.index)[::-1],
+                    y=list(ci_lower.values) + list(ci_upper.values)[::-1],
+                    fill='toself',
+                    fillcolor=colors[i % len(colors)] + '30',
+                    line=dict(color='rgba(255,255,255,0)'),
+                    hoverinfo="skip",
+                    name=f'{label} 95% CI',
+                    showlegend=False
+                ))
             
             # 2. Survival Curve (KM Estimate)
             fig.add_trace(go.Scatter(
@@ -428,7 +429,7 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
 
 # --- 5. Report Generation ---
 def generate_report_survival(title, elements):
-# ... (โค้ด generate_report_survival เดิม)
+# ... (โค้ด generate_report_survival เดิม ถูกต้องแล้ว)
     """
     Generate HTML report (Renamed to match tab_survival.py calls)
     """
@@ -471,4 +472,4 @@ def generate_report_survival(title, elements):
             html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
              
     html_doc += "</body></html>"
-    return html_doc
+    return html
