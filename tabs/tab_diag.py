@@ -235,7 +235,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                 # 🟢 FIX: แยกข้อความและลบแท็ก HTML (<b>, <br>) ออก
                 # และใช้ตัวแปร rep_elements ให้สอดคล้องกับโค้ดส่วนอื่น
                 rep_elements = [ 
-                    {'type': 'text', 'data': f"Analysis: Diagnostic Test / Chi-Square"},
+                    {'type': 'text', 'data': "Analysis: Diagnostic Test / Chi-Square"},
                     {'type': 'text', 'data': f"Variables: {v1} vs {v2}"},
                     {'type': 'text', 'data': status_text}, # แสดงสถานะหรือข้อความเตือน
                     
