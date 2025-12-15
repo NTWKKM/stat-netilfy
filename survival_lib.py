@@ -11,10 +11,21 @@ import html as _html
 
 # Helper function for standardization
 def _standardize_numeric_cols(data, cols):
+    """
+    Standardize numeric columns in-place, BUT SKIP BINARY columns (0/1).
+    This prevents numerical instability in Cox models.
+    """
     for col in cols:
         if pd.api.types.is_numeric_dtype(data[col]):
+            # Check if binary (only 2 unique values, e.g., 0 and 1)
+            unique_vals = data[col].dropna().unique()
+            if len(unique_vals) <= 2 and set(unique_vals).issubset({0, 1, 0.0, 1.0}):
+                continue # Skip standardization for binary variables
+            
             std = data[col].std()
-            if std != 0:
+            if std == 0:
+                warnings.warn(f"Covariate '{col}' has zero variance", stacklevel=3)
+            else:
                 data[col] = (data[col] - data[col].mean()) / std
 
 # --- 1. Kaplan-Meier & Log-Rank ---
@@ -44,21 +55,21 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
         else:
             df_g = data
             label = "Overall"
+        
+        # Check if enough data
+        if len(df_g) > 0:
+            kmf = KaplanMeierFitter()
+            kmf.fit(df_g[duration_col], df_g[event_col], label=label)
 
-        kmf = KaplanMeierFitter()
-        kmf.fit(df_g[duration_col], df_g[event_col], label=label)
-
-        # Survival Curve
-        fig.add_trace(go.Scatter(
-            x=kmf.survival_function_.index,
-            y=kmf.survival_function_.iloc[:, 0],
-            mode='lines',
-            name=label,
-            line=dict(color=colors[i % len(colors)], width=2),
-            hovertemplate=f'{label}<br>Time: %{{x:.1f}}<br>Surv: %{{y:.3f}}<extra></extra>'
-        ))
-
-        # Confidence Interval (Optional: Add shading if needed, skipping for cleaner UI default)
+            # Survival Curve
+            fig.add_trace(go.Scatter(
+                x=kmf.survival_function_.index,
+                y=kmf.survival_function_.iloc[:, 0],
+                mode='lines',
+                name=label,
+                line=dict(color=colors[i % len(colors)], width=2),
+                hovertemplate=f'{label}<br>Time: %{{x:.1f}}<br>Surv: %{{y:.3f}}<extra></extra>'
+            ))
 
     fig.update_layout(
         title=f'Kaplan-Meier Survival Curves',
@@ -72,30 +83,33 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
 
     # Log-Rank Test
     stats_data = {}
-    if len(groups) == 2 and group_col:
-        g1, g2 = groups
-        res = logrank_test(
-            data[data[group_col] == g1][duration_col],
-            data[data[group_col] == g2][duration_col],
-            event_observed_A=data[data[group_col] == g1][event_col],
-            event_observed_B=data[data[group_col] == g2][event_col]
-        )
-        stats_data = {
-            'Test': 'Log-Rank (Pairwise)',
-            'Statistic': res.test_statistic,
-            'P-value': res.p_value,
-            'Comparison': f'{g1} vs {g2}'
-        }
-    elif len(groups) > 2 and group_col:
-        res = multivariate_logrank_test(data[duration_col], data[group_col], data[event_col])
-        stats_data = {
-            'Test': 'Log-Rank (Multivariate)',
-            'Statistic': res.test_statistic,
-            'P-value': res.p_value,
-            'Comparison': 'All groups'
-        }
-    else:
-        stats_data = {'Test': 'None', 'Note': 'Single group or no group selected'}
+    try:
+        if len(groups) == 2 and group_col:
+            g1, g2 = groups
+            res = logrank_test(
+                data[data[group_col] == g1][duration_col],
+                data[data[group_col] == g2][duration_col],
+                event_observed_A=data[data[group_col] == g1][event_col],
+                event_observed_B=data[data[group_col] == g2][event_col]
+            )
+            stats_data = {
+                'Test': 'Log-Rank (Pairwise)',
+                'Statistic': res.test_statistic,
+                'P-value': res.p_value,
+                'Comparison': f'{g1} vs {g2}'
+            }
+        elif len(groups) > 2 and group_col:
+            res = multivariate_logrank_test(data[duration_col], data[group_col], data[event_col])
+            stats_data = {
+                'Test': 'Log-Rank (Multivariate)',
+                'Statistic': res.test_statistic,
+                'P-value': res.p_value,
+                'Comparison': 'All groups'
+            }
+        else:
+            stats_data = {'Test': 'None', 'Note': 'Single group or no group selected'}
+    except Exception as e:
+        stats_data = {'Test': 'Error', 'Note': str(e)}
 
     return fig, pd.DataFrame([stats_data])
 
@@ -126,21 +140,22 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
             df_g = data
             label = "Overall"
 
-        naf.fit(df_g[duration_col], event_observed=df_g[event_col], label=label)
+        if len(df_g) > 0:
+            naf.fit(df_g[duration_col], event_observed=df_g[event_col], label=label)
 
-        fig.add_trace(go.Scatter(
-            x=naf.cumulative_hazard_.index,
-            y=naf.cumulative_hazard_.iloc[:, 0],
-            mode='lines',
-            name=label,
-            line=dict(color=colors[i % len(colors)], width=2)
-        ))
-        
-        stats_list.append({
-            'Group': label,
-            'N': len(df_g),
-            'Events': df_g[event_col].sum()
-        })
+            fig.add_trace(go.Scatter(
+                x=naf.cumulative_hazard_.index,
+                y=naf.cumulative_hazard_.iloc[:, 0],
+                mode='lines',
+                name=label,
+                line=dict(color=colors[i % len(colors)], width=2)
+            ))
+            
+            stats_list.append({
+                'Group': label,
+                'N': len(df_g),
+                'Events': df_g[event_col].sum()
+            })
 
     fig.update_layout(
         title='Nelson-Aalen Cumulative Hazard',
@@ -152,12 +167,13 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
 
     return fig, pd.DataFrame(stats_list)
 
-# --- 3. Cox Proportional Hazards ---
+# --- 3. Cox Proportional Hazards (Robust Version) ---
 def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     """
-    Fits CoxPH model with auto-retry using penalizer if convergence fails.
+    Fits CoxPH model with auto-retry and stability enhancements.
     Returns: (cph_object, results_df, model_data, error_message)
     """
+    # 1. Validation
     missing = [c for c in [duration_col, event_col, *covariate_cols] if c not in df.columns]
     if missing:
         return None, None, df, f"Missing columns: {missing}"
@@ -166,27 +182,36 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     if len(data) == 0:
         return None, None, data, "No valid data after dropping missing values."
     
-    # Check variance
+    # 2. Check variance
     for col in covariate_cols:
          if pd.api.types.is_numeric_dtype(data[col]):
              if data[col].std() == 0:
                  return None, None, data, f"Covariate '{col}' has zero variance (constant value)."
-
+    
+    # 3. Standardize (Skip binary to improve stability)
     _standardize_numeric_cols(data, covariate_cols)
 
-    # 🟢 MODIFIED: Try standard fit first, then retry with penalizer if it fails
-    try:
-        cph = CoxPHFitter() # Default penalizer=0.0
-        cph.fit(data, duration_col=duration_col, event_col=event_col)
-    except Exception as e_std:
-        # ถ้า Error ให้ลองใหม่ด้วย penalizer = 0.1 (ช่วยแก้ปัญหา delta contains nan / convergence)
+    # 4. Progressive Fitting Loop (The Fix)
+    # step_size < 1.0 helps convergence on difficult datasets
+    penalizers = [0.0, 0.1, 1.0, 10.0]
+    cph = None
+    last_error = None
+    success_p = None
+
+    for p in penalizers:
         try:
-            warnings.warn(f"Standard Cox fit failed ({e_std}). Retrying with penalizer=0.1")
-            cph = CoxPHFitter(penalizer=0.1)
-            cph.fit(data, duration_col=duration_col, event_col=event_col)
-        except Exception as e_pen:
-            # ถ้ายังไม่ได้ ให้แจ้ง Error รวม
-            return None, None, data, f"Model Convergence Failed. Likely due to high collinearity or perfect separation.\nDetails: {e_std}"
+            # Use step_size=0.5 for better stability
+            temp_cph = CoxPHFitter(penalizer=p)
+            temp_cph.fit(data, duration_col=duration_col, event_col=event_col, step_size=0.5)
+            cph = temp_cph
+            success_p = p
+            break
+        except Exception as e:
+            last_error = e
+            continue
+
+    if cph is None:
+         return None, None, data, f"Model Convergence Failed. Details: {last_error}.\nTry checking for high correlation between variables."
 
     # Format Results
     summary = cph.summary.copy()
@@ -197,7 +222,7 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     res_df = summary[['HR', '95% CI Lower', '95% CI Upper', 'p']].rename(columns={'p': 'P-value'})
     
     return cph, res_df, data, None
-    
+
 def check_cph_assumptions(cph, data):
     """
     Checks PH assumptions.
@@ -209,23 +234,23 @@ def check_cph_assumptions(cph, data):
         html_output = "Proportional Hazards Test Results:\n"
         html_output += results.summary.to_string()
         
-        # 2. Schoenfeld Residual Plots (Standard Matplotlib -> Bytes)
+        # 2. Schoenfeld Residual Plots
         img_bytes_list = []
         
-        # Calculate residuals manually to plot
+        # Compute residuals
         scaled_schoenfeld = cph.compute_residuals(data, 'scaled_schoenfeld')
         
         for col in scaled_schoenfeld.columns:
             fig, ax = plt.subplots(figsize=(6, 4))
             ax.scatter(data[cph.duration_col], scaled_schoenfeld[col], alpha=0.5)
             
-            # Add LOWESS trend line if possible
+            # Trend line (optional)
             try:
-                from statsmodels.nonparametric.smoothers_lowess import lowess
-                smooth = lowess(scaled_schoenfeld[col], data[cph.duration_col], frac=0.6)
-                ax.plot(smooth[:, 0], smooth[:, 1], color='red')
-            except ImportError:
-                pass # Skip trend line if statsmodels not installed
+                z = np.polyfit(data[cph.duration_col], scaled_schoenfeld[col], 1)
+                p = np.poly1d(z)
+                ax.plot(data[cph.duration_col], p(data[cph.duration_col]), "r--", alpha=0.8)
+            except:
+                pass
                 
             ax.set_title(f"Schoenfeld Residuals: {col}")
             ax.set_xlabel("Time")
@@ -245,18 +270,21 @@ def check_cph_assumptions(cph, data):
 
 # --- 4. Report Generation ---
 def generate_report_survival(title, elements):
-    # รองรับทั้ง Plotly (HTML) และ Matplotlib (Image Bytes)
+    """
+    Generate HTML report (Renamed to match tab_survival.py calls)
+    """
     css_style = """<style>
         body{font-family:Arial;margin:20px;}
         table{border-collapse:collapse;width:100%;margin:10px 0;}
         th,td{border:1px solid #ddd;padding:8px;}
         th{background-color:#0066cc;color:white;}
+        h1{color:#333;border-bottom:2px solid #0066cc;}
+        h2{color:#0066cc;}
     </style>"""
     
-    # เพิ่ม Plotly JS
     plotly_js = '<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>'
     
-    html_doc = f"<html><head>{css_style}{plotly_js}</head><body><h1>{title}</h1>"
+    html_doc = f"<html><head><meta charset='utf-8'>{css_style}{plotly_js}</head><body><h1>{title}</h1>"
     
     for el in elements:
         t = el.get('type')
@@ -267,17 +295,14 @@ def generate_report_survival(title, elements):
         elif t == 'preformatted': html_doc += f"<pre>{d}</pre>"
         elif t == 'table': html_doc += d.to_html(classes='table')
         elif t == 'plot': 
-             # ถ้าเป็น Plotly Figure object
              if hasattr(d, 'to_html'):
                  html_doc += d.to_html(full_html=False, include_plotlyjs=False)
-             # ถ้าเป็น Matplotlib Figure
              elif hasattr(d, 'savefig'):
                  buf = io.BytesIO()
-                 d.savefig(buf, format='png')
+                 d.savefig(buf, format='png', bbox_inches='tight')
                  b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
                  html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
         elif t == 'image': 
-             # ถ้าเป็น Bytes (จาก assumption check)
              b64 = base64.b64encode(d).decode('utf-8')
              html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
              
