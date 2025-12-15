@@ -228,28 +228,34 @@ if upl:
             st.session_state.uploaded_file_name = upl.name
             st.session_state.uploaded_file_sig = file_sig
             
-            # 🟢 FIX #2: IMPROVED VARIABLE TYPE DETECTION
+            # 🟢 FIX #6: PRESERVE METADATA ON UPLOAD
+            # Instead of resetting to empty dict, preserve existing user settings and add new ones
             current_meta = {}
             for col in new_df.columns:
-                # Determine type automatically with better logic
-                if pd.api.types.is_numeric_dtype(new_df[col]):
-                    # For numeric columns, check if it looks categorical
-                    unique_vals = new_df[col].dropna().unique()
-                    unique_count = len(unique_vals)
-                    
-                    # If <10 unique values, check if mostly integers (likely codes)
-                    if unique_count < 10:
-                        decimals_count = sum(1 for v in unique_vals if not float(v).is_integer())
-                        decimals_pct = decimals_count / len(unique_vals) if len(unique_vals) > 0 else 0
+                # Check if this column already has metadata (preserving user customizations)
+                if col in st.session_state.var_meta:
+                    # Column exists in old metadata - preserve it
+                    current_meta[col] = st.session_state.var_meta[col]
+                else:
+                    # Column is new - auto-detect type
+                    if pd.api.types.is_numeric_dtype(new_df[col]):
+                        # For numeric columns, check if it looks categorical
+                        unique_vals = new_df[col].dropna().unique()
+                        unique_count = len(unique_vals)
                         
-                        if decimals_pct < 0.3:  # If <30% have decimals, treat as categorical
-                            current_meta[col] = {'type': 'Categorical', 'label': col, 'map': {}, 'confidence': 'auto'}
+                        # If <10 unique values, check if mostly integers (likely codes)
+                        if unique_count < 10:
+                            decimals_count = sum(1 for v in unique_vals if not float(v).is_integer())
+                            decimals_pct = decimals_count / len(unique_vals) if len(unique_vals) > 0 else 0
+                            
+                            if decimals_pct < 0.3:  # If <30% have decimals, treat as categorical
+                                current_meta[col] = {'type': 'Categorical', 'label': col, 'map': {}, 'confidence': 'auto'}
+                            else:
+                                current_meta[col] = {'type': 'Continuous', 'label': col, 'map': {}, 'confidence': 'auto'}
                         else:
                             current_meta[col] = {'type': 'Continuous', 'label': col, 'map': {}, 'confidence': 'auto'}
                     else:
-                        current_meta[col] = {'type': 'Continuous', 'label': col, 'map': {}, 'confidence': 'auto'}
-                else:
-                    current_meta[col] = {'type': 'Categorical', 'label': col, 'map': {}, 'confidence': 'auto'}
+                        current_meta[col] = {'type': 'Categorical', 'label': col, 'map': {}, 'confidence': 'auto'}
 
             st.session_state.var_meta = current_meta
             st.sidebar.success("File Uploaded and Metadata Initialized!")
