@@ -299,7 +299,8 @@ if st.session_state.df is not None:
     df = st.session_state.df 
 
     # 🟢 FIX 2: เพิ่ม Tab t7 สำหรับ Advanced Survival Analysis (Time Cox Regs)
-    t0, t1, t2, t3, t4, t5, t6, t7 = st.tabs([
+   # t0, t1, t2, t3, t4, t5, t6, t7 = st.tabs([
+    t0, t1, t2, t3, t4, t5, t6 = st.tabs([ # ⬅️ แก้: นำ t7 ออก
         "📄 Raw Data", 
         "📋 Baseline Table 1", 
         "🔬 Diagnostic Test", 
