@@ -95,7 +95,10 @@ if upl:
                         unique_count = len(unique_vals)
                         
                         if unique_count < 10:
-                            decimals_count = sum(1 for v in unique_vals if not float(v).is_integer())
+                            try:
+                                decimals_count = sum(1 for v in unique_vals if not float(v).is_integer())
+                            except (ValueError, TypeError):
+                                decimals_count = 0
                             decimals_pct = decimals_count / len(unique_vals) if len(unique_vals) > 0 else 0
                             
                             if decimals_pct < 0.3:
@@ -167,7 +170,7 @@ def render_logistic_regression_tab(df_clean, var_meta):
                 dtypes={col: str(dtype) for col, dtype in df_clean.dtypes.items()}
             )
             
-            st.components.v1.html(html_result, height=800, scrolling=True)
+            components.html(html_result, height=800, scrolling=True)
             logger.info("✅ Logistic regression analysis completed successfully")
             
         except Exception as e:
