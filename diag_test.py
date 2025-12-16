@@ -107,21 +107,26 @@ def calculate_ci_rr(risk_exp, n_exp, risk_unexp, n_unexp, ci=0.95):
     return np.exp(lower_log), np.exp(upper_log)
 
 
-def calculate_ci_nnt(rd, ci=0.95):
+def calculate_ci_nnt(rd, rd_se, ci=0.95):
     """
     Confidence Interval for NNT
     Based on CI of Risk Difference
     """
-    # For simplicity, using approximate method
-    # NNT = 1/RD, so CI reversed when RD crosses zero
     if abs(rd) < 0.001:
         return np.nan, np.nan
-    nnt = abs(1 / rd)
-    # Approximate: using 0.1*rd as error estimate
-    nnt_lower = abs(1 / (rd + 0.1)) if (rd + 0.1) != 0 else np.nan
-    nnt_upper = abs(1 / (rd - 0.1)) if (rd - 0.1) != 0 else np.nan
-    return min(nnt_lower, nnt_upper), max(nnt_lower, nnt_upper)
 
+    z = stats.norm.ppf(1 - (1 - ci) / 2)
+    rd_lower = rd - z * rd_se
+    rd_upper = rd + z * rd_se
+
+    # NNT CI is inverse of RD CI (bounds swap)
+    # Handle case where CI crosses zero
+    if rd_lower * rd_upper <= 0:
+        return np.nan, np.nan
+
+    nnt_lower = abs(1 / rd_upper)
+    nnt_upper = abs(1 / rd_lower)
+    return min(nnt_lower, nnt_upper), max(nnt_lower, nnt_upper)
 
 # ========================================
 # 2. CHI-SQUARE & FISHER'S EXACT TEST + DIAGNOSTIC METRICS
@@ -280,7 +285,10 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                 or_ci_lower, or_ci_upper = calculate_ci_log_odds(or_value, se_log_or)
                 
                 # Risk Ratio with CI
-                rr_ci_lower, rr_ci_upper = calculate_ci_rr(risk_exp, a+b, risk_unexp, c+d)
+                if (a+b) > 0 and (c+d) > 0 and risk_exp > 0 and risk_unexp > 0:
+                    rr_ci_lower, rr_ci_upper = calculate_ci_rr(risk_exp, a+b, risk_unexp, c+d)
+                else:
+                    rr_ci_lower, rr_ci_upper = np.nan, np.nan
                 
                 # NNT with CI (simplified)
                 nnt_ci_lower, nnt_ci_upper = calculate_ci_nnt(rd)
@@ -351,9 +359,9 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                      "95% CI": "-", "Interpretation": "(1 - Sensitivity) / Specificity"},
                 ]
                 risk_df = pd.DataFrame(risk_data)
-            except Exception as e:
+            except (ZeroDivisionError, ValueError, KeyError) as e:
                 risk_df = None
-                msg += f" (Risk metrics unavailable: {str(e)})"
+                msg += f" (Risk metrics unavailable: {e!s})"
         
         return display_tab, stats_df_for_report, msg, risk_df
     
