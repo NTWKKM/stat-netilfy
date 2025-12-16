@@ -9,15 +9,6 @@ import streamlit.components.v1 as components
 from config import CONFIG
 from logger import get_logger, LoggerFactory
 
-# Get logger instance
-logger = get_logger(__name__)
-
-# Initialize logging system (once at app start)
-if 'logging_initialized' not in st.session_state:
-    LoggerFactory.configure()
-    st.session_state.logging_initialized = True
-    logger.info("📱 Streamlit app started")
-
 # ==========================================
 # 1. CONFIG & LOADING SCREEN KILLER (Must be First)
 # ==========================================
@@ -30,7 +21,16 @@ st.set_page_config(
     }
 )
 
-st.title("🏥 Medical Statistical Tool")
+# Get logger instance
+logger = get_logger(__name__)
+
+# Initialize logging system (once at app start)
+if 'logging_initialized' not in st.session_state:
+    LoggerFactory.configure()
+    st.session_state.logging_initialized = True
+    logger.info("📱 Streamlit app started")
+
+st.title(f"🏥 {CONFIG.get('ui.page_title', 'Medical Statistical Tool')}") # Optional: ใช้ Config ตรง Title ด้วยก็ได้
 
 components.html("""
 <script>
