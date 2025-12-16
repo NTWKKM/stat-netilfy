@@ -99,7 +99,7 @@ def run_binary_logit(y, X, method='default'):
     except (KeyboardInterrupt, SystemExit):
         raise
     except Exception as e:
-        logger.exception("Logistic regression failed: %s", e)  # ✅ LOG ERROR
+        logger.exception("Logistic regression failed")  # ✅ LOG ERROR
         return None, None, None, str(e)
 
 def get_label(col_name, var_meta):
@@ -402,7 +402,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         # Bounds check: p-values must be in [0, 1]
         if val < -0.0001 or val > 1.0001:
             # Numerical error detected - log warning
-            logger.warning(f"⚠️ P-value out of bounds detected: {val:.6f}. Clipping to valid range [0, 1].")  # ✅ LOG WARNING
+            logger.warning("⚠️ P-value out of bounds detected: %.6f. Clipping to valid range [0, 1].", val)  # ✅ LOG WARNING
             val = max(0, min(1, val))  # Clip to [0, 1]
         else:
             # Safe clipping within tolerance
