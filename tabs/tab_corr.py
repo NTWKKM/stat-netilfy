@@ -1,28 +1,33 @@
 import streamlit as st
 import pandas as pd
 import correlation # Import from root
+import diag_test # Import for ICC calculation
 from typing import List, Tuple
 
 def render(df):
     """
-    Render the Correlation Analysis UI for both categorical (Chi-Square & risk measures) and continuous (Pearson/Spearman) analyses.
+    Render the Correlation Analysis UI for continuous variables: Pearson/Spearman correlation and ICC.
     
-    Builds two Streamlit sub-tabs:
-    - Categorical: UI for selecting two categorical variables, test method for 2x2 tables (Pearson, Yates, Fisher), positive labels for risk/odds calculations, runs chi-square/risk analysis, displays an interactive HTML report, and enables downloading the report.
-    - Continuous: UI for selecting two numeric variables and correlation method (Pearson or Spearman), runs correlation analysis, displays an interactive HTML report with statistics and a scatter plot, and enables downloading the report.
+    Builds three Streamlit sub-tabs:
+    - Pearson/Spearman: UI for selecting two numeric variables, correlation method, runs correlation analysis, displays scatter plot and statistics.
+    - ICC: UI for selecting 2+ numeric variables (raters/methods), calculates Intraclass Correlation Coefficient for reliability/agreement.
+    
+    NO CHI-SQUARE: Chi-Square moved to Tab 4 (Diagnostic Tests)
     
     Side effects:
     - Renders Streamlit controls, info, and results to the active Streamlit app.
-    - Stores generated HTML reports in st.session_state under keys 'html_output_corr_cat' (categorical) and 'html_output_corr_cont' (continuous) to enable downloads.
+    - Stores generated HTML reports in st.session_state under keys 'html_output_corr_cont' and 'html_output_icc'.
     
     Parameters:
-        df (pandas.DataFrame): Input dataset whose columns populate the variable selectors and whose data are used for the analyses.
+        df (pandas.DataFrame): Input dataset whose columns populate the variable selectors and whose data are used for analyses.
     """
-    st.subheader("3. Correlation Analysis")
+    st.subheader("📈 5. Correlation & ICC")
     
-    sub_tab1, sub_tab2 = st.tabs([
-        "🎲 Chi-Square & Risk-RR,OR,NNT (Categorical)", 
-        "📈 Pearson/Spearman (Continuous)"
+    # 🟢 REORGANIZED: 3 subtabs (removed Chi-Square, added ICC)
+    sub_tab1, sub_tab2, sub_tab3 = st.tabs([
+        "📉 Pearson/Spearman (Continuous Correlation)", 
+        "📏 Reliability (ICC)",
+        "ℹ️ Reference & Interpretation"
     ])
     
     all_cols = df.columns.tolist()
@@ -31,177 +36,10 @@ def render(df):
         return
 
     # ==================================================
-    # SUB-TAB 1: Chi-Square & Risk Measures (Categorical)
+    # SUB-TAB 1: Pearson/Spearman (Continuous)
     # ==================================================
     with sub_tab1:
-        st.markdown("##### Chi-Square Test & Risk Analysis")
-        st.info("""
-            **💡 Guide:** Used to analyze the association between **two categorical variables**.
-            * **Chi-Square Test:** Determines if there is a significant association between the variables (P-value).
-            * **Risk/Odds Ratio:** For **2x2 tables**, the tool provides **automatically calculated** metrics: **Risk Ratio (RR)**, **Odds Ratio (OR)**, and **Number Needed to Treat (NNT)**.
-            
-            **Variable Selection:**
-            * **Variable 1 (Row):** Typically the **Exposure**, **Risk Factor**, or **Intervention**.
-            * **Variable 2 (Column):** Typically the **Outcome** or **Event** of interest.
-        """)
-
-        cc1, cc2, cc3 = st.columns(3)
-        
-        # 🟢 UPDATE 1: Auto-select V1 and V2
-        v1_default_name = 'Group_Treatment'
-        v2_default_name = 'Status_Death'
-        
-        v1_idx = next((i for i, c in enumerate(all_cols) if c == v1_default_name), 0)
-        v2_idx = next((i for i, c in enumerate(all_cols) if c == v2_default_name), min(1, len(all_cols)-1))
-        
-        v1 = cc1.selectbox("Variable 1 (Exposure/Row):", all_cols, index=v1_idx, key='chi1_corr_tab') 
-        v2 = cc2.selectbox("Variable 2 (Outcome/Col):", all_cols, index=v2_idx, key='chi2_corr_tab')
-        # 🟢 FIX: Remove 'return' to allow the rest of the tab (e.g., Continuous Correlation) to render.
-        # We will use the 'v1 != v2' condition to only run the Chi-Square analysis.
-        # Check for invalid inputs
-        inputs_ok = (v1 is not None and v2 is not None and v1 != v2 and df[v1].nunique() > 1 and df[v2].nunique() > 1) # 🟢 UPDATE: ใช้ v1 != v2 ในการกำหนด inputs_ok
-        if v1 == v2:
-            st.error("Please select two different variables for Categorical Correlation.")
-            # 🟢 NOTE: Do NOT return here. Continue execution to render the rest of the tab UI.
-        
-        # 🟢 UPDATE: เพิ่ม Fisher's Exact Test
-        method_choice = cc3.radio(
-            "Test Method (for 2x2):", 
-            ['Pearson (Standard)', "Yates' correction", "Fisher's Exact Test"], 
-            index=0, 
-            key='chi_corr_method_tab',
-            help="""
-                - Pearson: Best for large samples. 
-                - Yates: Conservative correction. 
-                - Fisher: Exact test, MUST use if any expected count < 5."""
-        )
-        
-        # 🟢 NEW: Positive Label Selectors
-
-        # Helper function to get unique values and set default index
-        # from ._common import get_pos_label_settings <-- to fix after wthy this code not work properly
-        def get_pos_label_settings(df: pd.DataFrame, col_name: str) -> Tuple[List[str], int]:
-            """
-            Helper function to get unique values from a column, convert them to strings, 
-            sort them, and determine a default index (preferring '1', then '0').
-
-            Handles the case where the column might be empty after dropna.
-
-            Args:
-                df: The DataFrame containing the data.
-                col_name: The name of the column to process.
-
-            Returns:
-                A tuple containing:
-                1. A sorted list of unique non-null string values.
-                2. The default index for selection (0, or index of '1'/'0').
-            """
-            # 🟢 NOTE: Need to handle the case where the column might be empty after dropna
-            # Convert to string and drop NA values before getting unique values
-            unique_vals = [str(x) for x in df[col_name].dropna().unique()]
-            unique_vals.sort()
-    
-            default_idx = 0
-            if '1' in unique_vals:
-                # Default to '1' if available
-                default_idx = unique_vals.index('1')
-            elif len(unique_vals) > 0 and '0' in unique_vals:
-                # Otherwise, default to '0' if available and there are unique values
-                default_idx = unique_vals.index('0')
-        
-            return unique_vals, default_idx
-    
-        # Selector for V1 Positive Label
-        cc4, cc5, cc6 = st.columns(3)
-        v1_uv, v1_default_idx = get_pos_label_settings(df, v1)
-        
-        # 🟢 จุดแก้ 1: ป้องกัน V1 ว่าง
-        if not v1_uv:
-            cc4.warning(f"No non-null values in {v1}.")
-            v1_pos_label = None
-        else:
-            v1_pos_label = cc4.selectbox(f"Positive Label (Row: {v1}):", v1_uv, index=v1_default_idx, key='chi_v1_pos_corr')
-
-        # Selector for V2 Positive Label (Outcome)
-        v2_uv, v2_default_idx = get_pos_label_settings(df, v2)
-        
-        # 🟢 จุดแก้ 2: ป้องกัน V2 ว่าง
-        if not v2_uv:
-            cc5.warning(f"No non-null values in {v2}.")
-            v2_pos_label = None
-        else:
-            v2_pos_label = cc5.selectbox(f"Positive Label (Col: {v2}):", v2_uv, index=v2_default_idx, key='chi_v2_pos_corr')
-        
-        # Combine variable validity with positive label validity
-        inputs_ok = inputs_ok and (v1_pos_label is not None) and (v2_pos_label is not None)
-        if not inputs_ok:
-            st.warning("Chi-Square disabled: one of the selected columns has no non-null values.")
-        
-        # Add a placeholder column to maintain alignment
-        cc6.empty()
-        st.caption("Select Positive Label for Risk/Odds Ratio calculation (default is '1'):")
-
-        run_col, dl_col = st.columns([1, 1])
-        if 'html_output_corr_cat' not in st.session_state: st.session_state.html_output_corr_cat = None
-
-        if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run', disabled=not inputs_ok):
-            # 🟢 จุดแก้ 3: แปลงข้อมูลเป็น String เพื่อให้ Type ตรงกับ Selectbox
-            df_calc = df.copy()
-            df_calc[v1] = df_calc[v1].astype("string")
-            df_calc[v2] = df_calc[v2].astype("string")
-
-            # tab: Contingency table (DF), stats: Statistical results (DF), msg: Error/Warning (str), risk_df: Risk metrics (DF)
-            tab, stats, msg, risk_df = correlation.calculate_chi2( 
-                df_calc, v1, v2,   # <--- ใช้ df_calc ที่แปลงแล้ว
-                method=method_choice, 
-                v1_pos=v1_pos_label,
-                v2_pos=v2_pos_label
-            )
-            
-            if tab is not None:
-                # 🟢 UPDATE 1: จัดการข้อความสถานะ/หมายเหตุ
-                # เมื่อ tab is not None, msg จะมีแค่ข้อความเตือน (Warning/Note) หรือเป็นสตริงว่างเปล่าเท่านั้น
-                if msg.strip():
-                    status_text = f"Note: {msg.strip()}"
-                else:
-                    status_text = "Analysis Status: Completed successfully."
-
-                rep = [
-                    # 🟢 FIX: แยกข้อความและลบแท็ก HTML (<b>, <br>) ออก เพื่อให้ถูกแสดงผลเป็นข้อความธรรมดา
-                    {'type': 'text', 'data': "Analysis: Chi-Square & Risk"},
-                    {'type': 'text', 'data': f"Variables: {v1} vs {v2}"},
-                    {'type': 'text', 'data': status_text}, # แสดงสถานะหรือข้อความเตือน
-                    
-                    # Contingency Table
-                    {'type': 'contingency_table', 'header': 'Contingency Table', 'data': tab, 'outcome_col': v2},
-                    
-                    # Statistics
-                    # บรรทัดนี้เคยเป็น {'data': result} ซึ่งทำให้เกิด NameError และอาจเกิด ValueError
-                    {'type': 'table', 'header': 'Detailed Statistics', 'data': stats} # 🟢 FIX: ใช้ 'data': stats ตรงๆ
-                ]
-                
-                # 🟢 UPDATE 2: เพิ่ม Risk Table ลงใน Report ถ้ามีข้อมูล
-                if risk_df is not None:
-                    rep.append({'type': 'table', 'header': 'Risk & Effect Measures (2x2 Table)', 'data': risk_df})
-
-                html = correlation.generate_report(f"Chi-square: {v1} vs {v2}", rep)
-                
-                st.session_state.html_output_corr_cat = html
-                st.components.v1.html(html, height=600, scrolling=True)
-            else:
-                st.error(msg) 
-
-        with dl_col:
-            if st.session_state.html_output_corr_cat:
-                st.download_button("📥 Download Report", st.session_state.html_output_corr_cat, "chi_risk_report.html", "text/html", key='dl_btn_corr_cat')
-            else:
-                st.button("📥 Download Report", disabled=True, key='ph_btn_corr_cat')
-
-    # ==================================================
-    # SUB-TAB 2: Pearson/Spearman (Continuous)
-    # ==================================================
-    with sub_tab2:
-        st.markdown("##### Continuous Correlation Analysis")
+        st.markdown("##### Continuous Correlation Analysis (Pearson & Spearman)")
         st.info("""
     **💡 Guide:** Measures the relationship between **two continuous (numeric) variables**.
 
@@ -212,6 +50,7 @@ def render(df):
     * **Close to +1:** Strong positive association (Both variables increase together).
     * **Close to -1:** Strong negative association (One increases as the other decreases).
     * **Close to 0:** Weak or no association.
+    
     **X/Y Axis (for Plotting):**
     * The coefficient (r/rho) is **symmetrical** (X,Y is the same as Y,X).
     * For visual clarity, the **Predictor (Independent)** should be on the **X-axis** and the **Outcome (Dependent)** on the **Y-axis**.
@@ -244,7 +83,7 @@ def render(df):
                 if err: 
                     st.error(err)
                 else:
-                    # 🟢 FIX: res เป็น dict จึงต้องใช้ dict access และแปลงเป็น DataFrame สำหรับแสดงในตาราง
+                    # 🟢 FIX: res is dict, convert to DataFrame for table display
                     rep = [
                         {'type':'text', 'data':f"Method: {res['Method']}<br>Variables: {cv1} vs {cv2}"},
                         {'type':'table', 'header':'Statistics', 'data':pd.DataFrame([res])}, 
@@ -256,6 +95,117 @@ def render(df):
 
         with dl_col_cont:
             if st.session_state.html_output_corr_cont:
-                st.download_button("📥 Download Report", st.session_state.html_output_corr_cont, "correlation_cont_report.html", "text/html", key='dl_btn_corr_cont')
+                st.download_button("📥 Download Report", st.session_state.html_output_corr_cont, "correlation_report.html", "text/html", key='dl_btn_corr_cont')
             else:
                 st.button("📥 Download Report", disabled=True, key='ph_btn_corr_cont')
+
+    # ==================================================
+    # SUB-TAB 2: Reliability (ICC) - MOVED FROM Tab 4
+    # ==================================================
+    with sub_tab2:
+        st.markdown("##### Reliability Analysis (Intraclass Correlation Coefficient - ICC)")
+        st.info("""
+            **💡 Guide:** Evaluates the reliability/agreement between 2 or more raters/methods for **Numeric/Continuous** variables.
+            
+            **ICC Types (Most Common):**
+            * **ICC(2,1) Absolute Agreement:** Use when you care if the absolute scores are the same (e.g., Method A vs Method B must produce same values).
+            * **ICC(3,1) Consistency:** Use when you care if the ranking is consistent, even if absolute scores differ (e.g., systematic bias OK, just need same ranking).
+            
+            **Interpretation of ICC:**
+            * **< 0.5:** Poor reliability
+            * **0.5 - 0.75:** Moderate reliability
+            * **0.75 - 0.9:** Good reliability
+            * **> 0.9:** Excellent reliability
+        """)
+        
+        # 🟢 Auto-select numeric columns only
+        numeric_cols = df.select_dtypes(include="number").columns.tolist()
+        
+        # Auto-select columns with 'measurement', 'rater', 'machine', 'score', 'read' in name
+        default_icc_cols = [c for c in numeric_cols if any(k in c.lower() for k in ['measure', 'machine', 'rater', 'score', 'read', 'icc'])]
+        if len(default_icc_cols) < 2:
+            default_icc_cols = numeric_cols[:2] if len(numeric_cols) >= 2 else []
+        
+        icc_cols = st.multiselect(
+            "Select Variables (Raters/Methods) - Select 2+ for ICC:", 
+            numeric_cols, 
+            default=default_icc_cols, 
+            key='icc_vars_corr',
+            help="Select 2 or more numeric columns representing different raters/methods measuring the same construct."
+        )
+        
+        icc_run, icc_dl = st.columns([1, 1])
+        if 'html_output_icc' not in st.session_state: 
+            st.session_state.html_output_icc = None
+        
+        if icc_run.button("📏 Calculate ICC", key='btn_icc_run', help="Calculates Intraclass Correlation Coefficient for reliability"):
+            if len(icc_cols) < 2:
+                st.error("❌ Please select at least 2 numeric columns for ICC calculation.")
+                st.stop()
+            res_df, err, anova_df = diag_test.calculate_icc(df, icc_cols)
+            
+            if err:
+                st.error(err)
+            else:
+                rep_elements = [
+                    {'type': 'text', 'data': f"<b>ICC Analysis:</b> {', '.join(icc_cols)}"},
+                    {'type': 'table', 'header': 'ICC Results (Single Measures)', 'data': res_df},
+                    {'type': 'table', 'header': 'ANOVA Table (Reference)', 'data': anova_df}
+                ]
+                html = diag_test.generate_report("ICC Reliability Analysis", rep_elements)
+                st.session_state.html_output_icc = html
+                st.components.v1.html(html, height=500, scrolling=True)
+                
+        with icc_dl:
+            if st.session_state.html_output_icc:
+                st.download_button("📥 Download Report", st.session_state.html_output_icc, "icc_report.html", "text/html", key='dl_icc_corr')
+            else:
+                st.button("📥 Download Report", disabled=True, key='ph_icc_corr')
+
+    # ==================================================
+    # SUB-TAB 3: Reference & Interpretation
+    # ==================================================
+    with sub_tab3:
+        st.markdown("##### Quick Reference: Correlation vs ICC")
+        
+        st.info("""
+        **📊 When to Use What:**
+        
+        | Test | Variables | Purpose | Example |
+        |------|-----------|---------|----------|
+        | **Pearson** | 2 continuous | Linear relationship | Age vs Blood Pressure |
+        | **Spearman** | 2 continuous | Monotonic relationship (rank-based) | Severity score vs Hospital Stay |
+        | **ICC** | 2+ continuous | Reliability/agreement between raters/methods | Agreement between 2 doctors rating images |
+        
+        **Key Differences:**
+        - **Correlation (r/rho)** = Association strength between TWO variables
+        - **ICC** = Agreement strength between 2+ RATERS/METHODS measuring same thing
+        """)
+        
+        st.markdown("### Interpretation Guide")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Correlation Coefficient (r, rho)**")
+            st.markdown("""
+            - **|r| = 0.7 to 1.0** → Strong
+            - **|r| = 0.4 to 0.7** → Moderate  
+            - **|r| = 0.2 to 0.4** → Weak
+            - **|r| < 0.2** → Very weak/negligible
+            - **p < 0.05** → Statistically significant
+            """)
+        
+        with col2:
+            st.markdown("**ICC Value**")
+            st.markdown("""
+            - **0.90 to 1.00** → Excellent
+            - **0.75 to 0.89** → Good
+            - **0.50 to 0.74** → Moderate
+            - **0.25 to 0.49** → Fair
+            - **< 0.25** → Poor
+            """)
+        
+        st.markdown("""---
+        **📝 Note:** Chi-Square test (for categorical association) has been moved to **Tab 4: Diagnostic Tests (ROC)**.
+        """)
