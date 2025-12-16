@@ -76,7 +76,12 @@ if 'checked_deps' not in st.session_state:
 # 2. IMPORT MODULES
 # ==========================================
 try:
-    from tabs import tab_data, tab_baseline_matching, tab_diag, tab_corr, tab_logit, tab_survival
+    from tabs import tab_data
+    from tabs import tab_baseline_matching
+    from tabs import tab_diag
+    from tabs import tab_corr
+    from tabs import tab_logit
+    from tabs import tab_survival
 except (KeyboardInterrupt, SystemExit):
     raise
 except Exception as e:
