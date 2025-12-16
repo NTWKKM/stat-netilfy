@@ -185,9 +185,9 @@ class ConfigManager:
                 
                 # Try to set the value
                 try:
-                    self.update(f"{section}.{key_name}", value)
-                except Exception as e:
-                    warnings.warn(f"Failed to set env override {key}={value}: {e}")
+                self.update(f"{section}.{key_name}", value)
+            except (KeyError, ValueError, TypeError) as e:
+                warnings.warn(f"Failed to set env override {key}={value}: {e}", stacklevel=2)
     
     def get(self, key: str, default: Any = None) -> Any:
         """
@@ -289,7 +289,8 @@ class ConfigManager:
         Returns:
             dict: Complete configuration
         """
-        return self._config.copy()
+        import copy
+    return copy.deepcopy(self._config)
     
     def to_json(self, filepath: Optional[str] = None, pretty: bool = True) -> str:
         """
@@ -319,13 +320,14 @@ class ConfigManager:
         errors = []
         
         # Validate analysis settings
-        if not (0 < self.get('analysis.logit_screening_p') < 1):
+        screening_p = self.get('analysis.logit_screening_p')
+        if screening_p is None or not (0 < screening_p < 1):
             errors.append("analysis.logit_screening_p must be between 0 and 1")
         
         # Validate p-value bounds
         lower = self.get('analysis.pvalue_bounds_lower')
         upper = self.get('analysis.pvalue_bounds_upper')
-        if not (lower < upper):
+        if lower is None or upper is None or not (lower < upper):
             errors.append("pvalue_bounds_lower must be < pvalue_bounds_upper")
         
         # Validate logging
@@ -388,7 +390,7 @@ if __name__ == "__main__":
         for err in errors:
             print(f"    ✗ {err}")
     else:
-        print(f"    ✓ No errors found")
+        print("    ✓ No errors found")
     
     # Test 6: Export to JSON
     print("\n[Test 6] Exporting configuration:")
