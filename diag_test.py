@@ -326,43 +326,45 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                 else:
                     nnt_label = "NNT/NNH"
                 
-                # Build Risk Metrics Table
+                # Build Risk Metrics Table WITH ROW NUMBERING
                 risk_data = [
-                    {"Metric": "Risk in Exposed (R1)", "Value": f"{risk_exp:.4f}", 
+                    {"#": 1, "Metric": "Risk in Exposed (R1)", "Value": f"{risk_exp:.4f}", 
                      "95% CI": "-", "Interpretation": f"Risk of '{label_event}' in {label_exp}"},
-                    {"Metric": "Risk in Unexposed (R0)", "Value": f"{risk_unexp:.4f}", 
+                    {"#": 2, "Metric": "Risk in Unexposed (R0)", "Value": f"{risk_unexp:.4f}", 
                      "95% CI": "-", "Interpretation": f"Baseline risk of '{label_event}' in {label_unexp}"},
-                    {"Metric": "Risk Ratio (RR)", "Value": f"{rr:.4f}", 
+                    {"#": 3, "Metric": "Risk Ratio (RR)", "Value": f"{rr:.4f}", 
                      "95% CI": f"({rr_ci_lower:.4f} - {rr_ci_upper:.4f})" if np.isfinite(rr_ci_lower) else "N/A",
                      "Interpretation": f"Risk in {label_exp} is {rr:.2f}x that of {label_unexp}"},
-                    {"Metric": "Risk Difference (RD)", "Value": f"{rd:.4f}", 
+                    {"#": 4, "Metric": "Risk Difference (RD)", "Value": f"{rd:.4f}", 
                      "95% CI": "-", "Interpretation": "Absolute risk difference (R1 - R0)"},
-                    {"Metric": nnt_label, "Value": f"{nnt_abs:.1f}", 
+                    {"#": 5, "Metric": nnt_label, "Value": f"{nnt_abs:.1f}", 
                      "95% CI": f"({nnt_ci_lower:.1f} - {nnt_ci_upper:.1f})" if np.isfinite(nnt_ci_lower) else "N/A",
                      "Interpretation": "Patients to treat to prevent/cause 1 outcome"},
-                    {"Metric": "Odds Ratio (OR)", "Value": f"{or_value:.4f}", 
+                    {"#": 6, "Metric": "Odds Ratio (OR)", "Value": f"{or_value:.4f}", 
                      "95% CI": f"({or_ci_lower:.4f} - {or_ci_upper:.4f})" if np.isfinite(or_ci_lower) else "N/A",
                      "Interpretation": f"Odds of '{label_event}' ({label_exp} vs {label_unexp})"},
-                    # --- DIAGNOSTIC METRICS HEADER (MERGED & STYLED) ---
-                    {"Metric": "DIAGNOSTIC METRICS (Applies if using diagnostic/screening context)", "Value": "", "95% CI": "", "Interpretation": ""},
-                    {"Metric": "Sensitivity", "Value": f"{sensitivity:.4f}", 
+                    # --- DIAGNOSTIC METRICS HEADER (MERGED & STYLED) WITH ROW NUMBER ---
+                    {"#": 7, "Metric": "DIAGNOSTIC METRICS (Applies if using diagnostic/screening context)", "Value": "", "95% CI": "", "Interpretation": ""},
+                    {"#": 8, "Metric": "Sensitivity", "Value": f"{sensitivity:.4f}", 
                      "95% CI": f"({se_ci_lower:.4f} - {se_ci_upper:.4f})",
                      "Interpretation": "P(Test+ | Disease+) - True Positive Rate"},
-                    {"Metric": "Specificity", "Value": f"{specificity:.4f}", 
+                    {"#": 9, "Metric": "Specificity", "Value": f"{specificity:.4f}", 
                      "95% CI": f"({sp_ci_lower:.4f} - {sp_ci_upper:.4f})",
                      "Interpretation": "P(Test- | Disease-) - True Negative Rate"},
-                    {"Metric": "PPV (Positive Predictive Value)", "Value": f"{ppv:.4f}", 
+                    {"#": 10, "Metric": "PPV (Positive Predictive Value)", "Value": f"{ppv:.4f}", 
                      "95% CI": f"({ppv_ci_lower:.4f} - {ppv_ci_upper:.4f})",
                      "Interpretation": "P(Disease+ | Test+) - Precision"},
-                    {"Metric": "NPV (Negative Predictive Value)", "Value": f"{npv:.4f}", 
+                    {"#": 11, "Metric": "NPV (Negative Predictive Value)", "Value": f"{npv:.4f}", 
                      "95% CI": f"({npv_ci_lower:.4f} - {npv_ci_upper:.4f})",
                      "Interpretation": "P(Disease- | Test-) - Negative Precision"},
-                    {"Metric": "LR+ (Likelihood Ratio +)", "Value": f"{lr_plus:.4f}", 
+                    {"#": 12, "Metric": "LR+ (Likelihood Ratio +)", "Value": f"{lr_plus:.4f}", 
                      "95% CI": "-", "Interpretation": "Sensitivity / (1 - Specificity)"},
-                    {"Metric": "LR- (Likelihood Ratio -)", "Value": f"{lr_minus:.4f}", 
+                    {"#": 13, "Metric": "LR- (Likelihood Ratio -)", "Value": f"{lr_minus:.4f}", 
                      "95% CI": "-", "Interpretation": "(1 - Sensitivity) / Specificity"},
                 ]
                 risk_df = pd.DataFrame(risk_data)
+                # Set # as first column
+                risk_df = risk_df[["#", "Metric", "Value", "95% CI", "Interpretation"]]
             except (ZeroDivisionError, ValueError, KeyError) as e:
                 risk_df = None
                 msg += f" (Risk metrics unavailable: {e!s})"
