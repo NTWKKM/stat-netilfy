@@ -99,7 +99,7 @@ def run_binary_logit(y, X, method='default'):
     except (KeyboardInterrupt, SystemExit):
         raise
     except Exception as e:
-        logger.error(f"Logistic regression failed: {e}", exc_info=True)  # ✅ LOG ERROR
+        logger.exception("Logistic regression failed: %s", e)  # ✅ LOG ERROR
         return None, None, None, str(e)
 
 def get_label(col_name, var_meta):
@@ -251,25 +251,31 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             if is_categorical:
                 n_used = len(X_raw.dropna())
                 mapper = user_setting.get('map', {})
-                
-                try: levels = sorted(X_raw.dropna().unique(), key=lambda x: float(x) if str(x).replace('.','',1).isdigit() else str(x))
+    
+                try: levels = sorted(X_raw.dropna().unique(), ...)
                 except: levels = sorted(X_raw.astype(str).unique())
-                
+    
                 desc_tot = [f"<span class='n-badge'>n={n_used}</span>"]
                 desc_neg = [f"<span class='n-badge'>n={len(X_neg.dropna())}</span>"]
                 desc_pos = [f"<span class='n-badge'>n={len(X_pos.dropna())}</span>"]
-                
-                for lvl in levels:
+    
+                # ✅ DEFINE count_val ONCE, BEFORE THE LOOP
+                def count_val(series, v_str):
+                    """Count elements equal to v_str after normalizing numeric-like values."""
+                    return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
+    
+                for lvl in levels:  # ← Loop starts here
                     try: 
                         if float(lvl).is_integer(): key = int(float(lvl))
                         else: key = float(lvl)
                     except: key = lvl
-                    
+        
                     label_txt = mapper.get(key, str(lvl))
                     lvl_str = str(lvl)
                     if str(lvl).endswith('.0'): lvl_str = str(int(float(lvl)))
-                    
-                    def count_val(series, v_str):
+        
+                    # ✅ Just call it - no definition here anymore!
+                    c_all = count_val(X_raw, lvl_str)
                         """
                         Count how many elements in a pandas Series equal a given string after normalizing numeric-like values.
                         
@@ -305,7 +311,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 try:
                     contingency = pd.crosstab(X_raw, y)
                     if contingency.size > 0:
-                        chi2, p, dof, ex = stats.chi2_contingency(contingency)
+                        _, p, _, _ = stats.chi2_contingency(contingency)
                         res['p_comp'] = p
                         res['test_name'] = "Chi-square"
                     else: 
