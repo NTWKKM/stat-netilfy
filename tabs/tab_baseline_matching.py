@@ -39,11 +39,13 @@ def render(df, var_meta):
         all_cols = df.columns.tolist()
         grp_idx = 0
         for i, c in enumerate(all_cols):
-            if 'group' in c.lower() or 'treat' in c.lower(): grp_idx = i; break
+            if 'group' in c.lower() or 'treat' in c.lower(): 
+                grp_idx = i
+                break
         
         c1, c2 = st.columns([1, 2])
         with c1:
-            col_group = st.selectbox("Group By (Column):", ["None"] + all_cols, index=grp_idx+1, key='t1_group')
+            col_group = st.selectbox("Group By (Column):", ["None", *all_cols], index=grp_idx+1, key='t1_group')
         with c2:
             def_vars = [c for c in all_cols if c != col_group]
             selected_vars = st.multiselect("Include Variables:", all_cols, default=def_vars, key='t1_vars')
@@ -225,3 +227,4 @@ def render(df, var_meta):
                             
                     except Exception as e:
                         st.error(f"Error during PSM ({type(e).__name__}): {e}")
+                        logger.exception("PSM analysis failed")
