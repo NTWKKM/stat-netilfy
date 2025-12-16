@@ -97,6 +97,11 @@
         entrypoint: "app.py",
         files: {
           "app.py": { url: "./app.py" },
+          "app_integration_example.py': { url: "./app_integration_example.py" }, 
+          // 🟢 1. เพิ่มไฟล์ Config และ Logger ที่เพิ่งสร้างใหม่ (สำคัญมาก!)
+          "config.py": { url: "./config.py" },
+          "logger.py": { url: "./logger.py" },
+
           "survival_lib.py": { url: "./survival_lib.py" },
           "psm_lib.py": { url: "./psm_lib.py" },
           "logic.py": { url: "./logic.py" },
@@ -105,6 +110,10 @@
           "correlation.py": { url: "./correlation.py" },
           
           "tabs/__init__.py": { url: "./tabs/__init__.py" },
+          
+          // 🟢 2. เพิ่มไฟล์ _common.py ด้วย (ถ้า code มีการเรียกใช้)
+          "tabs/_common.py": { url: "./tabs/_common.py" },
+
           "tabs/tab_data.py": { url: "./tabs/tab_data.py" },
           "tabs/tab_table1.py": { url: "./tabs/tab_table1.py" },
           "tabs/tab_diag.py": { url: "./tabs/tab_diag.py" },
@@ -112,8 +121,6 @@
           "tabs/tab_logit.py": { url: "./tabs/tab_logit.py" },
           "tabs/tab_survival.py": { url: "./tabs/tab_survival.py" },
           "tabs/tab_psm.py": { url: "./tabs/tab_psm.py" },
-          
-          // 🟢 เพิ่มไฟล์ใหม่ตรงนี้
           "tabs/tab_adv_survival.py": { url: "./tabs/tab_adv_survival.py" } 
         },
       }, document.getElementById("root"));
