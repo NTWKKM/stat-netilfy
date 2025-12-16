@@ -252,8 +252,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 n_used = len(X_raw.dropna())
                 mapper = user_setting.get('map', {})
     
-                try: levels = sorted(X_raw.dropna().unique(), ...)
-                except: levels = sorted(X_raw.astype(str).unique())
+                try:
+                    levels = sorted(X_raw.dropna().unique(), key=lambda x: float(x) if str(x).replace('.','',1).isdigit() else str(x))
+                except (ValueError, TypeError):
+                    levels = sorted(X_raw.astype(str).unique())
     
                 desc_tot = [f"<span class='n-badge'>n={n_used}</span>"]
                 desc_neg = [f"<span class='n-badge'>n={len(X_neg.dropna())}</span>"]
@@ -265,10 +267,13 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                     return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
     
                 for lvl in levels:  # ← Loop starts here
-                    try: 
-                        if float(lvl).is_integer(): key = int(float(lvl))
-                        else: key = float(lvl)
-                    except: key = lvl
+                    try:
+                        if float(lvl).is_integer():
+                            key = int(float(lvl))
+                        else:
+                            key = float(lvl)
+                    except (ValueError, TypeError):
+                        key = lvl
         
                     label_txt = mapper.get(key, str(lvl))
                     lvl_str = str(lvl)
