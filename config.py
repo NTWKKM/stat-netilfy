@@ -291,7 +291,7 @@ class ConfigManager:
             dict: Complete configuration
         """
         import copy
-    return copy.deepcopy(self._config)
+        return copy.deepcopy(self._config)
     
     def to_json(self, filepath: Optional[str] = None, pretty: bool = True) -> str:
         """
