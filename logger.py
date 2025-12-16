@@ -153,13 +153,14 @@ class ContextFilter(logging.Filter):
         """
         self.context.clear()
 
+from typing import ClassVar
 
 class LoggerFactory:
     """
     Factory for creating and managing loggers.
     """
     
-    _loggers: Dict[str, logging.Logger] = {}
+    _loggers: ClassVar[Dict[str, 'Logger']] = {}
     _context_filter: Optional[ContextFilter] = None
     _perf_logger: Optional[PerformanceLogger] = None
     _configured = False
@@ -284,7 +285,7 @@ class LoggerFactory:
         
         except Exception as e:
             # 🟢 FIX #9: Silently fail for Streamlit config
-            pass
+            print(f"[DEBUG] Streamlit logging config skipped: {e}", file=sys.stderr)
     
     @classmethod
     def get_logger(cls, name: str) -> 'Logger':
