@@ -269,7 +269,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 desc_pos = [f"<span class='n-badge'>n={len(X_pos.dropna())}</span>"]
     
                 # ✅ DEFINE count_val ONCE, BEFORE THE LOOP
-                def count_val(series, v_str):
+                def count_val(series, v_str) -> int:
                     """Count elements equal to v_str after normalizing numeric-like values."""
                     return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
     
@@ -284,7 +284,8 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         
                     label_txt = mapper.get(key, str(lvl))
                     lvl_str = str(lvl)
-                    if str(lvl).endswith('.0'): lvl_str = str(int(float(lvl)))
+                    if str(lvl).endswith('.0'): 
+                        lvl_str = str(int(float(lvl)))
         
                     # ✅ Just call it - no definition here anymore!
                     c_all = count_val(X_raw, lvl_str)
@@ -352,13 +353,16 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                         
                     res['or'] = f"{or_val:.2f} ({ci_low:.2f}-{ci_high:.2f})"
                     res['p_or'] = pvals['x']
-                else: res['or'] = "-"
-            else: res['or'] = "-"
+                else: 
+                    res['or'] = "-"
+            else: 
+                res['or'] = "-"
 
             results_db[col] = res
             
             p_screen = res.get('p_comp', np.nan)
-            if pd.isna(p_screen): p_screen = res.get('p_or', np.nan)
+            if pd.isna(p_screen): 
+                p_screen = res.get('p_or', np.nan)
             if pd.notna(p_screen) and p_screen < 0.20:
                 candidates.append(col)
 
@@ -402,7 +406,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     # 🟢 3. เรียงลำดับ
     grouped_cols = sorted(valid_cols_for_html, key=sort_key_for_grouping)
 
-# ✅ FIX #5: P-VALUE BOUNDS CHECKING
+    # ✅ FIX #5: P-VALUE BOUNDS CHECKING
     def fmt_p(val) -> str:
         """
         Format p-value for display with bounds validation.
