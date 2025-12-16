@@ -367,11 +367,8 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                 risk_df = None
                 msg += f" (Risk metrics unavailable: {e!s})"
         
-        else:
-            return display_tab, stats_df_for_report, msg, risk_df
-
-    return display_tab, stats_df_for_report, msg, risk_df
-    
+        return display_tab, stats_df_for_report, msg, risk_df
+            
     except Exception as e:
         return display_tab, None, str(e), None
 
