@@ -249,7 +249,10 @@ if upl:
                         unique_count = len(unique_vals)
                         
                         if unique_count < 10:
-                            decimals_count = sum(1 for v in unique_vals if not float(v).is_integer())
+                            try:
+                                decimals_count = sum(1 for v in unique_vals if not float(v).is_integer())
+                            except (ValueError, TypeError):
+                                decimals_count = 0
                             decimals_pct = decimals_count / len(unique_vals) if len(unique_vals) > 0 else 0
                             
                             if decimals_pct < 0.3:
@@ -340,7 +343,7 @@ if st.session_state.df is not None:
             st.session_state.var_meta[s_var]['map'] = new_map
             st.session_state.var_meta[s_var].setdefault('label', s_var)
             
-            logger.info(f"✅ Variable '{s_var}' configured as {n_type}")  # ✅ LOG CONFIG
+            logger.info("✅ Variable '%s' configured as %s", s_var, n_type)  # ✅ LOG CONFIG
             st.sidebar.success("Saved!")
             st.rerun()
 
