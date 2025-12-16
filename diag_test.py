@@ -290,7 +290,12 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                     rr_ci_lower, rr_ci_upper = np.nan, np.nan
                 
                 # NNT with CI (simplified)
-                nnt_ci_lower, nnt_ci_upper = calculate_ci_nnt(rd)
+                # RD SE from 2x2 table: sqrt(p1*(1-p1)/n1 + p2*(1-p2)/n2)
+                rd_se = np.sqrt(
+                    (risk_exp * (1 - risk_exp)) / (a + b) + 
+                    (risk_unexp * (1 - risk_unexp)) / (c + d)
+                ) if (a + b) > 0 and (c + d) > 0 else np.nan
+                nnt_ci_lower, nnt_ci_upper = calculate_ci_nnt(rd, rd_se)
                 
                 # DIAGNOSTIC METRICS (if applicable)
                 # Sensitivity = TP / (TP + FN) = a / (a + c)
