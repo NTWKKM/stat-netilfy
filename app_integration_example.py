@@ -194,6 +194,12 @@ if st.sidebar.button("📂 Load Example Data"):
             
             # ... existing example data generation code ...
             
+            # NOTE: These variables should be defined above (see app.py for full implementation)
+            # Example placeholder - actual implementation would define these arrays
+            group = np.random.binomial(1, 0.5, n)
+            age = np.random.normal(55, 12, n).astype(int)
+            sex = np.random.binomial(1, 0.55, n)
+            
             data = {
                 'ID': range(1, n+1),
                 'Group_Treatment': group,
