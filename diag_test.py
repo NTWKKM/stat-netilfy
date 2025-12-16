@@ -115,6 +115,9 @@ def calculate_ci_nnt(rd, rd_se, ci=0.95):
     if abs(rd) < 0.001:
         return np.nan, np.nan
 
+    if np.isnan(rd_se) or rd_se <= 0:
+        return np.nan, np.nan
+
     z = stats.norm.ppf(1 - (1 - ci) / 2)
     rd_lower = rd - z * rd_se
     rd_upper = rd + z * rd_se
@@ -156,13 +159,13 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     base_col_labels = [col for col in all_col_labels if col != 'Total']
     base_row_labels = [row for row in all_row_labels if row != 'Total']
     
-    def get_original_label(label_str, df_labels):
+    def get_original_label(label_str: str, df_labels: list) -> any:
         for lbl in df_labels:
             if str(lbl) == label_str:
                 return lbl
         return label_str
     
-    def custom_sort(label):
+    def custom_sort(label) -> tuple:
         try:
             return (0, float(label))
         except (ValueError, TypeError):
@@ -451,7 +454,7 @@ def auc_ci_delong(y_true, y_scores):
         n_pos = tps[-1]
         n_neg = fps[-1]
         
-        if n_pos == 0 or n_neg == 0:
+        if n_pos <= 1 or n_neg <= 1:
             return np.nan, np.nan, np.nan
         
         auc = roc_auc_score(y_true, y_scores)
@@ -740,6 +743,11 @@ def generate_report(title, elements):
             font-weight: bold;
         }
         table tr.section-header td {
+            background-color: #0066cc;
+            color: white;
+            font-weight: bold;
+        }
+        table td.section-header {
             background-color: #0066cc;
             color: white;
             font-weight: bold;
