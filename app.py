@@ -406,6 +406,7 @@ else:
 # 3. GLOBAL CSS (Cleanup)
 # ==========================================
 
+# ⚠️ ตรวจสอบว่าบรรทัดนี้ไม่มีตัว 'f' นำหน้า (ต้องเป็น st.markdown(""" ไม่ใช่ st.markdown(f""")
 st.markdown("""
 <style>
 footer {
