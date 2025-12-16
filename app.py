@@ -32,23 +32,23 @@ if 'logging_initialized' not in st.session_state:
 
 st.title(f"🏥 {CONFIG.get('ui.page_title', 'Medical Statistical Tool')}") # Optional: ใช้ Config ตรง Title ด้วยก็ได้
 
-#components.html("""
-#<script>
-#    try {
-#        var loader = window.parent && window.parent.document
-#            ? window.parent.document.getElementById('loading-screen')
-#            : null;
-#        if (loader) {
-#            loader.style.opacity = '0';
-#            setTimeout(function() {
-#                loader.style.display = 'none';
-#            }, 500);
-#        }
-#    } catch (e) {
-#        console.log("Loader removal error: " + e);
-#    }
-#</script>
-#""", height=0)
+components.html("""
+<script>
+    try {
+        var loader = window.parent && window.parent.document
+            ? window.parent.document.getElementById('loading-screen')
+            : null;
+        if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(function() {
+                loader.style.display = 'none';
+            }, 500);
+        }
+    } catch (e) {
+        console.log("Loader removal error: " + e);
+    }
+</script>
+""", height=0)
 
 # ==========================================
 # 1a. CHECK OPTIONAL DEPENDENCIES (FIX #1)
@@ -402,25 +402,25 @@ else:
 8.  **Time-Dependent Cox Regression (New!)**
     """)
     
-# ==========================================
-# 3. GLOBAL CSS (Cleanup)
-# ==========================================
+ ==========================================
+ 3. GLOBAL CSS (Cleanup)
+ ==========================================
 
-#st.markdown("""
-#<style>
-#footer {
-#    visibility: hidden;
-#    height: 0px;
-#}
-#footer:after {
-#    content: none;
-#}
-#</style>
-#""", unsafe_allow_html=True)
+st.markdown("""
+<style>
+footer {
+    visibility: hidden;
+    height: 0px;
+}
+footer:after {
+    content: none;
+}
+</style>
+""", unsafe_allow_html=True)
 
-#st.markdown("""
-#<hr style="margin-top: 20px; margin-bottom: 10px; border-color: var(--border-color); opacity: 0.5;">
-#<div style='text-align: center; font-size: 0.8em; color: var(--text-color); opacity: 0.8;'>
-#    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit; font-weight:bold;">NTWKKM n Donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
-#</div>
-#""", unsafe_allow_html=True)
+st.markdown("""
+<hr style="margin-top: 20px; margin-bottom: 10px; border-color: var(--border-color); opacity: 0.5;">
+<div style='text-align: center; font-size: 0.8em; color: var(--text-color); opacity: 0.8;'>
+    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit; font-weight:bold;">NTWKKM n Donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
+</div>
+""", unsafe_allow_html=True)
