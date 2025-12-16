@@ -170,47 +170,54 @@ class LoggerFactory:
         Configure logging system based on configuration.
         
         Should be called once at application startup.
+        🟢 FIX #9: Made safe with try-catch to prevent infinite loading on errors
         """
         if cls._configured:
             return
         
-        # Check if logging enabled
-        if not CONFIG.get('logging.enabled'):
-            logging.disable(logging.CRITICAL)
+        try:
+            # Check if logging enabled
+            if not CONFIG.get('logging.enabled'):
+                logging.disable(logging.CRITICAL)
+                cls._configured = True
+                return
+            
+            # Get logging config
+            log_level = CONFIG.get('logging.level', 'INFO')
+            log_format = CONFIG.get('logging.format')
+            date_format = CONFIG.get('logging.date_format')
+            
+            # Create formatter
+            formatter = logging.Formatter(log_format, datefmt=date_format)
+            
+            # Configure root logger
+            root_logger = logging.getLogger()
+            root_logger.setLevel(getattr(logging, log_level))
+            
+            # Clear existing handlers
+            root_logger.handlers.clear()
+            
+            # Create context filter
+            cls._context_filter = ContextFilter()
+            
+            # File logging
+            if CONFIG.get('logging.file_enabled'):
+                cls._setup_file_logging(root_logger, formatter)
+            
+            # Console logging
+            if CONFIG.get('logging.console_enabled'):
+                cls._setup_console_logging(root_logger, formatter)
+            
+            # Streamlit logging (suppress some warnings)
+            if CONFIG.get('logging.streamlit_enabled'):
+                cls._setup_streamlit_logging()
+            
             cls._configured = True
-            return
         
-        # Get logging config
-        log_level = CONFIG.get('logging.level', 'INFO')
-        log_format = CONFIG.get('logging.format')
-        date_format = CONFIG.get('logging.date_format')
-        
-        # Create formatter
-        formatter = logging.Formatter(log_format, datefmt=date_format)
-        
-        # Configure root logger
-        root_logger = logging.getLogger()
-        root_logger.setLevel(getattr(logging, log_level))
-        
-        # Clear existing handlers
-        root_logger.handlers.clear()
-        
-        # Create context filter
-        cls._context_filter = ContextFilter()
-        
-        # File logging
-        if CONFIG.get('logging.file_enabled'):
-            cls._setup_file_logging(root_logger, formatter)
-        
-        # Console logging
-        if CONFIG.get('logging.console_enabled'):
-            cls._setup_console_logging(root_logger, formatter)
-        
-        # Streamlit logging (suppress some warnings)
-        if CONFIG.get('logging.streamlit_enabled'):
-            cls._setup_streamlit_logging()
-        
-        cls._configured = True
+        except Exception as e:
+            # 🟢 FIX #9: Catch errors and set configured flag to prevent retry loops
+            print(f"[WARNING] Logging configuration failed: {e}", file=sys.stderr)
+            cls._configured = True  # Mark as configured to prevent retry
     
     @classmethod
     def _setup_file_logging(cls, root_logger: logging.Logger, formatter: logging.Formatter) -> None:
@@ -220,15 +227,17 @@ class LoggerFactory:
         Parameters:
             root_logger: Root logger to configure
             formatter: Log formatter
+        
+        🟢 FIX #9: Added try-catch to handle disk/permission issues gracefully
         """
-        log_dir = Path(CONFIG.get('logging.log_dir', 'logs'))
-        log_dir.mkdir(exist_ok=True, parents=True)
-        
-        log_file = log_dir / CONFIG.get('logging.log_file', 'app.log')
-        max_size = CONFIG.get('logging.max_log_size', 10485760)
-        backup_count = CONFIG.get('logging.backup_count', 5)
-        
         try:
+            log_dir = Path(CONFIG.get('logging.log_dir', 'logs'))
+            log_dir.mkdir(exist_ok=True, parents=True)
+            
+            log_file = log_dir / CONFIG.get('logging.log_file', 'app.log')
+            max_size = CONFIG.get('logging.max_log_size', 10485760)
+            backup_count = CONFIG.get('logging.backup_count', 5)
+            
             handler = logging.handlers.RotatingFileHandler(
                 log_file,
                 maxBytes=max_size,
@@ -237,8 +246,10 @@ class LoggerFactory:
             handler.setFormatter(formatter)
             handler.addFilter(cls._context_filter)
             root_logger.addHandler(handler)
+        
         except Exception as e:
-            print(f"Failed to setup file logging: {e}")
+            # 🟢 FIX #9: Log error but don't crash
+            print(f"[WARNING] Failed to setup file logging: {e}", file=sys.stderr)
     
     @classmethod
     def _setup_console_logging(cls, root_logger: logging.Logger, formatter: logging.Formatter) -> None:
@@ -249,21 +260,31 @@ class LoggerFactory:
             root_logger: Root logger to configure
             formatter: Log formatter
         """
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_level = CONFIG.get('logging.console_level', 'INFO')
-        console_handler.setLevel(getattr(logging, console_level))
-        console_handler.setFormatter(formatter)
-        console_handler.addFilter(cls._context_filter)
-        root_logger.addHandler(console_handler)
+        try:
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_level = CONFIG.get('logging.console_level', 'INFO')
+            console_handler.setLevel(getattr(logging, console_level))
+            console_handler.setFormatter(formatter)
+            console_handler.addFilter(cls._context_filter)
+            root_logger.addHandler(console_handler)
+        
+        except Exception as e:
+            # 🟢 FIX #9: Log error but don't crash
+            print(f"[WARNING] Failed to setup console logging: {e}", file=sys.stderr)
     
     @classmethod
     def _setup_streamlit_logging(cls) -> None:
         """
         Configure Streamlit logger to reduce noise.
         """
-        streamlit_level = CONFIG.get('logging.streamlit_level', 'WARNING')
-        logging.getLogger('streamlit').setLevel(getattr(logging, streamlit_level))
-        logging.getLogger('altair').setLevel(getattr(logging, streamlit_level))
+        try:
+            streamlit_level = CONFIG.get('logging.streamlit_level', 'WARNING')
+            logging.getLogger('streamlit').setLevel(getattr(logging, streamlit_level))
+            logging.getLogger('altair').setLevel(getattr(logging, streamlit_level))
+        
+        except Exception as e:
+            # 🟢 FIX #9: Silently fail for Streamlit config
+            pass
     
     @classmethod
     def get_logger(cls, name: str) -> 'Logger':
@@ -465,11 +486,6 @@ def get_logger(name: str) -> Logger:
         logger.info("Hello world")
     """
     return LoggerFactory.get_logger(name)
-
-
-# Initialize logging on import
-if CONFIG.get('logging.enabled'):
-    LoggerFactory.configure()
 
 
 if __name__ == "__main__":
