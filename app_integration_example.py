@@ -239,7 +239,7 @@ try:
     # ... existing app code ...
     pass
 except Exception as e:
-    logger.error(f"Unexpected error: {e}", exc_info=True)  # ✅ Log with traceback
+    logger.exception("Unexpected error: %s", e)  # ✅ Log with traceback
     st.error(f"Application error: {e}")
     st.stop()
 
