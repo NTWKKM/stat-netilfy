@@ -276,21 +276,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         
                     # ✅ Just call it - no definition here anymore!
                     c_all = count_val(X_raw, lvl_str)
-                        """
-                        Count how many elements in a pandas Series equal a given string after normalizing numeric-like values.
-                        
-                        This converts each element to string; if the string represents a number (allowing one decimal point) a trailing ".0" is removed (e.g., "1.0" -> "1") before comparing to v_str. The comparison is string equality performed after this normalization.
-                        
-                        Parameters:
-                            series (pandas.Series): Series whose values will be normalized and compared.
-                            v_str (str): Target string to match against each normalized series element.
-                        
-                        Returns:
-                            int: Number of elements equal to v_str after normalization.
-                        """
-                        return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
-
-                    c_all = count_val(X_raw, lvl_str)
+                       
                     if c_all == 0:
                         c_all = (X_raw == lvl).sum()
                     
