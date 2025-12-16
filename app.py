@@ -76,7 +76,7 @@ if 'checked_deps' not in st.session_state:
 # 2. IMPORT MODULES
 # ==========================================
 try:
-    from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival, tab_psm, tab_adv_survival
+    from tabs import tab_data, tab_baseline_matching, tab_diag, tab_corr, tab_logit, tab_survival
 except (KeyboardInterrupt, SystemExit):
     raise
 except Exception as e:
@@ -343,12 +343,12 @@ if st.session_state.df is not None:
             st.session_state.var_meta[s_var]['map'] = new_map
             st.session_state.var_meta[s_var].setdefault('label', s_var)
             
-            logger.info("✅ Variable '%s' configured as %s", s_var, n_type)  # ✅ LOG CONFIG
+            logger.info(f"✅ Variable '{s_var}' configured as {n_type}")  # ✅ LOG CONFIG
             st.sidebar.success("Saved!")
             st.rerun()
 
 # ==========================================
-# MAIN AREA - TABS REORGANIZATION (1B Modified)
+# MAIN AREA - TABS (6 TOTAL - MERGED)
 # ==========================================
 if st.session_state.df is not None:
     df = st.session_state.df 
@@ -363,11 +363,10 @@ if st.session_state.df is not None:
             if len(cols_to_verify) > 10:
                 st.caption(f"  ... and {len(cols_to_verify) - 10} more")
 
-    # 🟢 FINAL TAB LAYOUT (1B Modified)
-    t0, t1, t2, t3, t4, t5, t6 = st.tabs([
+    # 🟢 FINAL TAB LAYOUT (6 tabs total, merged Table 1 + PSM)
+    t0, t1, t2, t3, t4, t5 = st.tabs([
         "📁 Data Management", 
-        "📋 Table 1 (Baseline)", 
-        "⚖️ Propensity Score Matching", 
+        "📋 Table 1 & Matching",  # ← MERGED (has 2 subtabs)
         "🧪 Diagnostic Tests (ROC)",
         "📈 Correlation & ICC",
         "📊 Risk Factors (Logistic)",
@@ -380,35 +379,33 @@ if st.session_state.df is not None:
         df_clean = tab_data.get_clean_data(st.session_state.df, custom_na)
 
     with t1:
-        tab_table1.render(df_clean, st.session_state.var_meta)
+        tab_baseline_matching.render(df_clean, st.session_state.var_meta)  # ← HAS INTERNAL SUBTABS
         
     with t2:
-        tab_psm.render(df_clean, st.session_state.var_meta)
-        
-    with t3:
         tab_diag.render(df_clean, st.session_state.var_meta)
         
-    with t4:
+    with t3:
         tab_corr.render(df_clean)
         
-    with t5:
+    with t4:
         tab_logit.render(df_clean, st.session_state.var_meta)
         
-    with t6:
+    with t5:
         tab_survival.render(df_clean, st.session_state.var_meta)
         
 else:
     st.info("👈 Please load example data or upload a file to start.")
     st.markdown("""
-### ✨ 7-Tab Analysis Pipeline:
+### ✨ 6-Tab Analysis Pipeline (Optimized):
 
 1. **📁 Data Management** - Upload, clean, set variable types
-2. **📋 Table 1 (Baseline)** - Descriptive stats + group comparison
-3. **⚖️ Propensity Score Matching** - Balance treatment groups (optional)
-4. **🧪 Diagnostic Tests (ROC)** - Chi-Square, ROC, Kappa, RR/OR/NNT
-5. **📈 Correlation & ICC** - Pearson, Spearman, ICC reliability
-6. **📊 Risk Factors (Logistic)** - Binary logistic regression
-7. **⏳ Survival Analysis** - Kaplan-Meier & Cox regression
+2. **📋 Table 1 & Matching** - Baseline characteristics + Propensity Score Matching
+   - Subtab 2.1: Baseline Characteristics (Table 1)
+   - Subtab 2.2: Propensity Score Matching (if needed)
+3. **🧪 Diagnostic Tests (ROC)** - Chi-Square, ROC, Kappa, RR/OR/NNT
+4. **📈 Correlation & ICC** - Pearson, Spearman, ICC reliability
+5. **📊 Risk Factors (Logistic)** - Binary logistic regression
+6. **⏳ Survival Analysis** - Kaplan-Meier & Cox regression
     """)
     
 # ==========================================
