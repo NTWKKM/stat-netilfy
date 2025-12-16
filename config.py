@@ -280,7 +280,9 @@ class ConfigManager:
         Returns:
             dict: Section configuration
         """
-        return self.get(section, {})
+        import copy
+        result = self.get(section, {})
+        return copy.deepcopy(result) if isinstance(result, dict) else result
     
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -374,7 +376,7 @@ if __name__ == "__main__":
     try:
         CONFIG.update('logging.level', 'DEBUG')
         print(f"  ✓ Updated logging.level to: {CONFIG.get('logging.level')}")
-    except Exception as e:
+    except KeyError as e:
         print(f"  ✗ Error: {e}")
     
     # Test 4: Get section
