@@ -3,6 +3,9 @@ import pandas as pd
 import numpy as np
 import table_one  # Import from root
 import psm_lib  # Import from root
+from logger import get_logger
+
+logger = get_logger(__name__)
 
 def render(df, var_meta):
     st.subheader("📋 Table 1 & Matching")
@@ -60,6 +63,7 @@ def render(df, var_meta):
                     st.components.v1.html(html_t1, height=600, scrolling=True)
                 except Exception as e:
                     st.error(f"Error: {e}")
+                    logger.exception("Table 1 generation failed")
                     st.session_state.html_output_t1 = None 
                     
         with dl_col:
@@ -181,7 +185,7 @@ def render(df, var_meta):
                             with t_res1:
                                 c_plot, c_tab = st.columns([2, 1])
                                 fig_love = psm_lib.plot_love_plot(smd_pre, smd_post)
-                                c_plot.pyplot(fig_love)
+                                c_plot.plotly_chart(fig_love, use_container_width=True)
                                 
                                 c_tab.markdown("**SMD Table:**")
                                 smd_merge = pd.merge(smd_pre, smd_post, on='Variable', suffixes=('_Pre', '_Post'))
