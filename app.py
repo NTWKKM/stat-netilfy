@@ -30,7 +30,7 @@ if 'logging_initialized' not in st.session_state:
     st.session_state.logging_initialized = True
     logger.info("📱 Streamlit app started")
 
-st.title(f"🏥 {CONFIG.get('ui.page_title', 'Medical Statistical Tool')}") # Optional: ใช้ Config ตรง Title ด้วยก็ได้
+st.title(f"🏥 {CONFIG.get('ui.page_title', 'Medical Statistical Tool')}")
 
 components.html("""
 <script>
@@ -73,7 +73,7 @@ if 'checked_deps' not in st.session_state:
         st.info(deps['firth']['msg'])
 
 # ==========================================
-# 2. คำ่อยเริ่ม IMPORT MODULES
+# 2. IMPORT MODULES
 # ==========================================
 try:
     from tabs import tab_data, tab_table1, tab_diag, tab_corr, tab_logit, tab_survival, tab_psm, tab_adv_survival
@@ -208,7 +208,7 @@ if st.sidebar.button("📄 Load Example Data"):
         logger.log_operation("example_data", "completed",   # ✅ LOG COMPLETION
                            rows=len(st.session_state.df),
                            columns=len(st.session_state.df.columns))
-        st.sidebar.success(f"Loaded {n} Example Patients! (Includes Logistic Outcome)")
+        st.sidebar.success(f"Loaded {n} Example Patients!")
         st.rerun()
         
     except Exception as e:
@@ -340,12 +340,12 @@ if st.session_state.df is not None:
             st.session_state.var_meta[s_var]['map'] = new_map
             st.session_state.var_meta[s_var].setdefault('label', s_var)
             
-            logger.info("✅ Variable '%s' configured as %s", s_var, n_type)  # ✅ LOG CONFIG
+            logger.info(f"✅ Variable '{s_var}' configured as {n_type}")  # ✅ LOG CONFIG
             st.sidebar.success("Saved!")
             st.rerun()
 
 # ==========================================
-# 2. MAIN AREA
+# MAIN AREA - TABS REORGANIZATION (1B Modified)
 # ==========================================
 if st.session_state.df is not None:
     df = st.session_state.df 
@@ -360,14 +360,15 @@ if st.session_state.df is not None:
             if len(cols_to_verify) > 10:
                 st.caption(f"  ... and {len(cols_to_verify) - 10} more")
 
+    # 🟢 FINAL TAB LAYOUT (1B Modified)
     t0, t1, t2, t3, t4, t5, t6 = st.tabs([
-        "📄 Raw Data", 
-        "📋 Baseline Table 1", 
-        "🔬 Diagnostic Test", 
-        "🔗 Correlation",
-        "📊 Logistic Regression",
-        "⏳ Survival Analysis",
-        "⚖️ Propensity Score",
+        "📁 Data Management", 
+        "📋 Table 1 (Baseline)", 
+        "⚖️ Propensity Score Matching", 
+        "🧪 Diagnostic Tests (ROC)",
+        "📈 Correlation & ICC",
+        "📊 Risk Factors (Logistic)",
+        "⏳ Survival Analysis (KM & Cox)",
     ])
 
     with t0:
@@ -377,34 +378,38 @@ if st.session_state.df is not None:
 
     with t1:
         tab_table1.render(df_clean, st.session_state.var_meta)
+        
     with t2:
-        tab_diag.render(df_clean, st.session_state.var_meta)
-    with t3:
-        tab_corr.render(df_clean)
-    with t4:
-        tab_logit.render(df_clean, st.session_state.var_meta)
-    with t5:
-        tab_survival.render(df_clean, st.session_state.var_meta)
-    with t6:
         tab_psm.render(df_clean, st.session_state.var_meta)
+        
+    with t3:
+        tab_diag.render(df_clean, st.session_state.var_meta)
+        
+    with t4:
+        tab_corr.render(df_clean)
+        
+    with t5:
+        tab_logit.render(df_clean, st.session_state.var_meta)
+        
+    with t6:
+        tab_survival.render(df_clean, st.session_state.var_meta)
         
 else:
     st.info("👈 Please load example data or upload a file to start.")
     st.markdown("""
-### ✨ All Statistical Features:
-1.  **Raw Data Management**
-2.  **Baseline Characteristics (Table 1)**
-3.  **Diagnostic Test & Statistics**
-4.  **Continuous Correlation**
-5.  **Binary Logistic Regression**
-6.  **Survival Analysis**
-7.  **Propensity Score Matching**
-8.  **Time-Dependent Cox Regression (New!)**
+### ✨ 7-Tab Analysis Pipeline:
+
+1. **📁 Data Management** - Upload, clean, set variable types
+2. **📋 Table 1 (Baseline)** - Descriptive stats + group comparison
+3. **⚖️ Propensity Score Matching** - Balance treatment groups (optional)
+4. **🧪 Diagnostic Tests (ROC)** - Chi-Square, ROC, Kappa, RR/OR/NNT
+5. **📈 Correlation & ICC** - Pearson, Spearman, ICC reliability
+6. **📊 Risk Factors (Logistic)** - Binary logistic regression
+7. **⏳ Survival Analysis** - Kaplan-Meier & Cox regression
     """)
     
-# 👇 บรรทัดนี้ต้องชิดซ้ายสุด (ลบช่องว่างข้างหน้าออกให้หมด)
 # ==========================================
-# 3. GLOBAL CSS (Cleanup)
+# GLOBAL CSS
 # ==========================================
 
 st.markdown("""
