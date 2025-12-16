@@ -20,7 +20,7 @@ Usage:
 import json
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 import warnings
 
 
