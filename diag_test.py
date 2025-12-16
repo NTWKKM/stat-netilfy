@@ -270,7 +270,6 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                 label_exp = str(row_labels[0])
                 label_unexp = str(row_labels[1])
                 label_event = str(col_labels[0])
-                label_noevent = str(col_labels[1])
                 
                 # RISK METRICS
                 risk_exp = a / (a + b) if (a + b) > 0 else 0
