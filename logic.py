@@ -162,7 +162,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     # ✅ FIX #3: ADD BINARY OUTCOME VALIDATION
     if outcome_name not in df.columns:
         msg = f"<div class='alert'>⚠️ Outcome '{outcome_name}' not found.</div>"
-        logger.warning(f"Outcome column not found: {outcome_name}")  # ✅ LOG WARNING
+        logger.warning("Outcome column not found: %s", outcome_name)  # ✅ LOG WARNING
         return msg
     
     # NEW: Validate outcome is binary (exactly 2 unique values)
@@ -177,7 +177,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             <span style='font-size:0.9em; color:#666; margin-top:8px; display:block;'>💡 Please select a truly binary outcome variable (e.g., Yes/No, Dead/Alive, 0/1)</span>
         </div>
         """
-        logger.error(f"Invalid outcome: {len(unique_outcomes)} unique values instead of 2")  # ✅ LOG ERROR
+        logger.error("Invalid outcome: %d unique values instead of 2", len(unique_outcomes))  # ✅ LOG ERROR
         return msg
     
     # NEW: Warn if outcome isn't 0/1
@@ -390,6 +390,32 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     # 🟢 3. เรียงลำดับ
     grouped_cols = sorted(valid_cols_for_html, key=sort_key_for_grouping)
 
+# ✅ FIX #5: P-VALUE BOUNDS CHECKING
+    def fmt_p(val):
+        """
+        Format p-value for display with bounds validation.
+        Clips to valid range [0, 1] and warns if numerical error detected.
+        """
+        if pd.isna(val): 
+            return "-"
+            
+        # Bounds check: p-values must be in [0, 1]
+        if val < -0.0001 or val > 1.0001:
+            # Numerical error detected - log warning
+            logger.warning(f"⚠️ P-value out of bounds detected: {val:.6f}. Clipping to valid range [0, 1].")  # ✅ LOG WARNING
+            val = max(0, min(1, val))  # Clip to [0, 1]
+        else:
+            # Safe clipping within tolerance
+            val = max(0, min(1, val))
+            
+        # Format the p-value
+        if val < 0.001:
+            return "<0.001"
+        if val > 0.999:
+            return ">0.999"
+            
+        return f"{val:.3f}"
+            
     for col in grouped_cols:
         if col == outcome_name:
             continue
@@ -402,32 +428,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             
         lbl = get_label(col, var_meta)
         or_s = res.get('or', '-')
-        
-        # ✅ FIX #5: P-VALUE BOUNDS CHECKING
-        def fmt_p(val):
-            """
-            Format p-value for display with bounds validation.
-            Clips to valid range [0, 1] and warns if numerical error detected.
-            """
-            if pd.isna(val): 
-                return "-"
-            
-            # Bounds check: p-values must be in [0, 1]
-            if val < -0.0001 or val > 1.0001:
-                # Numerical error detected - log warning
-                logger.warning(f"⚠️ P-value out of bounds detected: {val:.6f}. Clipping to valid range [0, 1].")  # ✅ LOG WARNING
-                val = max(0, min(1, val))  # Clip to [0, 1]
-            else:
-                # Safe clipping within tolerance
-                val = max(0, min(1, val))
-            
-            # Format the p-value
-            if val < 0.001:
-                return "<0.001"
-            if val > 0.999:
-                return ">0.999"
-            
-            return f"{val:.3f}"
 
         p_val = res.get('p_comp', np.nan)
         p_s = fmt_p(p_val)
@@ -470,7 +470,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         method_note = "Binary Logistic Regression"
 
     # 🟢 4. ส่วน Return HTML (เพิ่มสัญลักษณ์ †)
-    logger.info(f"✅ Logistic regression analysis completed (n_multi={final_n_multi})")  # ✅ LOG COMPLETION
+    logger.info("✅ Logistic regression analysis completed (n_multi=%d)", final_n_multi)  # ✅ LOG COMPLETION
     
     return f"""
     <div id='{outcome_name}' class='table-container'>
