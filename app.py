@@ -80,7 +80,7 @@ try:
 except (KeyboardInterrupt, SystemExit):
     raise
 except Exception as e:
-    logger.exception("Failed to import tabs: %s", e)  # ✅ LOG ERROR
+    logger.exception("Failed to import tabs")  # ✅ LOG ERROR
     st.exception(e)
     st.stop()
 
@@ -340,7 +340,7 @@ if st.session_state.df is not None:
             st.session_state.var_meta[s_var]['map'] = new_map
             st.session_state.var_meta[s_var].setdefault('label', s_var)
             
-            logger.info(f"✅ Variable '{s_var}' configured as {n_type}")  # ✅ LOG CONFIG
+            logger.info("✅ Variable '%s' configured as %s", s_var, n_type)  # ✅ LOG CONFIG
             st.sidebar.success("Saved!")
             st.rerun()
 
