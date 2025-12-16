@@ -211,8 +211,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     # --- CALCULATION LOOP ---
     with logger.track_time("univariate_analysis", log_level="debug"):  # ✅ TRACK TIMING
         for col in sorted_cols:
-            if col == outcome_name: continue
-            if df_aligned[col].isnull().all(): continue
+            if col == outcome_name:
+                continue
+            if df_aligned[col].isnull().all():
+                continue
 
             res = {'var': col}
             X_raw = df_aligned[col]
@@ -401,7 +403,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     grouped_cols = sorted(valid_cols_for_html, key=sort_key_for_grouping)
 
 # ✅ FIX #5: P-VALUE BOUNDS CHECKING
-    def fmt_p(val):
+    def fmt_p(val) -> str:
         """
         Format p-value for display with bounds validation.
         Clips to valid range [0, 1] and warns if numerical error detected.
