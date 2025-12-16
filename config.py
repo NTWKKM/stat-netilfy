@@ -187,8 +187,8 @@ class ConfigManager:
                 # Try to set the value
                 try:
                     self.update(f"{section}.{key_name}", value)
-            except (KeyError, ValueError, TypeError) as e:
-                warnings.warn(f"Failed to set env override {key}={value}: {e}", stacklevel=2)
+                except (KeyError, ValueError, TypeError) as e:
+                    warnings.warn(f"Failed to set env override {key}={value}: {e}", stacklevel=2)
     
     def get(self, key: str, default: Any = None) -> Any:
         """
