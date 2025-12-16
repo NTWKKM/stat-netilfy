@@ -116,7 +116,8 @@ class ConfigManager:
                 "date_format": "%Y-%m-%d %H:%M:%S",
                 
                 # File Logging
-                "file_enabled": True,
+                "file_enabled": False,  # 🔴 เปลี่ยนเป็น False
+                "console_enabled": True, # ✅ ให้ Log ออก Console แทน (ดูได้ใน Dashboard ของ Netlify/Streamlit)
                 "log_dir": "logs",
                 "log_file": "app.log",
                 "max_log_size": 10485760,  # 10MB in bytes
