@@ -344,7 +344,7 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                      "95% CI": f"({or_ci_lower:.4f} - {or_ci_upper:.4f})" if np.isfinite(or_ci_lower) else "N/A",
                      "Interpretation": f"Odds of '{label_event}' ({label_exp} vs {label_unexp})"},
                     # --- DIAGNOSTIC METRICS HEADER (MERGED & STYLED) ---
-                    {"Metric": "\ud83d\udcca DIAGNOSTIC METRICS -- (Applies if using diagnostic/screening context)", "Value": "", "95% CI": "", "Interpretation": ""},
+                    {"Metric": "DIAGNOSTIC METRICS (Applies if using diagnostic/screening context)", "Value": "", "95% CI": "", "Interpretation": ""},
                     {"Metric": "Sensitivity", "Value": f"{sensitivity:.4f}", 
                      "95% CI": f"({se_ci_lower:.4f} - {se_ci_upper:.4f})",
                      "Interpretation": "P(Test+ | Disease+) - True Positive Rate"},
@@ -782,8 +782,8 @@ def generate_report(title, elements):
             html_table = data.to_html(index=not is_stats_table, classes='report-table', escape=True)
             # Add section-header class to diagnostic metrics row
             html_table = html_table.replace(
-                '<td>\ud83d\udcca DIAGNOSTIC METRICS',
-                '<td class="section-header">\ud83d\udcca DIAGNOSTIC METRICS'
+                '<td>DIAGNOSTIC METRICS (Applies if using diagnostic/screening context)</td>',
+                '<td class="section-header">DIAGNOSTIC METRICS (Applies if using diagnostic/screening context)</td>'
             )
             html += html_table
         
