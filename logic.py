@@ -182,7 +182,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     
     # NEW: Warn if outcome isn't 0/1
     if not unique_outcomes.issubset({0, 1}):
-        st.warning(f"ℹ️ Outcome values are {sorted(unique_outcomes)}, not {{0, 1}}. Will be converted to binary.")
+        st.warning(f"ℹ Outcome values are {sorted(unique_outcomes)}, not {{0, 1}}. Will be converted to binary.")
         # Map to binary: first sorted value -> 0, second -> 1
         sorted_outcomes = sorted(unique_outcomes, key=str)
         outcome_map = {sorted_outcomes[0]: 0, sorted_outcomes[1]: 1}
