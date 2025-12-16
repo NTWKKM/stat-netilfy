@@ -32,22 +32,22 @@ if 'logging_initialized' not in st.session_state:
 
 st.title(f"🏥 {CONFIG.get('ui.page_title', 'Medical Statistical Tool')}") # Optional: ใช้ Config ตรง Title ด้วยก็ได้
 
-components.html("""
-<script>
-    try {
-        var loader = window.parent && window.parent.document
-            ? window.parent.document.getElementById('loading-screen')
-            : null;
-        if (loader) {
-            loader.style.opacity = '0';
-            setTimeout(function() {
-                loader.style.display = 'none';
-            }, 500);
-        }
-    } catch (e) {
-        console.log("Loader removal error: " + e);
-    }
-</script>
+#components.html("""
+#<script>
+#    try {
+#        var loader = window.parent && window.parent.document
+#            ? window.parent.document.getElementById('loading-screen')
+#            : null;
+#        if (loader) {
+#            loader.style.opacity = '0';
+#            setTimeout(function() {
+#                loader.style.display = 'none';
+#            }, 500);
+#        }
+#    } catch (e) {
+#        console.log("Loader removal error: " + e);
+#    }
+#</script>
 """, height=0)
 
 # ==========================================
