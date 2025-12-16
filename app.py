@@ -80,7 +80,7 @@ try:
 except (KeyboardInterrupt, SystemExit):
     raise
 except Exception as e:
-    logger.error(f"Failed to import tabs: {e}", exc_info=True)  # ✅ LOG ERROR
+    logger.exception("Failed to import tabs: %s", e)  # ✅ LOG ERROR
     st.exception(e)
     st.stop()
 
