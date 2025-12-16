@@ -26,7 +26,7 @@ import logging.handlers
 import sys
 from pathlib import Path
 from contextlib import contextmanager
-from typing import Optional, Dict, Any
+from typing import Optional, Any
 import time
 import traceback
 from datetime import datetime
