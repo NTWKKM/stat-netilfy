@@ -25,10 +25,13 @@ st.set_page_config(
 logger = get_logger(__name__)
 
 # Initialize logging system (once at app start)
-if 'logging_initialized' not in st.session_state:
+@st.cache_resource(show_spinner=False)
+def _init_logging():
     LoggerFactory.configure()
-    st.session_state.logging_initialized = True
-    logger.info("📱 Streamlit app started")
+    return True
+
+_init_logging()
+logger.info("📱 Streamlit app started")
 
 st.title(f"🏥 {CONFIG.get('ui.page_title', 'Medical Statistical Tool')}")
 
