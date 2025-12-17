@@ -123,9 +123,47 @@ def render(df, var_meta):
                 with st.spinner("Calculating..."):
                     try:
                         final_df = df.drop(columns=exclude_cols, errors='ignore')
+                        
+                        # 🆕 NEW: Re-check for perfect separation AFTER exclusion
+                        risky_vars_final = check_perfect_separation(final_df, target)
+                        
+                        # 🆕 NEW: Warn if using Standard method on risky data
+                        if risky_vars_final and algo == 'bfgs':
+                            st.warning(
+                                f"""⚠️ **WARNING: Perfect Separation Detected!**
+
+**Variables with zero-cell contingency tables:** {', '.join(risky_vars_final)}
+
+**Selected Method:** Standard (MLE)
+
+**Problems this may cause:**
+- ❌ Model may not converge
+- ❌ Infinite coefficients (∞)
+- ❌ Missing p-values and standard errors
+- ❌ Invalid confidence intervals
+- ❌ Unreliable results
+
+**✅ Recommended Solution:** Use **Firth's (Penalized)** method instead!
+- Handles perfect separation automatically
+- Produces reliable confidence intervals
+- Better for small samples and rare events
+
+**Your Options:**
+1. Cancel and select "Firth's (Penalized)" method
+2. Cancel and exclude these variables manually
+3. Proceed anyway (not recommended)
+""",
+                                icon="⚠️"
+                            )
+                            logger.warning(f"User selected Standard method with perfect separation: {risky_vars_final}")
+                        
                         html = process_data_and_generate_html(final_df, target, var_meta=var_meta, method=algo)
                         st.session_state.html_output_logit = html 
                         st.components.v1.html(html, height=600, scrolling=True)
+                        
+                        # 🆕 NEW: Log method used
+                        logger.info(f"✅ Logit analysis completed | method={algo} | risky_vars={len(risky_vars_final)} | n={len(final_df)}")
+                        
                     except Exception as e:
                         st.error(f"Failed: {e}")
                         logger.exception("Logistic regression failed")
@@ -196,12 +234,77 @@ def render(df, var_meta):
             ### Common Mistakes ❌
             
             - **Unadjusted OR** without adjustment → Use aOR ✅
-            - **Perfect separation** (category = outcome) → Exclude problematic vars
+            - **Perfect separation** (category = outcome) → Exclude or use Firth
             - **Ignoring CI** (only p-value) → CI shows range
             - **Multicollinearity** (correlated predictors) → Check correlations
             - **Overfitting** (too many variables) → Use variable selection
             - **Log-transformed interpreters** → Multiply by e^(unit change)
             """)
+        
+        st.markdown("---")
+        
+        # 🆕 NEW: Perfect Separation & Method Selection Guide
+        st.markdown("""
+        ### ⚠️ Perfect Separation & Method Selection
+        
+        **What is Perfect Separation?**
+        
+        A predictor perfectly predicts the outcome. Example:
+        
+        | High Risk | Survived | Died |
+        |-----------|----------|------|
+        | No        | 100      | 0    |
+        | Yes       | 0        | 100  |
+        
+        → Perfect separation! (diagonal pattern)
+        
+        **Why is it a Problem?**
+        
+        Standard logistic regression (MLE):
+        - ❌ Cannot estimate coefficients reliably
+        - ❌ Returns infinite or missing values
+        - ❌ Model doesn't converge
+        - ❌ P-values are undefined
+        - ❌ Results are invalid
+        
+        **How to Detect:**
+        - 🔍 App shows warning: "⚠️ Risk of Perfect Separation: var_name"
+        - 📊 Contingency table has a zero cell (entire row/column = 0)
+        
+        **4 Solutions (Ranked by Recommendation):**
+        
+        **Option 1: Auto Method** 🟢 (BEST - RECOMMENDED)
+        - ✅ Automatically detects perfect separation
+        - ✅ Automatically switches to Firth's method
+        - ✅ No manual action required
+        - ✅ Most reliable
+        - ✅ **Just select "Auto (Recommended)" and run!**
+        
+        **Option 2: Firth's Method** 🟢 (GOOD)
+        - ✅ Handles separation via penalized likelihood
+        - ✅ Produces reliable coefficients & CI
+        - ✅ Reduces coefficient bias
+        - ⚠️ Requires manual method selection
+        
+        **Option 3: Exclude Variable** 🟢 (ACCEPTABLE)
+        - ✅ Removes problematic variable
+        - ✅ Simplifies model
+        - ⚠️ Loses information from that variable
+        - ⚠️ Requires manual exclusion
+        
+        **Option 4: Standard (MLE)** 🔴 (NOT RECOMMENDED)
+        - ❌ May not converge
+        - ❌ Infinite coefficients
+        - ❌ Missing p-values
+        - ❌ Invalid results
+        - ❌ **DO NOT USE with perfect separation!**
+        
+        **Best Practice Summary:**
+        1. Load your data
+        2. Select "Auto (Recommended)" method
+        3. Click "Run Logistic Regression"
+        4. Done! App handles everything automatically
+        """)
         
         st.markdown("---")
         st.markdown("""
