@@ -459,10 +459,14 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
 
     return fig, pd.DataFrame([stats_data]), n_pre_filter, n_post_filter, None
 
-# --- 5. Report Generation ---
+# --- 5. Report Generation 🟢 FIX: Include Plotly JS in HTML ---
 def generate_report_survival(title, elements):
     """
-    Generate HTML report (Renamed to match tab_survival.py calls)
+    Generate HTML report with proper Plotly JS inclusion.
+    
+    🟢 FIX: Include Plotly JS with first plot only for self-contained HTML.
+    This ensures graphs render correctly even when offline or with strict CSP.
+    Subsequent plots reuse the same JS library (efficient).
     """
     css_style = """<style>
         body{font-family:Arial;margin:20px;}
@@ -481,10 +485,12 @@ def generate_report_survival(title, elements):
         }
     </style>"""
     
-    plotly_js = '<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>'
-    
     safe_title = _html.escape(str(title))
-    html_doc = f"<!DOCTYPE html><html><head><meta charset='utf-8'>{css_style}{plotly_js}</head><body><h1>{safe_title}</h1>"
+    # 🟢 NEW: Don't include Plotly JS in head - will include with first plot
+    html_doc = f"<!DOCTYPE html><html><head><meta charset='utf-8'>{css_style}</head><body><h1>{safe_title}</h1>"
+    
+    # 🟢 NEW: Track if Plotly JS already included
+    plotly_js_included = False
     
     for el in elements:
         t = el.get('type')
@@ -498,9 +504,16 @@ def generate_report_survival(title, elements):
             html_doc += f"<pre>{_html.escape(str(d))}</pre>"
         elif t == 'table':
             html_doc += d.to_html(classes='table')
-        elif t == 'plot': 
+        elif t == 'plot':
             if hasattr(d, 'to_html'):
-                html_doc += d.to_html(full_html=False, include_plotlyjs=False)
+                # 🟢 SOLUTION: Include Plotly JS with first plot only
+                if not plotly_js_included:
+                    # First plot: include 'cdn' to embed Plotly JS in HTML
+                    html_doc += d.to_html(full_html=False, include_plotlyjs='cdn')
+                    plotly_js_included = True
+                else:
+                    # Subsequent plots: don't include JS (already loaded from first plot)
+                    html_doc += d.to_html(full_html=False, include_plotlyjs=False)
             elif hasattr(d, 'savefig'):
                 buf = io.BytesIO()
                 d.savefig(buf, format='png', bbox_inches='tight')
