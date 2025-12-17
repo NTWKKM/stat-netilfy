@@ -401,12 +401,10 @@ if st.session_state.df is not None:
 else:
     st.info("👈 Please load example data or upload a file to start.")
     st.markdown("""
-### ✨ 6-Tab Analysis Pipeline (Optimized):
+### ✨ 6-Tab Analysis Pipeline:
 
 1. **📁 Data Management** - Upload, clean, set variable types
 2. **📋 Table 1 & Matching** - Baseline characteristics + Propensity Score Matching
-   - Subtab 2.1: Baseline Characteristics (Table 1)
-   - Subtab 2.2: Propensity Score Matching (if needed)
 3. **🧪 Diagnostic Tests (ROC)** - Chi-Square, ROC, Kappa, RR/OR/NNT
 4. **📈 Correlation & ICC** - Pearson, Spearman, ICC reliability
 5. **📊 Risk Factors (Logistic)** - Binary logistic regression
