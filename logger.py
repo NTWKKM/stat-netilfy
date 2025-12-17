@@ -338,8 +338,6 @@ class LoggerFactory:
                 logger = Logger(standard_logger, cls._context_filter)
                 cls._loggers[name] = logger
             return cls._loggers[name]
-        
-        return cls._loggers[name]
     
     @classmethod
     def get_performance_logger(cls) -> PerformanceLogger:
@@ -601,7 +599,7 @@ if __name__ == "__main__":
     print("\n[Test 7] Exception logging:")
     try:
         raise ValueError("Simulated error for testing")
-    except Exception:
+    except Exception as e:
         logger.exception(f"Caught an exception during processing: {type(e).__name__}")
 
     # Test 8: Performance summary
