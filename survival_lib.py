@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import warnings
 import io, base64
 import html as _html
+import logging
+_logger = logging.getLogger(__name__)
 
 # Helper function for standardization
 def _standardize_numeric_cols(data, cols) -> None:
@@ -285,8 +287,8 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
                     # Check if ranges completely separate (no overlap)
                     if (outcomes_0.max() < outcomes_1.min()) or (outcomes_1.max() < outcomes_0.min()):
                         validation_errors.append(f"Covariate '{col}': Perfect separation detected - outcomes completely separated by this variable. Try removing, combining with other variables, or grouping.")
-            except Exception:
-                pass  # Skip if check fails
+            except Exception as e:
+                _logger.debug("Perfect separation check failed for '%s': %s", col, e)
     
     # Check 5: Multicollinearity (high correlation between numeric covariates)
     numeric_covs = [c for c in covariate_cols if pd.api.types.is_numeric_dtype(data[c])]
