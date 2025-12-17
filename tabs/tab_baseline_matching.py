@@ -21,34 +21,20 @@ def render(df, var_meta):
     # ==========================================
     with sub_tab1:
         st.markdown("### Baseline Characteristics (Table 1)")
-        
-        with st.expander("💡 Guide: Baseline Characteristics (Table 1)", expanded=False):
-            st.markdown("""
-            **What is this table?**
-            
-            Summarizes key demographics and patient characteristics, stratified by a **Grouping Variable**, to assess **group comparability**.
+        st.info("""
+        **💡 Guide:** Summarizes key demographics and patient characteristics, stratified by a **Grouping Variable**, to assess **group comparability**.
 
-            **Presentation:**
-            * **Numeric:** Mean ± SD (Normally Distributed Data) or Median (IQR) (**Non**-Normally Distributed Data).
-            * **Categorical:** Count (Percentage).
-            * **Odds Ratio (OR):** Automatically calculated for categorical variables when there are **exactly 2 groups** (One-vs-Rest method).
-            * **P-value & Test Used:** Tests for statistically significant differences in characteristics across groups.
-            * **Automatically selects the appropriate test for P-value** (e.g., t-test, Chi-square, Kruskal-Wallis) based on the variable type and distribution.
+        **Presentation:**
+        * **Numeric:** Mean ± SD (Normally Distributed Data) or Median (IQR) (**Non**-Normally Distributed Data).
+        * **Categorical:** Count (Percentage).
+        * **Odds Ratio (OR):** Automatically calculated for categorical variables when there are **exactly 2 groups** (One-vs-Rest method).
+        * **P-value & Test Used:** Tests for statistically significant differences in characteristics across groups.
+        * **Automatically selects the appropriate test for P-value** (e.g., t-test, Chi-square, Kruskal-Wallis) based on the variable type and distribution.
 
-            **Variable Selection:**
-            * **Grouping Variable (Split):** The primary categorical variable used to stratify the **dataset** (e.g., 'Treatment' or 'Outcome').
-            * **Characteristics:** All other variables (numeric/categorical) to be summarized and compared.
-            
-            **When to Use:**
-            - RCTs to assess baseline balance between groups
-            - Observational studies for group comparability assessment
-            - Publication requirements (Table 1 is standard in most medical research papers)
-            
-            **Common Mistakes:**
-            - Using t-test for non-normally distributed data (should use Mann-Whitney U test)
-            - Not checking if groups are comparable at baseline
-            - Reporting too many statistical comparisons (multiple testing problem)
-            """)
+        **Variable Selection:**
+        * **Grouping Variable (Split):** The primary categorical variable used to stratify the **dataset** (e.g., 'Treatment' or 'Outcome').
+        * **Characteristics:** All other variables (numeric/categorical) to be summarized and compared.
+        """)
         
         all_cols = df.columns.tolist()
         grp_idx = 0
@@ -93,38 +79,15 @@ def render(df, var_meta):
     # ==========================================
     with sub_tab2:
         st.markdown("### Propensity Score Matching (PSM)")
+        st.info("""
+        **💡 Concept:** Matches patients in the Treatment group with similar patients in the Control group using **Propensity Scores**.
+        * **Goal:** To reduce selection bias and mimic a Randomized Controlled Trial (RCT).
+        * **Algorithm:** Nearest Neighbor 1:1 Matching (Greedy, Without Replacement).
         
-        with st.expander("💡 Guide: Propensity Score Matching (PSM)", expanded=False):
-            st.markdown("""
-            **What is PSM?**
-            
-            Matches patients in the Treatment group with similar patients in the Control group using **Propensity Scores**.
-            * **Goal:** To reduce selection bias and mimic a Randomized Controlled Trial (RCT).
-            * **Algorithm:** Nearest Neighbor 1:1 Matching (Greedy, Without Replacement).
-            
-            **How to Use:**
-            
-            **Step 1:** Check baseline imbalance in **Subtab 1 (Table 1)** - Look at P-values and group differences
-            
-            **Step 2:** If imbalanced (p<0.05 or differences exist) → Run PSM below
-            
-            **Step 3:** Check balance after matching using SMD table (SMD < 0.1 = good balance)
-            
-            **When to Use:**
-            - Observational studies with group imbalances
-            - When randomization is not possible
-            - To adjust for confounding variables
-            
-            **Common Mistakes:**
-            - Using PSM on already balanced groups (unnecessary)
-            - Not checking SMD after matching
-            - Ignoring residual confounding (PSM can't fix unmeasured confounders)
-            - Using too few covariates (underfitting) or too many (overfitting)
-            
-            **Quality Check:**
-            - After matching, SMD < 0.1 for all covariates = good balance ✅
-            - After matching, SMD > 0.2 for any covariate = poor balance ⚠️
-            """)
+        **Step 1:** Check baseline imbalance in **Subtab 1 (Table 1)** - Look at P-values and group differences
+        **Step 2:** If imbalanced (p<0.05 or differences exist) → Run PSM below
+        **Step 3:** Check balance after matching using SMD table (SMD < 0.1 = good balance)
+        """)
 
         all_cols = df.columns.tolist()
         if not all_cols:
