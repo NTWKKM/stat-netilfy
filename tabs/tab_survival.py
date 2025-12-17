@@ -102,7 +102,7 @@ def render(df, _var_meta):
         
         # State Management for Landmark Time
         if 'landmark_val' not in st.session_state:
-            st.session_state.landmark_val = float(max_t) * 0.1
+            st.session_state.landmark_val = float(round(float(max_t) * 0.1))
 
         def update_from_slider() -> None:
             st.session_state.landmark_val = st.session_state.lm_slider_widget
@@ -119,7 +119,6 @@ def render(df, _var_meta):
             st.number_input("Enter Value:", min_value=0.0, max_value=float(max_t) * 0.99, key='lm_number_widget', value=min(st.session_state.landmark_val, float(max_t) * 0.99), on_change=update_from_number, step=1.0, label_visibility="collapsed")
             
         landmark_t = st.session_state.landmark_val
-        st.info(f"📑 Current Landmark Time: **{landmark_t:.2f}** ({col_time})")
         
         # 🟢 NEW: Auto-detect group column for landmark analysis
         # Priority: 'group' > 'treatment' > 'comorbid'
