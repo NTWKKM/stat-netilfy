@@ -547,7 +547,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     # 🟢 4. ส่วน Return HTML (เพิ่มสัญลักษณ์ †)
     logger.info("✅ Logistic regression analysis completed (n_multi=%d, method=%s)", final_n_multi, preferred_method)  # ✅ LOG COMPLETION
     
-    return f"""
+    html_table = f"""
     <div id='{outcome_name}' class='table-container'>
     <div class='outcome-title'>Outcome: {outcome_name} (Total n={total_n})</div>
     <table>
@@ -563,7 +563,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 <th>aP-value</th>
             </tr>
         </thead>
-        <tbody>{"\n".join(html_rows)}</tbody>
+        <tbody>{chr(10).join(html_rows)}</tbody>
     </table>
     <div class='summary-box'>
         <b>Method:</b> {method_note}. Complete Case Analysis.<br>
@@ -575,6 +575,8 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     </div>
     </div><br>
     """
+    
+    return html_table
 
 def process_data_and_generate_html(df, target_outcome, var_meta=None, method='auto'):
     """
@@ -618,9 +620,14 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None, method='au
     html += "<h1>Analysis Report</h1>"
     html += analyze_outcome(target_outcome, df, var_meta, method=method)
     
-    html += """<div class='report-footer'>
-    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM n donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
-    </div>"""
+    # ✅ FIX: Use string concatenation instead of f-string with backslash
+    footer_html = (
+        "<div class='report-footer'>"
+        "&copy; 2025 <a href=\"https://github.com/NTWKKM/\" target=\"_blank\" style=\"text-decoration:none; color:inherit;\">"
+        "NTWKKM n donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit"
+        "</div>"
+    )
+    html += footer_html
     
     html += "</body></html>"
     
