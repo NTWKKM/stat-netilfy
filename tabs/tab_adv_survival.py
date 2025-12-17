@@ -4,12 +4,12 @@ import survival_lib
 
 def render(df, _var_meta):
     """
-    Render Streamlit controls to configure, fit, and report a time-dependent (start–stop) Cox proportional hazards model.
+    Render Streamlit controls to configure, fit, and report a time-dependent (start-stop) Cox proportional hazards model.
     
     Validates that at least one covariate is selected and that the selected start, stop, event, and covariate columns are numeric; calls survival_lib.fit_cox_time_varying to fit the model; displays results or errors in the UI; and stores a generated HTML report in st.session_state["html_output_adv_survival"] for download.
     
     Parameters:
-        df (pandas.DataFrame): Input dataset in long (start–stop) format containing ID, start, stop, event, and covariate columns.
+        df (pandas.DataFrame): Input dataset in long (start-stop) format containing ID, start, stop, event, and covariate columns.
         _var_meta (Any): Optional variable metadata provided for compatibility with the tabs API (not used by the UI).
     """
     st.subheader("⏳ Advanced Survival Analysis")
