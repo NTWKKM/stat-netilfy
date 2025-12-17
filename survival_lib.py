@@ -275,7 +275,7 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
             # Update data and covariate list
             data = pd.concat([data[[duration_col, event_col]], covars_encoded], axis=1)
             covariate_cols = covars_encoded.columns.tolist()
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         return None, None, data, f"Encoding Error: Failed to convert categorical variables. {e}"
     
     # 🟢 NEW: Comprehensive Data Validation BEFORE attempting fit
@@ -325,9 +325,9 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
                         high_corr_pairs.append(f"{col_i} <-> {col_j} (r={r:.3f})")
             
             if high_corr_pairs:
-                validation_errors.append(f"High multicollinearity detected (r > 0.95): " + ", ".join(high_corr_pairs) + ". Try removing one of each correlated pair.")
-        except Exception:
-            pass  # Skip if check fails
+                validation_errors.append("High multicollinearity detected (r > 0.95): " + ", ".join(high_corr_pairs) + ". Try removing one of each correlated pair.")
+        except Exception as e:
+            _logger.debug("Multicollinearity check failed: %s", e)
     
     # If validation errors found, report them NOW before trying to fit
     if validation_errors:
