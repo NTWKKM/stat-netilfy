@@ -7,11 +7,12 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
     """
     Render Streamlit UI panels for diagnostic tests and statistics.
     
-    Displays four interactive tabs for diagnostic analyses:
+    Displays five interactive tabs for diagnostic analyses:
     - ROC Curve & AUC
     - Chi-Square & Risk (2x2) with RR/OR/NNT - THE CHI-SQUARE HOME
     - Agreement (Cohen's Kappa)
     - Descriptive statistics
+    - Reference & Interpretation
     
     Each tab provides controls for selecting columns from `df`, running the analysis, viewing results as embedded HTML, and downloading an HTML report. Generated report HTML is stored in Streamlit session state under keys: `html_output_roc`, `html_output_chi`, `html_output_kappa`, and `html_output_desc`.
     
@@ -21,12 +22,13 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
     """
     st.subheader("🧪 4. Diagnostic Tests (ROC)")
     
-    # 🟢 IMPORTANT: Removed ICC Tab - Now only 4 subtabs
-    sub_tab1, sub_tab2, sub_tab3, sub_tab4 = st.tabs([
+    # 🟢 IMPORTANT: Now 5 subtabs (added Reference & Interpretation)
+    sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5 = st.tabs([
         "📈 ROC Curve & AUC", 
         "🎲 Chi-Square & Risk Analysis (2x2) - THE PLACE FOR CHI-SQUARE!", 
         "🤝 Agreement (Kappa)", 
-        "📊 Descriptive"
+        "📊 Descriptive",
+        "ℹ️ Reference & Interpretation"
     ])
     
     all_cols = df.columns.tolist()
@@ -373,3 +375,109 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                 st.download_button("📥 Download Report", st.session_state.html_output_desc, "desc.html", "text/html", key='dl_desc_diag')
             else:
                 st.button("📥 Download Report", disabled=True, key='ph_desc_diag')
+
+    # --- Reference & Interpretation (NEW) ---
+    with sub_tab5:
+        st.markdown("##### 📚 Quick Reference: Diagnostic Tests")
+        
+        st.info("""
+        **When to Use Which Test:**
+        
+        | Test | Variables | Purpose | Example |
+        |------|-----------|---------|----------|
+        | **ROC AUC** | 1 continuous + 1 binary | Diagnostic test performance | Blood glucose vs diabetes diagnosis |
+        | **Chi-Square** | 2 categorical | Association between categories | Treatment group vs Outcome (Yes/No) |
+        | **Kappa** | 2 categorical (same categories) | Agreement between raters | Doctor A diagnosis vs Doctor B diagnosis |
+        | **Descriptive** | Any single variable | Data distribution & summary | Patient age, gender, lab values |
+        """)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### ROC Curve (AUC)")
+            st.markdown("""
+            **When to Use:**
+            - Evaluating diagnostic test performance
+            - Finding optimal cut-off thresholds
+            - Comparing multiple diagnostic tests
+            
+            **Interpretation:**
+            - AUC = 0.9-1.0: Excellent test ✅
+            - AUC = 0.8-0.9: Good test ✔️
+            - AUC = 0.7-0.8: Fair test ⚠️
+            - AUC < 0.7: Poor test ❌
+            
+            **Common Mistakes:**
+            - Using non-continuous predictor (should be numeric score)
+            - Not validating on independent test set
+            - Ignoring confidence intervals
+            """)
+            
+            st.markdown("### Chi-Square & Risk Analysis")
+            st.markdown("""
+            **Test Selection:**
+            - Pearson: Large samples (n > 40)
+            - Yates' correction: Small samples
+            - Fisher's Exact: Expected count < 5
+            
+            **Interpretation:**
+            - p < 0.05: Significant association ✅
+            - p ≥ 0.05: No association ❌
+            
+            **Metrics:**
+            - **RR > 1**: Increased risk
+            - **OR > 1**: Increased odds
+            - **NNT < 10**: Excellent ✅
+            - **NNT > 50**: Marginal ⚠️
+            """)
+        
+        with col2:
+            st.markdown("### Agreement (Kappa)")
+            st.markdown("""
+            **Interpretation (Landis & Koch):**
+            - κ < 0: Poor ❌
+            - κ 0.01-0.20: Slight
+            - κ 0.21-0.40: Fair
+            - κ 0.41-0.60: Moderate ✔️
+            - κ 0.61-0.80: Substantial ✅
+            - κ 0.81-1.00: Perfect 🏆
+            
+            **Common Mistakes:**
+            - Using Kappa for continuous data (use ICC instead)
+            - Not checking if categories are the same
+            - Interpreting raw agreement % (need chance adjustment)
+            """)
+            
+            st.markdown("### Descriptive Statistics")
+            st.markdown("""
+            **For Numeric Data:**
+            - Mean ± SD (if normal) ✅
+            - Median ± IQR (if non-normal) ✅
+            - Check normality with Shapiro-Wilk test
+            
+            **For Categorical Data:**
+            - Frequency counts
+            - Percentages
+            
+            **Common Mistakes:**
+            - Mean ± SD for non-normal data ❌
+            - Not checking for outliers
+            - Ignoring missing data patterns
+            """)
+        
+        st.markdown("---")
+        st.markdown("""
+        ### 💡 Quick Decision Guide
+        
+        **Question: My test predicts disease (continuous score vs binary disease status)?**
+        → Use **ROC Curve & AUC** (Tab 1)
+        
+        **Question: Two categorical variables - are they associated?**
+        → Use **Chi-Square** (Tab 2)
+        
+        **Question: Do two raters/methods agree on classification?**
+        → Use **Kappa** (Tab 3)
+        
+        **Question: I just want to understand my data distribution?**
+        → Use **Descriptive Statistics** (Tab 4)
+        """)
