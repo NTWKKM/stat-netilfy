@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import survival_lib
 import time
-import pandas.api.types as ptypes # 🟢 Import เพื่อความชัดในการใช้ types
+from pandas.api.types import is_numeric_dtype
 
 def render(df, _var_meta):
     """
@@ -94,7 +94,7 @@ def render(df, _var_meta):
         st.caption("Principle: Exclude patients who had an event or were censored before the Landmark Time.")
         
         # Calculate Max Time (Robust check)
-        max_t = df[col_time].dropna().max() if not df.empty and ptypes.is_numeric_dtype(df[col_time]) and df[col_time].notna().any() else 1.0
+        max_t = df[col_time].dropna().max() if not df.empty and is_numeric_dtype(df[col_time]) and df[col_time].notna().any() else 1.0
         if max_t <= 0:
             max_t = 1.0 
         
