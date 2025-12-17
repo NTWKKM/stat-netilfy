@@ -586,6 +586,43 @@ if __name__ == "__main__":
         n_vars=12,
         n_samples=500
     )
+
+    # Test 7: Exception logging
+    print("\n[Test 7] Exception logging:")
+    try:
+        raise ValueError("Simulated error for testing")
+    except Exception as e:
+        logger.exception("Caught an exception during processing")
+
+    # Test 8: Performance summary
+    print("\n[Test 8] Performance summary:")
+    with logger.track_time("quick_operation"):
+        time.sleep(0.02)
+    with logger.track_time("data_processing"):
+        time.sleep(0.15)
+    # Print the performance summary
+    perf_logger = LoggerFactory.get_performance_logger()
+    perf_logger.print_summary()
+
+    # Test 9: Get specific timings
+    print("\n[Test 9] Retrieve specific timings:")
+    timings = logger.get_timings()
+    logger.info(f"Total operations tracked: {len(timings)}")
+    if "data_processing" in timings:
+        logger.info(f"data_processing was called {len(timings['data_processing'])} time(s)")
+
+    # Test 10: Nested context tracking
+    print("\n[Test 10] Nested operations with context:")
+    logger.set_context(module="data_loader")
+    with logger.track_time("data_validation", log_level="INFO"):
+        logger.info("Validating data structure")
+        time.sleep(0.05)
+        logger.warning("Found 3 missing values")
+    logger.clear_context()
+
+    # Test 11: Critical logging scenario
+    print("\n[Test 11] Critical scenario:")
+    logger.critical("System resources exhausted - immediate action required")
     
     print("\n" + "="*70)
     print("All tests completed!")
