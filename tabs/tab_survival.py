@@ -105,6 +105,11 @@ def render(df, _var_meta):
             st.session_state.landmark_val = float(round(float(max_t) * 0.1))
 
         def update_from_slider() -> None:
+            """
+            Synchronizes the stored landmark time value with the slider widget.
+            
+            Sets st.session_state.landmark_val to the current value of st.session_state.lm_slider_widget so the session state reflects slider changes.
+            """
             st.session_state.landmark_val = st.session_state.lm_slider_widget
         
         def update_from_number() -> None:

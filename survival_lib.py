@@ -14,8 +14,15 @@ _logger = logging.getLogger(__name__)
 # Helper function for standardization
 def _standardize_numeric_cols(data, cols) -> None:
     """
-    Standardize numeric columns in-place, BUT SKIP BINARY columns (0/1).
-    This prevents numerical instability in Cox models.
+    Standardize numeric columns in-place while preserving binary (0/1) columns.
+    
+    Numeric columns listed in `cols` are centered to mean zero and scaled to unit variance.
+    Columns containing only the values 0 and 1 are left unchanged. If a column has
+    zero or undefined standard deviation, a warning is emitted and the column is not modified.
+    
+    Parameters:
+        data (pandas.DataFrame): DataFrame whose columns will be standardized in-place.
+        cols (Iterable[str]): Column names to consider for standardization.
     """
     for col in cols:
         if pd.api.types.is_numeric_dtype(data[col]):
@@ -150,8 +157,22 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
 # --- 2. Nelson-Aalen (With Robust CI) 🟢 FIX NA CI ---
 def fit_nelson_aalen(df, duration_col, event_col, group_col):
     """
-    Fits Nelson-Aalen cumulative hazard.
-    Returns: (fig, stats_df)
+    Fit Nelson–Aalen cumulative hazard curves optionally stratified by a grouping column and return a Plotly figure plus group-level statistics.
+    
+    Drops rows with missing duration or event values. If a group column is provided, rows with missing group values are dropped and curves are plotted per group; otherwise a single overall curve is plotted. When the fitter provides a confidence interval with at least two columns, a shaded 95% CI is added for each group.
+    
+    Parameters:
+        df (pandas.DataFrame): Input dataset containing duration, event, and optional group columns.
+        duration_col (str): Name of the column with follow-up time or duration.
+        event_col (str): Name of the column with event indicator (1 for event, 0 for censored).
+        group_col (str or None): Name of the column to stratify by, or None to compute an overall curve.
+    
+    Returns:
+        fig (plotly.graph_objs.Figure): Plotly figure showing cumulative hazard curves and shaded 95% CIs when available.
+        stats_df (pandas.DataFrame): DataFrame with one row per plotted group containing columns `Group`, `N`, and `Events`.
+    
+    Raises:
+        ValueError: If no valid rows remain after dropping missing duration/event values, or if a specified group column is not present in `df`.
     """
     data = df.dropna(subset=[duration_col, event_col])
     if len(data) == 0:
@@ -231,24 +252,21 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
 # --- 3. Cox Proportional Hazards (Robust with Progressive L2 Penalization & Data Validation) ---
 def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     """
-    Fit Cox Proportional Hazards model with comprehensive pre-fit validation.
+    Fit a Cox Proportional Hazards model after validating and preprocessing covariates.
     
-    🟢 NEW: Pre-fit validation detects:
-    - Missing values (NaN) - already dropped, but double-check
-    - Infinite values (Inf, -Inf)
-    - Extreme values (>±1e10)
-    - Zero variance columns (constant)
-    - Perfect separation (outcome completely predicted by covariate)
-    - High multicollinearity (r > 0.95)
+    Validates input columns and rows, performs automatic one-hot encoding for categorical covariates (drop_first=True), checks numeric covariates for infinite or extreme values, zero variance, potential perfect separation, and high multicollinearity, standardizes numeric covariates (skipping binary 0/1), and attempts a progressive fitting strategy (standard CoxPH then increasing L2 penalization) until a successful fit is obtained or all attempts fail.
     
-    Automatic One-Hot Encoding:
-    - Categorical/object columns automatically encoded
-    - drop_first=True to prevent multicollinearity
+    Parameters:
+        df (pandas.DataFrame): Input dataset containing duration, event, and covariates.
+        duration_col (str): Name of the duration/time-to-event column.
+        event_col (str): Name of the event indicator column (0/1).
+        covariate_cols (list[str]): List of covariate column names to include in the model.
     
-    Progressive penalization fallback:
-    1. Standard CoxPH (Maximum Partial Likelihood, p=0.0)
-    2. L2 Penalized (p=0.1) - Ridge regression
-    3. L2 Penalized (p=1.0) - Strong regularization
+    Returns:
+        cph (lifelines.CoxPHFitter or None): Fitted CoxPHFitter instance on success, otherwise None.
+        res_df (pandas.DataFrame or None): Results table with hazard ratios (`HR`), 95% CI bounds, `P-value`, and `Method` when fit succeeds; None on failure.
+        data (pandas.DataFrame): Processed DataFrame used for fitting (after dropping missing rows and any encoding/standardization). Returned even on failure to aid debugging.
+        error_message (str or None): Detailed error message when fitting or validation fails; None on success.
     """
     # 1. Basic Validation
     missing = [c for c in [duration_col, event_col, *covariate_cols] if c not in df.columns]
@@ -447,9 +465,21 @@ def check_cph_assumptions(cph, data):
 # --- 4. Landmark Analysis (KM) 🟢 FIX LM CI ---
 def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
     """
-    Performs Kaplan-Meier Survival Analysis using the Landmark Method.
+    Perform Kaplan–Meier survival analysis using a landmark-time approach and produce a survival plot plus log-rank test results.
     
-    Returns: (fig, stats_df, n_pre_filter, n_post_filter)
+    Parameters:
+        df (pandas.DataFrame): Input data containing duration, event indicator, and group columns.
+        duration_col (str): Name of the column with observed times-to-event.
+        event_col (str): Name of the column with event indicator (1=event, 0=censored).
+        group_col (str): Name of the grouping/stratification column; required for stratified curves and tests.
+        landmark_time (numeric): Time threshold used for the landmark analysis; only records with duration >= landmark_time are included and their times are re-based to time since landmark.
+    
+    Returns:
+        fig (plotly.graph_objects.Figure or None): Plotly figure showing Kaplan–Meier curves and shaded 95% confidence intervals for each group, or None if an error occurred before plotting.
+        stats_df (pandas.DataFrame or None): Single-row DataFrame summarizing the performed log-rank test (test name, statistic, p-value, comparison, Method) or a DataFrame describing an error/note; None if not applicable.
+        n_pre_filter (int): Number of records remaining after dropping rows with missing duration, event, or group (before applying the landmark filter).
+        n_post_filter (int): Number of records remaining after applying the landmark filter (duration >= landmark_time).
+        error (str or None): Error message when the function fails early (e.g., missing columns or insufficient records), otherwise None.
     """
     
     # 1. Data Cleaning
@@ -571,11 +601,23 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
 # --- 5. Report Generation 🟢 FIX: Include Plotly JS in HTML ---
 def generate_report_survival(title, elements):
     """
-    Generate HTML report with proper Plotly JS inclusion.
+    Assemble a complete HTML report from a sequence of content elements, embedding tables, figures, and images for offline-friendly consumption.
     
-    🟢 FIX: Include Plotly JS with first plot only for self-contained HTML.
-    This ensures graphs render correctly even when offline or with strict CSP.
-    Subsequent plots reuse the same JS library (efficient).
+    Builds an HTML document with the given title and iterates over `elements` to render supported content types. For Plotly figures, the Plotly JS library is embedded only once with the first Plotly plot and omitted for subsequent Plotly plots so later plots reuse the already-loaded script. Supported element types and expected `data` values:
+    - "header": a string rendered as an H2 section header.
+    - "text": a plain string rendered as a paragraph.
+    - "preformatted": a string rendered inside a <pre> block.
+    - "table": a pandas DataFrame (or DataFrame-like) rendered via DataFrame.to_html().
+    - "plot": a Plotly Figure-like object (with to_html) or a Matplotlib Figure-like object (with savefig).
+    - "image": raw image bytes (PNG) which will be embedded as a base64 data URL.
+    
+    Parameters:
+        title: The report title; will be HTML-escaped.
+        elements: An iterable of dicts describing report elements; each dict should include keys
+            'type' (one of the supported types above) and 'data' (the corresponding content).
+    
+    Returns:
+        html_doc (str): A self-contained HTML string representing the assembled report.
     """
     css_style = """<style>
         body{font-family:Arial;margin:20px;}

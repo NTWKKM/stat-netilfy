@@ -40,22 +40,24 @@ class PerformanceLogger:
     """
     
     def __init__(self, logger: logging.Logger):
-        """Initialize PerformanceLogger."""
+        """
+        Create a PerformanceLogger bound to a standard logger and prepare storage for timing data.
+        
+        Initializes the instance with the given `logging.Logger` and an empty dict that maps operation names to lists of elapsed times (in seconds).
+        """
         self.logger = logger
         self.timings: Dict[str, list] = {}
     
     @contextmanager
     def track_time(self, operation: str, log_level: str = "DEBUG"):
         """
-        Context manager to track operation timing.
+        Context manager that measures and logs the elapsed time of a named operation.
+        
+        If CONFIG['logging.log_performance'] is falsy, the context yields without measuring or logging. When enabled, the elapsed time is appended to self.timings[operation] (creating the list if needed) and a timestamped message is emitted on the wrapped logger at the requested log level.
         
         Parameters:
-            operation (str): Operation name for logging
-            log_level (str): Logging level for output
-        
-        Example:
-            with logger.track_time("data_processing"):
-                process_data()
+            operation (str): Name of the operation to record and log.
+            log_level (str): Name of the logger method to call (e.g., "DEBUG", "INFO"); falls back to debug if unavailable.
         """
         if not CONFIG.get('logging.log_performance'):
             yield
@@ -78,13 +80,15 @@ class PerformanceLogger:
     
     def get_timings(self, operation: Optional[str] = None) -> Dict[str, list]:
         """
-        Get recorded timings.
+        Return recorded performance timings.
+        
+        If `operation` is provided, return a dict containing only that operation mapped to its list of timings (empty list if no timings recorded for that operation). Otherwise return the full timings mapping.
         
         Parameters:
-            operation (str, optional): Specific operation to get timings for
+            operation (str, optional): Operation name to filter timings for.
         
         Returns:
-            dict: Timing data
+            dict: Mapping of operation names to lists of elapsed times in seconds.
         """
         if operation:
             return {operation: self.timings.get(operation, [])}
@@ -92,7 +96,9 @@ class PerformanceLogger:
     
     def print_summary(self) -> None:
         """
-        Print timing summary.
+        Log a human-readable summary of recorded operation timings.
+        
+        If no timings are present, the method does nothing. For each tracked operation it logs the average, minimum, maximum, and count of recorded durations using the instance's logger.
         """
         if not self.timings:
             return
@@ -120,19 +126,23 @@ class ContextFilter(logging.Filter):
     """
     
     def __init__(self):
-        """Initialize ContextFilter."""
+        """
+        Create a ContextFilter instance and initialize its internal context storage.
+        
+        Initializes an empty dictionary used to store contextual key-value pairs that will be attached to log records.
+        """
         super().__init__()
         self.context: Dict[str, Any] = {}
     
     def filter(self, record: logging.LogRecord) -> bool:
         """
-        Add context to log record.
+        Attach stored context key/value pairs as attributes on the given LogRecord.
         
         Parameters:
-            record: Log record
+            record (logging.LogRecord): The log record to augment.
         
         Returns:
-            bool: True to allow log record
+            bool: `True` to allow the record to be processed by logging handlers.
         """
         for key, value in self.context.items():
             setattr(record, key, value)
@@ -140,16 +150,18 @@ class ContextFilter(logging.Filter):
     
     def set_context(self, **kwargs) -> None:
         """
-        Set context variables.
+        Add or update contextual key-value pairs that will be attached to subsequent log records.
         
-        Example:
-            context_filter.set_context(user_id="123", session="abc")
+        Parameters:
+            **kwargs: Arbitrary keyword arguments whose keys and values will be stored as context attributes and made available on log records processed by this filter.
         """
         self.context.update(kwargs)
     
     def clear_context(self) -> None:
         """
-        Clear all context.
+        Remove all stored context key/value pairs used to enrich log records.
+        
+        After calling this method, subsequent log records will no longer include any previously set context values.
         """
         self.context.clear()
 
@@ -168,10 +180,9 @@ class LoggerFactory:
     @classmethod
     def configure(cls) -> None:
         """
-        Configure logging system based on configuration.
+        Perform one-time configuration of the application's logging system using values from CONFIG.
         
-        Should be called once at application startup.
-        🟢 FIX #9: Made safe with try-catch to prevent infinite loading on errors
+        Reads logging settings (level, format, date format) and sets up the root logger, a shared ContextFilter, and enabled handlers (file/console/Streamlit). If CONFIG disables logging, logging is globally disabled. The method is idempotent and will no-op if configuration has already been performed. On error it prints a warning to stderr and marks configuration as complete to avoid repeated attempts.
         """
         if cls._configured:
             return
@@ -223,13 +234,17 @@ class LoggerFactory:
     @classmethod
     def _setup_file_logging(cls, root_logger: logging.Logger, formatter: logging.Formatter) -> None:
         """
-        Setup file logging with rotation.
+        Configure rotating file logging for the given root logger using settings from CONFIG.
+        
+        Creates the log directory if missing and attaches a RotatingFileHandler formatted with `formatter`. Rotation parameters and file path are read from CONFIG; on any setup error a warning is printed to stderr and the function returns without raising.
         
         Parameters:
-            root_logger: Root logger to configure
-            formatter: Log formatter
+            root_logger (logging.Logger): The root logger to which the file handler will be attached.
+            formatter (logging.Formatter): Formatter to apply to the file handler.
         
-        🟢 FIX #9: Added try-catch to handle disk/permission issues gracefully
+        Notes:
+            Uses CONFIG keys: 'logging.log_dir' (default 'logs'), 'logging.log_file' (default 'app.log'),
+            'logging.max_log_size' (default 10485760), and 'logging.backup_count' (default 5).
         """
         try:
             log_dir = Path(CONFIG.get('logging.log_dir', 'logs'))
@@ -255,11 +270,13 @@ class LoggerFactory:
     @classmethod
     def _setup_console_logging(cls, root_logger: logging.Logger, formatter: logging.Formatter) -> None:
         """
-        Setup console logging.
+        Configure console (stdout) logging for the given root logger using the provided formatter.
+        
+        Reads the console log level from CONFIG['logging.console_level'] (defaults to 'INFO'), creates a StreamHandler that writes to stdout, applies the formatter and the class-wide context filter, and attaches the handler to the root logger.
         
         Parameters:
-            root_logger: Root logger to configure
-            formatter: Log formatter
+            root_logger (logging.Logger): Root logger to which the console handler will be attached.
+            formatter (logging.Formatter): Formatter to apply to console log messages.
         """
         try:
             console_handler = logging.StreamHandler(sys.stdout)
@@ -276,7 +293,9 @@ class LoggerFactory:
     @classmethod
     def _setup_streamlit_logging(cls) -> None:
         """
-        Configure Streamlit logger to reduce noise.
+        Reduce log verbosity for Streamlit and Altair by setting their logger levels from CONFIG.
+        
+        Reads 'logging.streamlit_level' from CONFIG (defaulting to 'WARNING') and applies that level to the 'streamlit' and 'altair' loggers. If configuration fails, a debug message is printed to stderr and execution continues.
         """
         try:
             streamlit_level = CONFIG.get('logging.streamlit_level', 'WARNING')
@@ -290,13 +309,13 @@ class LoggerFactory:
     @classmethod
     def get_logger(cls, name: str) -> 'Logger':
         """
-        Get or create logger.
+        Retrieve a cached custom Logger by name, configuring the logging system on first use if necessary.
         
         Parameters:
-            name (str): Logger name (usually __name__)
+            name (str): Logger name (typically __name__).
         
         Returns:
-            Logger: Custom logger instance
+            Logger: Custom Logger instance associated with `name`.
         """
         # Configure if not done
         if not cls._configured:
@@ -313,10 +332,12 @@ class LoggerFactory:
     @classmethod
     def get_performance_logger(cls) -> PerformanceLogger:
         """
-        Get performance logger.
+        Return the singleton PerformanceLogger instance used for recording operation timings.
+        
+        This method returns a shared PerformanceLogger for the application, creating and caching it on first access.
         
         Returns:
-            PerformanceLogger: Performance tracking logger
+            PerformanceLogger: Singleton PerformanceLogger for tracking and retrieving performance timings.
         """
         if cls._perf_logger is None:
             perf_std_logger = logging.getLogger('performance')
@@ -331,11 +352,11 @@ class Logger:
     
     def __init__(self, standard_logger: logging.Logger, context_filter: Optional[ContextFilter] = None):
         """
-        Initialize Logger.
+        Wrap the provided standard logger with contextual and performance-tracking support.
         
         Parameters:
-            standard_logger: Standard Python logger
-            context_filter: Optional context filter
+            standard_logger (logging.Logger): The underlying Python logger to delegate log calls to.
+            context_filter (ContextFilter | None): Optional ContextFilter whose context will be applied to log records.
         """
         self._logger = standard_logger
         self._context_filter = context_filter
@@ -346,33 +367,62 @@ class Logger:
         self._logger.debug(msg, *args, **kwargs)
     
     def info(self, msg: str, *args, **kwargs) -> None:
-        """Log info message."""
+        """
+        Log an informational message via the wrapped logger.
+        
+        Parameters:
+            msg (str): Message format string or message object.
+            *args: Positional arguments for message formatting.
+            **kwargs: Keyword arguments forwarded to the underlying logger (e.g., `exc_info`, `stack_info`).
+        """
         self._logger.info(msg, *args, **kwargs)
     
     def warning(self, msg: str, *args, **kwargs) -> None:
-        """Log warning message."""
+        """
+        Log a message with severity WARNING.
+        """
         self._logger.warning(msg, *args, **kwargs)
     
     def error(self, msg: str, *args, **kwargs) -> None:
-        """Log error message."""
+        """
+        Log a message with ERROR severity.
+        
+        Parameters:
+            msg (str): The message format string.
+            *args: Positional arguments used for message formatting.
+            **kwargs: Keyword arguments forwarded to the underlying logger (for example, `exc_info`).
+        """
         self._logger.error(msg, *args, **kwargs)
     
     def critical(self, msg: str, *args, **kwargs) -> None:
-        """Log critical message."""
+        """
+        Log a message with CRITICAL severity.
+        
+        Parameters:
+            msg (str): Message format string.
+            *args: Positional arguments for message formatting.
+            **kwargs: Additional keyword arguments forwarded to the logger (for example `exc_info` or `stack_info`).
+        """
         self._logger.critical(msg, *args, **kwargs)
     
     def exception(self, msg: str, *args, **kwargs) -> None:
-        """Log exception with traceback."""
+        """
+        Log a message and include the current exception traceback.
+        
+        Records exception information from the active exception context and formats the message using any supplied positional or keyword arguments.
+        """
         self._logger.exception(msg, *args, **kwargs)
     
     def log_operation(self, operation: str, status: str = "started", **details) -> None:
         """
-        Log operation event.
+        Log an operation event with optional details.
+        
+        Builds a single-line message containing the operation name in brackets, an uppercase status, and any key=value pairs provided in `details`. Uses the ERROR level when `status` is "failed" (case-insensitive) and INFO level for other statuses.
         
         Parameters:
-            operation (str): Operation name
-            status (str): Operation status (started, completed, failed)
-            **details: Additional details
+            operation (str): Name of the operation.
+            status (str): Operation status such as "started", "completed", or "failed".
+            **details: Additional key/value pairs to include in the log message.
         """
         msg_parts = [f"[{operation}]"]
         
@@ -394,12 +444,14 @@ class Logger:
     
     def log_data_summary(self, df_name: str, shape: tuple, dtypes: Dict[str, str]) -> None:
         """
-        Log data frame summary.
+        Log a concise summary of a DataFrame's size and column type composition.
+        
+        Logs the DataFrame name, its shape (rows, columns), and counts of numeric and object-typed columns. This log is emitted only when CONFIG['logging.log_data_operations'] is truthy.
         
         Parameters:
-            df_name (str): DataFrame name
-            shape (tuple): DataFrame shape (rows, cols)
-            dtypes (dict): Column dtypes
+            df_name (str): Identifier or name of the DataFrame.
+            shape (tuple): Tuple of (rows, columns).
+            dtypes (Dict[str, str]): Mapping from column name to dtype string (e.g., 'int64', 'float32', 'object').
         """
         if CONFIG.get('logging.log_data_operations'):
             self.info(
@@ -410,13 +462,15 @@ class Logger:
     
     def log_analysis(self, analysis_type: str, outcome: str, n_vars: int, n_samples: int) -> None:
         """
-        Log analysis execution.
+        Log a concise summary of an analysis run.
+        
+        Logs the analysis type, outcome variable, number of predictor variables, and sample count. This message is emitted only when the `logging.log_analysis_operations` configuration flag is enabled.
         
         Parameters:
-            analysis_type (str): Type of analysis
-            outcome (str): Outcome variable
-            n_vars (int): Number of variables
-            n_samples (int): Number of samples
+            analysis_type (str): Human-readable analysis name or type (e.g., "regression", "clustering").
+            outcome (str): Outcome variable or target description.
+            n_vars (int): Number of predictor variables used in the analysis.
+            n_samples (int): Number of samples or observations processed.
         """
         if CONFIG.get('logging.log_analysis_operations'):
             self.info(
@@ -427,44 +481,39 @@ class Logger:
     @contextmanager
     def track_time(self, operation: str, log_level: str = "DEBUG"):
         """
-        Context manager for tracking operation timing.
+        Provide a context manager that records elapsed time for the named operation and logs the duration at the specified level.
         
         Parameters:
-            operation (str): Operation name
-            log_level (str): Logging level
-        
-        Example:
-            with logger.track_time("data_loading"):
-                df = load_data()
+            operation (str): Name of the operation being measured.
+            log_level (str): Logging level name to use when emitting the timing message (e.g., "DEBUG", "INFO"). Defaults to "DEBUG".
         """
         with self._perf_logger.track_time(operation, log_level):
             yield
     
     def get_timings(self) -> Dict[str, list]:
         """
-        Get performance timings.
+        Retrieve recorded performance timings for all tracked operations.
         
         Returns:
-            dict: Timing data
+            dict: Mapping from operation name (str) to a list of elapsed times in seconds (List[float]).
         """
         return self._perf_logger.get_timings()
     
     def set_context(self, **kwargs) -> None:
         """
-        Set context for logging.
+        Attach key-value context that will be included on subsequent log records.
+        
+        Adds or updates context keys used by the logging system; existing keys are preserved unless overwritten.
         
         Parameters:
-            **kwargs: Context key-value pairs
-        
-        Example:
-            logger.set_context(user_id="123", session="abc")
+            **kwargs: Arbitrary mapping of context names to values that will be added to future log records.
         """
         if self._context_filter:
             self._context_filter.set_context(**kwargs)
     
     def clear_context(self) -> None:
         """
-        Clear logging context.
+        Remove all context key-value pairs previously set for this logger; no-op if no context is configured.
         """
         if self._context_filter:
             self._context_filter.clear_context()
@@ -473,18 +522,13 @@ class Logger:
 # Convenience function
 def get_logger(name: str) -> Logger:
     """
-    Get a logger instance.
+    Obtain a configured logger for the given name.
     
     Parameters:
-        name (str): Logger name (usually __name__)
+        name (str): The logger name, typically `__name__`.
     
     Returns:
-        Logger: Custom logger instance
-    
-    Example:
-        from logger import get_logger
-        logger = get_logger(__name__)
-        logger.info("Hello world")
+        Logger: A Logger instance configured according to the module's logging settings.
     """
     return LoggerFactory.get_logger(name)
 

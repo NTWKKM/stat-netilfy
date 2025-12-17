@@ -38,11 +38,10 @@ class ConfigManager:
     
     def __init__(self, config_dict: Optional[Dict] = None):
         """
-        Initialize ConfigManager.
+        Create a ConfigManager populated with the given configuration or the module defaults and apply environment variable overrides.
         
         Parameters:
-            config_dict (dict, optional): Initial configuration dictionary.
-                If None, loads from default config.
+            config_dict (dict | None): Optional initial configuration dictionary to use instead of the built-in defaults. If None, the manager is initialized from the default configuration.
         """
         self._config = config_dict or self._get_default_config()
         self._env_prefix = "MEDSTAT_"
@@ -51,10 +50,12 @@ class ConfigManager:
     @staticmethod
     def _get_default_config() -> Dict[str, Any]:
         """
-        Get default configuration values.
+        Provide the default nested configuration used by the application.
         
         Returns:
-            dict: Default configuration with all settings.
+            Dict[str, Any]: A dictionary with the default configuration sections
+            ('analysis', 'ui', 'logging', 'performance', 'validation', 'debug') and
+            their corresponding default settings.
         """
         return {
             # ========== ANALYSIS SETTINGS ==========
@@ -165,11 +166,9 @@ class ConfigManager:
     
     def _load_env_overrides(self) -> None:
         """
-        Load configuration overrides from environment variables.
+        Apply configuration overrides from environment variables that start with the MEDSTAT_ prefix.
         
-        Environment variable naming convention:
-            MEDSTAT_<SECTION>_<KEY>=value
-            Example: MEDSTAT_LOGGING_LEVEL=DEBUG
+        Environment variables must follow the form MEDSTAT_<SECTION>_<KEY>=value; the portion after the prefix is lowercased and split on underscores, where the first segment is treated as the section and the remaining segments are joined with underscores to form the dot-notated key within that section (e.g., MEDSTAT_LOGGING_LEVEL -> logging.level). Variables without at least a section and key are ignored. If applying an override fails (e.g., type or key errors), a warning is emitted and the override is skipped.
         """
         for key, value in os.environ.items():
             if key.startswith(self._env_prefix):
@@ -191,18 +190,14 @@ class ConfigManager:
     
     def get(self, key: str, default: Any = None) -> Any:
         """
-        Get configuration value using dot notation.
+        Retrieve a configuration value using a dot-separated key path.
         
         Parameters:
-            key (str): Dot-separated key path (e.g., 'logging.level')
-            default: Default value if key not found
+            key (str): Dot-separated path to a nested configuration value (e.g., "logging.level").
+            default: Value to return if the specified path does not exist.
         
         Returns:
-            Configuration value or default
-        
-        Examples:
-            CONFIG.get('analysis.logit_method')  # Returns 'auto'
-            CONFIG.get('nonexistent.key', 'default')  # Returns 'default'
+            The configuration value at the given path, or `default` if the path is not found.
         """
         keys = key.split('.')
         value = self._config
@@ -217,18 +212,14 @@ class ConfigManager:
     
     def update(self, key: str, value: Any) -> None:
         """
-        Update configuration value using dot notation.
+        Set an existing configuration value identified by a dot-separated path.
         
         Parameters:
-            key (str): Dot-separated key path (e.g., 'logging.level')
-            value: New value to set
+            key (str): Dot-separated path to an existing configuration entry (e.g., "logging.level").
+            value (Any): Value to assign to the configuration entry.
         
         Raises:
-            KeyError: If path doesn't exist in config
-        
-        Examples:
-            CONFIG.update('logging.level', 'DEBUG')
-            CONFIG.update('analysis.logit_method', 'firth')
+            KeyError: If any intermediate path segment or the final key does not exist in the configuration.
         """
         keys = key.split('.')
         config = self._config
@@ -248,12 +239,12 @@ class ConfigManager:
     
     def set_nested(self, key: str, value: Any, create: bool = False) -> None:
         """
-        Set configuration value, optionally creating intermediate keys.
+        Set a value in the configuration using a dot-separated path, optionally creating missing intermediate dictionaries.
         
         Parameters:
-            key (str): Dot-separated key path
-            value: Value to set
-            create (bool): If True, create missing intermediate keys
+            key (str): Dot-separated path to the configuration key (e.g., "section.sub.key").
+            value (Any): Value to assign to the final key.
+            create (bool): If True, create missing intermediate dictionaries along the path; if False and a path segment is missing, a KeyError is raised.
         """
         keys = key.split('.')
         config = self._config
@@ -272,13 +263,13 @@ class ConfigManager:
     
     def get_section(self, section: str) -> Dict[str, Any]:
         """
-        Get entire configuration section.
+        Return a deep copy of a top-level configuration section.
         
         Parameters:
-            section (str): Section name (e.g., 'logging')
+            section (str): Top-level section name (e.g., "logging").
         
         Returns:
-            dict: Section configuration
+            dict or Any: A deep copy of the section dictionary if the section is a dict; otherwise the section value as-is.
         """
         import copy
         result = self.get(section, {})
@@ -286,24 +277,24 @@ class ConfigManager:
     
     def to_dict(self) -> Dict[str, Any]:
         """
-        Export configuration as dictionary.
+        Get a deep copy of the entire configuration dictionary.
         
         Returns:
-            dict: Complete configuration
+            dict: A deep copy of the full configuration that can be modified without affecting the manager's internal state.
         """
         import copy
         return copy.deepcopy(self._config)
     
     def to_json(self, filepath: Optional[str] = None, pretty: bool = True) -> str:
         """
-        Export configuration as JSON.
+        Serialize the current configuration to a JSON string.
         
         Parameters:
-            filepath (str, optional): If provided, save to file
-            pretty (bool): Pretty-print JSON
+            filepath (str | None): Optional filesystem path to write the JSON output; when provided, the file is overwritten.
+            pretty (bool): If True, format the JSON with indentation for readability; if False, produce compact JSON.
         
         Returns:
-            str: JSON string
+            str: The configuration serialized as a JSON-formatted string.
         """
         json_str = json.dumps(self._config, indent=2 if pretty else None)
         
@@ -314,10 +305,16 @@ class ConfigManager:
     
     def validate(self) -> tuple[bool, list[str]]:
         """
-        Validate configuration values.
+        Validate key configuration constraints and collect any violations.
+        
+        Performs a set of sanity checks on configuration values and records any problems found:
+        - Ensures `analysis.logit_screening_p` is greater than 0 and less than 1.
+        - Ensures `analysis.pvalue_bounds_lower` is less than `analysis.pvalue_bounds_upper`.
+        - Ensures `logging.level` is one of `['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']`.
+        - Ensures `analysis.logit_method` is one of `['auto', 'firth', 'bfgs', 'default']`.
         
         Returns:
-            tuple: (is_valid, [list of error messages])
+            tuple: (is_valid, errors) where `is_valid` is `True` if no validation errors were found, `False` otherwise; `errors` is a list of human-readable error messages.
         """
         errors = []
         
@@ -345,7 +342,12 @@ class ConfigManager:
         return len(errors) == 0, errors
     
     def __repr__(self) -> str:
-        """String representation of ConfigManager."""
+        """
+        Return a concise representation of the ConfigManager showing how many top-level sections it contains.
+        
+        Returns:
+            str: A string in the form "ConfigManager(<N> sections)" where <N> is the number of top-level configuration sections.
+        """
         return f"ConfigManager({len(self._config)} sections)"
 
 

@@ -44,21 +44,21 @@ def clean_numeric_value(val):
 
 def run_binary_logit(y, X, method='default'):
     """
-    Execute a binary logistic regression using the selected estimation method.
+    Perform binary logistic regression using the specified estimation method.
     
-    Supports three methods: 'default' (statsmodels Logit with default optimizer), 'bfgs' (statsmodels Logit using BFGS), and 'firth' (Firth's penalized likelihood when available).
+    Supports 'default' (statsmodels Logit default optimizer), 'bfgs' (statsmodels Logit with BFGS), and 'firth' (Firth's penalized likelihood when the firthlogist package is available). An intercept column is added to X automatically; if 'firth' is requested but firthlogist is not installed the function returns an error status.
     
     Parameters:
-        y (array-like or pd.Series): Binary outcome vector aligned to rows of X.
-        X (array-like or pd.DataFrame): Predictors matrix; an intercept column will be added automatically.
-        method (str): One of 'default', 'bfgs', or 'firth'. If 'firth' is requested but the firthlogist library is unavailable, the function returns an error message.
+        y (array-like or pd.Series): Binary outcome aligned to the rows of X.
+        X (array-like or pd.DataFrame): Predictor matrix; a constant/intercept column will be added.
+        method (str): One of 'default', 'bfgs', or 'firth' selecting the estimator.
     
     Returns:
         tuple: (params, conf_int, pvalues, status)
-            - params (pd.Series or None): Estimated coefficients indexed by predictor names (including the intercept) or None on failure.
+            - params (pd.Series or None): Estimated coefficients indexed by predictor names (including the intercept), or None on failure.
             - conf_int (pd.DataFrame or None): Confidence intervals with columns [0, 1] indexed by predictor names, or None on failure.
             - pvalues (pd.Series or None): Two-sided p-values indexed by predictor names, or None on failure.
-            - status (str): "OK" on success; otherwise an error message (for example when firthlogist is not installed or another exception occurred).
+            - status (str): "OK" on success; otherwise an error message describing the failure.
     """
     try:
         # เตรียมข้อมูล (Statsmodels ต้องการ Constant เสมอ)
@@ -104,8 +104,16 @@ def run_binary_logit(y, X, method='default'):
 
 def get_label(col_name, var_meta):
     """
-    Create an HTML label. 
-    FIX: Use full column name instead of splitting by '_' to prevent weird names like 'of_birth'
+    Build an HTML label for a column using its name and optional metadata.
+    
+    When metadata provides a 'label' for the full column name (or for the suffix after the first underscore), the label is shown as a secondary, muted line beneath the bolded column name; otherwise only the bolded column name is returned. Both display name and secondary label are HTML-escaped.
+    
+    Parameters:
+        col_name (str): The column name to display.
+        var_meta (dict or None): Optional mapping of column keys to metadata dictionaries; a metadata entry with key 'label' supplies the secondary label.
+    
+    Returns:
+        str: An HTML fragment containing a bolded column name and, if available, a secondary label on the next line.
     """
     # 1. ใช้ชื่อเต็มเป็นค่าเริ่มต้น (ไม่ตัด _ ทิ้งแล้ว)
     display_name = col_name 
@@ -305,7 +313,16 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     
                 # ✅ DEFINE count_val ONCE, BEFORE THE LOOP
                 def count_val(series, v_str) -> int:
-                    """Count elements equal to v_str after normalizing numeric-like values."""
+                    """
+                    Count occurrences in a Series matching a target string after normalizing numeric-like values (e.g., converting "1.0" to "1").
+                    
+                    Parameters:
+                        series (pandas.Series): Series whose elements will be compared as strings after normalization.
+                        v_str (str): Target string to match against each normalized element.
+                    
+                    Returns:
+                        int: Number of elements equal to `v_str` after normalization.
+                    """
                     return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
     
                 for lvl in levels:  # ← Loop starts here
@@ -444,8 +461,14 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     # ✅ FIX #5: P-VALUE BOUNDS CHECKING
     def fmt_p(val) -> str:
         """
-        Format p-value for display with bounds validation.
-        Clips to valid range [0, 1] and warns if numerical error detected.
+        Format a p-value for display, clipping small numerical errors to the valid range [0, 1] and applying display thresholds.
+        
+        Returns:
+            str: Formatted p-value:
+                - "-" if the input is missing (NaN).
+                - "<0.001" if the value is less than 0.001.
+                - ">0.999" if the value is greater than 0.999.
+                - Otherwise the p-value rounded to three decimal places (e.g., "0.123").
         """
         if pd.isna(val): 
             return "-"

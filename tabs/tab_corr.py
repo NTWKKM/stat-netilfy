@@ -6,20 +6,15 @@ from typing import List, Tuple
 
 def render(df):
     """
-    Render the Correlation Analysis UI for continuous variables: Pearson/Spearman correlation and ICC.
+    Render the Correlation & ICC section UI in Streamlit.
     
-    Builds three Streamlit sub-tabs:
-    - Pearson/Spearman: UI for selecting two numeric variables, correlation method, runs correlation analysis, displays scatter plot and statistics.
-    - ICC: UI for selecting 2+ numeric variables (raters/methods), calculates Intraclass Correlation Coefficient for reliability/agreement.
-    
-    NO CHI-SQUARE: Chi-Square moved to Tab 4 (Diagnostic Tests)
-    
-    Side effects:
-    - Renders Streamlit controls, info, and results to the active Streamlit app.
-    - Stores generated HTML reports in st.session_state under keys 'html_output_corr_cont' and 'html_output_icc'.
+    Displays three subtabs for continuous-variable analyses: (1) Pearson/Spearman correlation between two selected variables with a scatter plot and statistics, (2) Intraclass Correlation Coefficient (ICC) reliability analysis for 2+ numeric columns, and (3) a reference & interpretation guide. Generated HTML reports are stored in st.session_state under 'html_output_corr_cont' and 'html_output_icc'.
     
     Parameters:
-        df (pandas.DataFrame): Input dataset whose columns populate the variable selectors and whose data are used for analyses.
+        df (pandas.DataFrame): Input dataset whose columns populate selectors and whose data are used for the analyses.
+    
+    Side effects:
+        Renders Streamlit controls, informational text, analysis results, and plots; writes HTML reports to st.session_state keys 'html_output_corr_cont' and 'html_output_icc'.
     """
     st.subheader("📈 5. Correlation & ICC")
     
