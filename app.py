@@ -24,6 +24,14 @@ st.set_page_config(
 # Initialize logging system (once at app start)
 @st.cache_resource(show_spinner=False)
 def _init_logging() -> bool:
+    """
+    Configure the application's global logging and record that the app has started.
+    
+    This sets up LoggerFactory for the running process and emits a startup log entry.
+    
+    Returns:
+        True if logging was successfully initialized.
+    """
     LoggerFactory.configure()
     get_logger(__name__).info("📱 Streamlit app started")
     return True
@@ -58,7 +66,14 @@ components.html("""
 # ==========================================
 @st.cache_resource(show_spinner=False)
 def check_optional_deps():
-    """Check and report on optional dependencies"""
+    """
+    Report presence of optional third-party dependencies used by the app.
+    
+    Returns:
+        deps_status (dict): Mapping of dependency keys to status objects. Each status object contains:
+            - 'installed' (bool): True if the dependency is importable, False otherwise.
+            - 'msg' (str): Human-readable message describing availability or fallback behavior.
+    """
     deps_status = {}
     
     try:

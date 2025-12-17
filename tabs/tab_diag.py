@@ -154,19 +154,14 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         # Positive Label Selectors
         def get_pos_label_settings(df: pd.DataFrame, col_name: str) -> Tuple[List[str], int]:
             """
-            Helper function to get unique values from a column, convert them to strings, 
-            sort them, and determine a default index (preferring '1', then '0').
-
-            Handles the case where the column might be empty after dropna.
-
-            Args:
-                df: The DataFrame containing the data.
-                col_name: The name of the column to process.
-
+            Return sorted non-null unique string values from a DataFrame column and a sensible default selection index.
+            
+            Parameters:
+                df (pd.DataFrame): DataFrame containing the column.
+                col_name (str): Name of the column to extract values from.
+            
             Returns:
-                A tuple containing:
-                1. A sorted list of unique non-null string values.
-                2. The default index for selection (0, or index of '1'/'0').
+                tuple(list[str], int): A tuple where the first element is a sorted list of the column's unique non-null values as strings, and the second element is the default index to select (index of '1' if present, otherwise index of '0' if present, otherwise 0).
             """
             # 🟢 NOTE: Need to handle the case where the column might be empty after dropna
             # Convert to string and drop NA values before getting unique values

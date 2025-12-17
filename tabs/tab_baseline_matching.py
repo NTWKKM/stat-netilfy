@@ -8,6 +8,15 @@ from logger import get_logger
 logger = get_logger(__name__)
 
 def render(df, var_meta):
+    """
+    Render the "Table 1 & Matching" Streamlit interface with three subtabs for baseline characteristics, propensity score matching, and reference/interpretation.
+    
+    Displays interactive controls to select grouping variables, characteristics, treatment/outcome/covariates, and advanced matching settings; generates Table 1 HTML, performs propensity score calculation and 1:1 nearest-neighbor matching, shows balance diagnostics (SMD and Love plot), previews/downloads matched data, and provides explanatory guidance. Handles session state for persisted HTML output and displays user-facing errors and warnings when inputs are invalid.
+    
+    Parameters:
+        df (pandas.DataFrame): The dataset to analyze and display in the UI.
+        var_meta (Mapping): Metadata for variables (e.g., display names, types, formatting) used when generating Table 1 and reports.
+    """
     st.subheader("📋 Table 1 & Matching")
     
     # Create three subtabs (added Reference & Interpretation)
