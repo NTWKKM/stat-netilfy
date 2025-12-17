@@ -376,7 +376,7 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
         error_msg = (
             f"Cox Model Convergence Failed\n\n"
             f"Fitting Methods Attempted:\n{methods_str}\n\n"
-            f"Last Error: {str(last_error)}\n\n"
+            f"Last Error: {last_error!s}\n\n"
             f"Troubleshooting Guide:\n"
             f"  1. Verify your data passed validation checks above\n"
             f"  2. Try removing ONE covariate at a time to isolate the problem\n"
