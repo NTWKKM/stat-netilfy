@@ -367,7 +367,7 @@ if st.session_state.df is not None:
     cols_to_verify = [c for c in st.session_state.var_meta if st.session_state.var_meta[c].get('confidence') == 'auto']
     if cols_to_verify:
         with st.expander("⚠️ Auto-Detected Variable Types (Please Verify)", expanded=False):
-            st.info(f"The following {len(cols_to_verify)} column(s) were auto-detected. Please verify they are correct in the Settings tab:")
+            st.info(f"The following {len(cols_to_verify)} column(s) were auto-detected. Please verify they are correct in the sidebar Settings:")
             for col in cols_to_verify[:10]:
                 detected_type = st.session_state.var_meta[col]['type']
                 st.caption(f"  • **{col}**: {detected_type}")
