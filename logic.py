@@ -197,10 +197,44 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     results_db = {} 
     sorted_cols = sorted(df.columns)
 
-    preferred_method = 'bfgs' 
+    # 🆕 NEW: DETECT DATA QUALITY FOR AUTO-METHOD SELECTION
+    has_perfect_separation = False
+    small_sample = len(df) < 50
+    rare_outcome = (y == 1).sum() < 20
+    
+    # Check for perfect separation in any predictor
+    if method == 'auto':
+        for col in sorted_cols:
+            if col == outcome_name:
+                continue
+            try:
+                X_num = df_aligned[col].apply(clean_numeric_value)
+                if X_num.nunique() > 1:
+                    tab = pd.crosstab(X_num, y)
+                    if (tab == 0).any().any():  # Zero cell = separation
+                        has_perfect_separation = True
+                        logger.warning(f"🔴 Perfect separation detected in: {col}")
+                        break
+            except:
+                pass
+    
+    # 🆕 NEW: AUTO-SELECT METHOD BASED ON DATA QUALITY
+    preferred_method = 'bfgs'  # Default fallback
     
     if method == 'auto':
-        preferred_method = 'firth' if HAS_FIRTH else 'bfgs'
+        if HAS_FIRTH and (has_perfect_separation or small_sample or rare_outcome):
+            preferred_method = 'firth'
+            conditions = []
+            if has_perfect_separation:
+                conditions.append("perfect_separation")
+            if small_sample:
+                conditions.append(f"small_sample(n={len(df)}<50)")
+            if rare_outcome:
+                conditions.append(f"rare_outcome({(y==1).sum()}<20)")
+            logger.info(f"✅ Auto-selected Firth's method | Conditions: {', '.join(conditions)}")
+        else:
+            preferred_method = 'bfgs'
+            logger.info("✅ Auto-selected Standard method (BFGS) | Data quality OK")
     elif method == 'firth':
         preferred_method = 'firth' if HAS_FIRTH else 'bfgs'
     elif method == 'bfgs':
@@ -472,21 +506,22 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     
     # Update Footer Note
     if preferred_method == 'firth':
-        suffix = "(Auto-detected)" if method == 'auto' else "(User Selected)"
-        method_note = f"Firth's Penalized Likelihood {suffix}"
-
+        if method == 'auto':
+            method_note = f"Firth's Penalized Likelihood (Auto-detected - data quality concern)"
+        else:
+            method_note = f"Firth's Penalized Likelihood (User Selected)"
     elif preferred_method == 'bfgs':
-        suffix = "(Auto-fallback)" if method == 'auto' else "(MLE)"
-        method_note = f"Standard Binary Logistic Regression {suffix}"
-
+        if method == 'auto':
+            method_note = f"Standard Binary Logistic Regression (Auto-selected - data quality OK)"
+        else:
+            method_note = f"Standard Binary Logistic Regression (MLE)"
     elif preferred_method == 'default':
         method_note = "Standard Binary Logistic Regression (Default Optimizer)"
-        
     else:
         method_note = "Binary Logistic Regression"
 
     # 🟢 4. ส่วน Return HTML (เพิ่มสัญลักษณ์ †)
-    logger.info("✅ Logistic regression analysis completed (n_multi=%d)", final_n_multi)  # ✅ LOG COMPLETION
+    logger.info("✅ Logistic regression analysis completed (n_multi=%d, method=%s)", final_n_multi, preferred_method)  # ✅ LOG COMPLETION
     
     return f"""
     <div id='{outcome_name}' class='table-container'>
@@ -504,7 +539,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 <th>aP-value</th>
             </tr>
         </thead>
-        <tbody>{"".join(html_rows)}</tbody>
+        <tbody>{"=".join(html_rows)}</tbody>
     </table>
     <div class='summary-box'>
         <b>Method:</b> {method_note}. Complete Case Analysis.<br>
