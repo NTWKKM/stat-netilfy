@@ -241,11 +241,14 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     - Perfect separation (outcome completely predicted by covariate)
     - High multicollinearity (r > 0.95)
     
+    Automatic One-Hot Encoding:
+    - Categorical/object columns automatically encoded
+    - drop_first=True to prevent multicollinearity
+    
     Progressive penalization fallback:
-    1. Standard CoxPH (Maximum Partial Likelihood)
-    2. Standard CoxPH with small step_size (For convergence stability)
-    3. L2 Penalized (p=0.1) - Ridge regression
-    4. L2 Penalized (p=1.0) - Strong regularization
+    1. Standard CoxPH (Maximum Partial Likelihood, p=0.0)
+    2. L2 Penalized (p=0.1) - Ridge regression
+    3. L2 Penalized (p=1.0) - Strong regularization
     """
     # 1. Basic Validation
     missing = [c for c in [duration_col, event_col, *covariate_cols] if c not in df.columns]
@@ -260,17 +263,16 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
         return None, None, data, "No events observed (all censored). CoxPH requires at least one event." 
 
     # 🟢 NEW: Automatic One-Hot Encoding for Categorical/Object columns
-    # จำเป็นมากสำหรับ Cox Regression เพื่อป้องกัน Dummy Variable Trap และจัดการกับ Text
+    # Essential for Cox Regression to handle categorical variables
     try:
-        # เลือกเฉพาะคอลัมน์ Covariates เพื่อแปลง (เก็บ Time/Event ไว้เหมือนเดิม)
         covars_only = data[covariate_cols]
-        # ตรวจสอบว่ามี column ไหนเป็น object หรือ category หรือไม่
+        # Find categorical/object columns
         cat_cols = [c for c in covariate_cols if not pd.api.types.is_numeric_dtype(data[c])]
         
         if cat_cols:
-            # ใช้ drop_first=True เพื่อป้องกัน Multicollinearity (Perfect Correlation)
+            # Use drop_first=True to prevent multicollinearity (dummy variable trap)
             covars_encoded = pd.get_dummies(covars_only, columns=cat_cols, drop_first=True)
-            # อัปเดต data และรายชื่อ covariate_cols ใหม่
+            # Update data and covariate list
             data = pd.concat([data[[duration_col, event_col]], covars_encoded], axis=1)
             covariate_cols = covars_encoded.columns.tolist()
     except Exception as e:
@@ -337,32 +339,29 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     _standardize_numeric_cols(data, covariate_cols)
     
     # 3. Fitting Strategy (Progressive Robustness)
-    # Try: Standard -> Standard(small step) -> L2(0.1) -> L2(1.0)
-    # เพิ่ม step_size เพื่อแก้ปัญหา 'delta contains nan'
-    configs = [
-        {"p": 0.0, "step": 1.0, "name": "Standard CoxPH (Maximum Partial Likelihood)"},
-        {"p": 0.0, "step": 0.5, "name": "Standard CoxPH (Step Size=0.5)"}, # ช่วยเรื่อง convergence
-        {"p": 0.0, "step": 0.2, "name": "Standard CoxPH (Step Size=0.2)"}, # ช่วยเรื่อง convergence มากขึ้น
-        {"p": 0.1, "step": 1.0, "name": "L2 Penalized CoxPH (p=0.1) - Ridge Regression"},
-        {"p": 1.0, "step": 1.0, "name": "L2 Penalized CoxPH (p=1.0) - Strong Regularization"}
+    # Try: Standard -> L2(0.1) -> L2(1.0)
+    penalizers = [
+        {"p": 0.0, "name": "Standard CoxPH (Maximum Partial Likelihood)"},
+        {"p": 0.1, "name": "L2 Penalized CoxPH (p=0.1) - Ridge Regression"},
+        {"p": 1.0, "name": "L2 Penalized CoxPH (p=1.0) - Strong Regularization"}
     ]
     
     cph = None
     last_error = None
     method_used = None
-    methods_tried = []  # 🟢 NEW: Track methods for error reporting
+    methods_tried = []  # 🟢 Track methods for error reporting
 
-    for conf in configs:
+    for conf in penalizers:
         p = conf['p']
-        step = conf['step']
         current_method = conf['name']
         
         methods_tried.append(current_method)
         
         try:
             temp_cph = CoxPHFitter(penalizer=p) 
-            # ใช้ step_size ในการ fit
-            temp_cph.fit(data, duration_col=duration_col, event_col=event_col, step_size=step)
+            # 🎫 FIX: Removed invalid step_size parameter
+            # CoxPHFitter.fit() only accepts: duration_col, event_col, show_progress
+            temp_cph.fit(data, duration_col=duration_col, event_col=event_col)
             cph = temp_cph
             method_used = current_method  # ✅ SET on success
             break  # Stop trying - success!
@@ -372,7 +371,7 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
 
     # 4. Error handling
     if cph is None:
-        # 🟢 NEW: Show which methods were tried + troubleshooting guide
+        # 🟢 Show which methods were tried + troubleshooting guide
         methods_str = "\n".join(f"  ❌ {m}" for m in methods_tried)
         error_msg = (
             f"Cox Model Convergence Failed\n\n"
@@ -381,7 +380,7 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
             f"Troubleshooting Guide:\n"
             f"  1. Verify your data passed validation checks above\n"
             f"  2. Try removing ONE covariate at a time to isolate the problem\n"
-            f"  3. For comorbid variables: Check if perfectly separated from outcome\n"
+            f"  3. For categorical variables: Check if categories separated from outcome\n"
             f"  4. Try scaling numeric variables to 0-100 or 0-1 range\n"
             f"  5. Check for rare categories in categorical variables\n"
             f"  6. Try with fewer covariates (e.g., 2-3 instead of many)\n"
@@ -397,7 +396,7 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     summary['95% CI Upper'] = np.exp(ci.iloc[:, 1])
 
     # Add Method used to results table
-    summary['Method'] = method_used # 🟢 NEW: Show which method succeeded
+    summary['Method'] = method_used # 🟢 Show which method succeeded
     summary.index.name = "Covariate"
 
     res_df = summary[['HR', '95% CI Lower', '95% CI Upper', 'p', 'Method']].rename(columns={'p': 'P-value'})
