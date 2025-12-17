@@ -238,7 +238,6 @@ if st.sidebar.button("📄 Load Example Data"):
     except Exception as e:
         logger.log_operation("example_data", "failed", error=str(e))  # ✅ LOG ERROR
         st.sidebar.error(f"Error loading example data: {e}")
-        raise
     
 # File Uploader
 upl = st.sidebar.file_uploader("Upload CSV/Excel", type=['csv', 'xlsx'])
