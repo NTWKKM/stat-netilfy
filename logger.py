@@ -29,6 +29,7 @@ from contextlib import contextmanager
 from typing import Optional, Any, Dict, List
 import time
 import traceback
+import threading
 from datetime import datetime
 
 from config import CONFIG
@@ -47,6 +48,7 @@ class PerformanceLogger:
         """
         self.logger = logger
         self.timings: Dict[str, list] = {}
+        self._lock = threading.Lock()
     
     @contextmanager
     def track_time(self, operation: str, log_level: str = "DEBUG"):
@@ -70,9 +72,10 @@ class PerformanceLogger:
             elapsed = time.time() - start_time
             
             # Store timing
-            if operation not in self.timings:
-                self.timings[operation] = []
-            self.timings[operation].append(elapsed)
+            with self._lock:
+                if operation not in self.timings:
+                    self.timings[operation] = []
+                self.timings[operation].append(elapsed)
             
             # Log timing
             log_method = getattr(self.logger, log_level.lower(), self.logger.debug)
@@ -204,10 +207,15 @@ class LoggerFactory:
             
             # Configure root logger
             root_logger = logging.getLogger()
-            root_logger.setLevel(getattr(logging, log_level))
+            numeric_level = getattr(logging, log_level.upper(), None)
+            if numeric_level is None:
+                print(f"[WARNING] Invalid log level '{log_level}', defaulting to INFO", file=sys.stderr)
+                numeric_level = logging.INFO
+            root_logger.setLevel(numeric_level)
             
-            # Clear existing handlers
-            root_logger.handlers.clear()
+            # Clear existing handlers only if re-configuring
+            if root_logger.handlers:
+                root_logger.handlers.clear()
             
             # Create context filter
             cls._context_filter = ContextFilter()
@@ -305,7 +313,9 @@ class LoggerFactory:
         except Exception as e:
             # 🟢 FIX #9: Silently fail for Streamlit config
             print(f"[DEBUG] Streamlit logging config skipped: {e}", file=sys.stderr)
-    
+
+_lock: ClassVar[threading.Lock] = threading.Lock()
+
     @classmethod
     def get_logger(cls, name: str) -> 'Logger':
         """
@@ -322,10 +332,12 @@ class LoggerFactory:
             cls.configure()
         
         # Create or return existing logger
-        if name not in cls._loggers:
-            standard_logger = logging.getLogger(name)
-            logger = Logger(standard_logger, cls._context_filter)
-            cls._loggers[name] = logger
+        with cls._lock:
+            if name not in cls._loggers:
+                standard_logger = logging.getLogger(name)
+                logger = Logger(standard_logger, cls._context_filter)
+                cls._loggers[name] = logger
+            return cls._loggers[name]
         
         return cls._loggers[name]
     
@@ -437,8 +449,6 @@ class Logger:
         
         if status.lower() == "failed":
             self.error(msg)
-        elif status.lower() == "completed":
-            self.info(msg)
         else:
             self.info(msg)
     
@@ -456,7 +466,7 @@ class Logger:
         if CONFIG.get('logging.log_data_operations'):
             self.info(
                 f"📊 {df_name}: shape={shape}, "
-                f"numeric={sum(1 for t in dtypes.values() if 'int' in t or 'float' in t)}, "
+                f"numeric={sum(1 for t in dtypes.values() if 'int' in t.lower() or 'float' in t.lower())}, "
                 f"object={sum(1 for t in dtypes.values() if 'object' in t)}"
             )
     
@@ -591,8 +601,8 @@ if __name__ == "__main__":
     print("\n[Test 7] Exception logging:")
     try:
         raise ValueError("Simulated error for testing")
-    except Exception as e:
-        logger.exception("Caught an exception during processing")
+   except Exception:
+        logger.exception(f"Caught an exception during processing: {type(e).__name__}")
 
     # Test 8: Performance summary
     print("\n[Test 8] Performance summary:")
