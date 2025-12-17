@@ -55,8 +55,8 @@ def render(df):
         cm = c1.selectbox("Correlation Coefficient:", ["Pearson", "Spearman"], key='coeff_type_tab')
         
         # 🟢 UPDATE: Auto-select default continuous variables
-        cv1_default_name = 'Lab_Calcium'
-        cv2_default_name = 'Lab_Albumin'
+        cv1_default_name = 'Lab_HbA1c'
+        cv2_default_name = 'Lab_Glucose'
         
         cv1_idx = next((i for i, c in enumerate(all_cols) if c == cv1_default_name), 0)
         cv2_idx = next((i for i, c in enumerate(all_cols) if c == cv2_default_name), min(1, len(all_cols)-1))
