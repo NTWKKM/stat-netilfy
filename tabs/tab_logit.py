@@ -156,14 +156,14 @@ def render(df, var_meta):
 """,
                                 icon="⚠️"
                             )
-                            logger.warning(f"User selected Standard method with perfect separation: {risky_vars_final}")
+                            logger.warning("User selected Standard method with perfect separation: %s", risky_vars_final)
                         
                         html = process_data_and_generate_html(final_df, target, var_meta=var_meta, method=algo)
                         st.session_state.html_output_logit = html 
                         st.components.v1.html(html, height=600, scrolling=True)
                         
                         # 🆕 NEW: Log method used
-                        logger.info(f"✅ Logit analysis completed | method={algo} | risky_vars={len(risky_vars_final)} | n={len(final_df)}")
+                        logger.info("✅ Logit analysis completed | method=%s | risky_vars=%d | n=%d", algo, len(risky_vars_final), len(final_df))
                         
                     except Exception as e:
                         st.error(f"Failed: {e}")
