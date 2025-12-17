@@ -460,12 +460,13 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
     return fig, pd.DataFrame([stats_data]), n_pre_filter, n_post_filter, None
 
 # --- 5. Report Generation 🟢 FIX: Include Plotly JS in HTML ---
-def generate_report_survival(title, elements):
+def generate_report_survival(title, elements, offline=False):
     """
     Generate HTML report with proper Plotly JS inclusion.
     
-    🟢 FIX: Include Plotly JS with first plot only for self-contained HTML.
-    This ensures graphs render correctly even when offline or with strict CSP.
+    🟢 FIX: Include Plotly JS with first plot only.
+    Set offline=True for self-contained HTML (larger file, works offline).
+    Default uses CDN (smaller file, requires internet).
     Subsequent plots reuse the same JS library (efficient).
     """
     css_style = """<style>
@@ -509,7 +510,7 @@ def generate_report_survival(title, elements):
                 # 🟢 SOLUTION: Include Plotly JS with first plot only
                 if not plotly_js_included:
                     # First plot: include 'cdn' to embed Plotly JS in HTML
-                    html_doc += d.to_html(full_html=False, include_plotlyjs='cdn')
+                    html_doc += d.to_html(full_html=False, include_plotlyjs=True if offline else 'cdn')
                     plotly_js_included = True
                 else:
                     # Subsequent plots: don't include JS (already loaded from first plot)
