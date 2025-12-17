@@ -124,7 +124,11 @@ def render(df, _var_meta):
         # Priority: 'group' > 'treatment' > 'comorbid'
         group_idx = 0
         available_cols = [c for c in all_cols if c not in [col_time, col_event]]
-        
+
+        if not available_cols:
+            st.warning("Landmark analysis requires at least one group/covariate column beyond time and event.")
+            return
+
         for priority_key in ['group', 'treatment', 'comorbid']:
             found_idx = next((i for i, c in enumerate(available_cols) if priority_key in c.lower()), None)
             if found_idx is not None:
