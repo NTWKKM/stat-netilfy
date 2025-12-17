@@ -25,7 +25,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
     # 🟢 IMPORTANT: Now 5 subtabs (added Reference & Interpretation)
     sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5 = st.tabs([
         "📈 ROC Curve & AUC", 
-        "🎲 Chi-Square & Risk Analysis (2x2) - THE PLACE FOR CHI-SQUARE!", 
+        "🎲 Chi-Square & Risk Analysis (2x2)", 
         "🤝 Agreement (Kappa)", 
         "📊 Descriptive",
         "ℹ️ Reference & Interpretation"
