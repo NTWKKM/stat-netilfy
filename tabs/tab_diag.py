@@ -21,7 +21,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
     """
     st.subheader("🧪 4. Diagnostic Tests (ROC)")
     
-    # 🟢 IMPORTANT: Removed ICC Tab - Now only 4 subtabs
+    # 🔵 IMPORTANT: Removed ICC Tab - Now only 4 subtabs
     sub_tab1, sub_tab2, sub_tab3, sub_tab4 = st.tabs([
         "📈 ROC Curve & AUC", 
         "🎲 Chi-Square & Risk Analysis (2x2) - THE PLACE FOR CHI-SQUARE!", 
@@ -37,13 +37,34 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
     # --- ROC ---
     with sub_tab1:
         st.markdown("##### ROC Curve Analysis")
-        st.info("""
-    **💡 Guide:** Evaluates the performance of a **continuous diagnostic test** (e.g., 'lab value' or 'risk index') against a **binary Gold Standard** (e.g., 'disease' or 'no disease').
+        
+        with st.expander("💡 Guide: ROC Curve Analysis", expanded=False):
+            st.markdown("""
+            **What is ROC Analysis?**
+            
+            Evaluates the performance of a **continuous diagnostic test** (e.g., 'lab value' or 'risk index') against a **binary Gold Standard** (e.g., 'disease' or 'no disease').
 
-    * **AUC (Area Under Curve):** Measures overall test discrimination ability (0.5 = random guess, 1.0 = perfect test).
-    * **Youden Index (J):** Identifies the **optimal cut-off point** by maximizing the difference between Sensitivity and (1 - Specificity).
-    * **P-value:** Tests the null hypothesis that the AUC is equal to 0.5 (i.e., the test performs better than chance).
-        """)
+            **Key Metrics:**
+            * **AUC (Area Under Curve):** Measures overall test discrimination ability (0.5 = random guess, 1.0 = perfect test).
+            * **Youden Index (J):** Identifies the **optimal cut-off point** by maximizing the difference between Sensitivity and (1 - Specificity).
+            * **P-value:** Tests the null hypothesis that the AUC is equal to 0.5 (i.e., the test performs better than chance).
+            
+            **When to Use:**
+            - Evaluating diagnostic test performance
+            - Finding optimal cut-off thresholds
+            - Comparing multiple diagnostic tests
+            
+            **Interpretation:**
+            - AUC = 0.9-1.0: Excellent test ✅
+            - AUC = 0.8-0.9: Good test ✔️
+            - AUC = 0.7-0.8: Fair test ⚠️
+            - AUC < 0.7: Poor test ❌
+            
+            **Common Mistakes:**
+            - Using non-continuous predictor (should be numeric score)
+            - Not validating on independent test set
+            - Ignoring confidence intervals
+            """)
         
         rc1, rc2, rc3, rc4 = st.columns(4)
         
@@ -105,8 +126,12 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
     # --- Chi-Square & Risk Analysis (2x2) ---
     with sub_tab2:
         st.markdown("##### 🎲 Chi-Square & Risk Analysis (2x2 Contingency Table)")
-        st.info("""
-            **💡 Guide - THE HOME OF CHI-SQUARE ANALYSIS:** Used to analyze the association between **two categorical variables**.
+        
+        with st.expander("💡 Guide: Chi-Square & Risk Analysis (2x2)", expanded=False):
+            st.markdown("""
+            **What is Chi-Square Analysis?**
+            
+            THE HOME OF CHI-SQUARE! Used to analyze the association between **two categorical variables**.
             
             ### 📊 What You Get from 2x2 Tables:
             
@@ -128,7 +153,18 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
             **Variable Selection:**
             * **Variable 1 (Row):** Typically the **Exposure**, **Risk Factor**, **Intervention**, or **Test Result**
             * **Variable 2 (Column):** Typically the **Outcome**, **Event**, **Gold Standard**, or **Disease Status**
-        """)
+            
+            **When to Use:**
+            - Testing association between two categorical variables
+            - 2x2 tables: Cohort studies (RR), Case-control studies (OR)
+            - Diagnostic test evaluation (Sensitivity/Specificity)
+            
+            **Common Mistakes:**
+            - Using Chi-Square when expected count < 5 (use Fisher's Exact instead)
+            - Confusing OR with RR (use RR for cohort studies)
+            - Not interpreting confidence intervals
+            - Assuming causation from association
+            """)
 
         c1, c2, c3 = st.columns(3)
         
@@ -166,7 +202,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                 1. A sorted list of unique non-null string values.
                 2. The default index for selection (0, or index of '1'/'0').
             """
-            # 🟢 NOTE: Need to handle the case where the column might be empty after dropna
+            # 🔵 NOTE: Need to handle the case where the column might be empty after dropna
             # Convert to string and drop NA values before getting unique values
             unique_vals = [str(x) for x in df[col_name].dropna().unique()]
             unique_vals.sort()
@@ -221,7 +257,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
 
         if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run_diag', disabled=not inputs_ok):
             
-            # --- 🟢 จุดที่ 3 เพิ่มตรงนี้ครับ ---
+            # --- 🔵 จุดที่ 3 เพิ่มตรงนี้ครับ ---
             # CodeRabbit เตือนว่า selectbox คืนค่าเป็น String (เช่น "1") 
             # แต่ในตารางอาจเป็น Int (เช่น 1) ทำให้เทียบกันไม่ติด
             # เราจึงต้องสร้างตารางจำลอง (df_calc) และแปลงข้อมูลเป็น String ก่อนส่งไปคำนวณ
@@ -239,14 +275,14 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
             )
             
             if tab is not None:
-                # 🟢 UPDATE 1: จัดการข้อความสถานะ/หมายเหตุ (Warning/Note)
+                # 🔵 UPDATE 1: จัดการข้อความสถานะ/หมายเหตุ (Warning/Note)
                 # เมื่อ tab is not None, msg จะมีแค่ข้อความเตือน (Warning/Note) หรือเป็นสตริงว่างเปล่าเท่านั้น
                 if msg.strip():
                     status_text = f"Note: {msg.strip()}"
                 else:
                     status_text = "Analysis Status: Completed successfully."
                 
-                # 🟢 FIX: แยกข้อความและลบแท็ก HTML (<b>, <br>) ออก
+                # 🔵 FIX: แยกข้อความและลบแท็ก HTML (<b>, <br>) ออก
                 # และใช้ตัวแปร rep_elements ให้สอดคล้องกับโค้ดส่วนอื่น
                 rep_elements = [ 
                     {'type': 'text', 'data': "Analysis: Diagnostic Test / Chi-Square"},
@@ -257,7 +293,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                     {'type': 'contingency_table', 'header': 'Contingency Table', 'data': tab, 'outcome_col': v2},
                 ]
                 
-                # 🟢 NOTE: ใช้โครงสร้างเดิมในการเพิ่ม Statistics และ Risk/Effect Measures
+                # 🔵 NOTE: ใช้โครงสร้างเดิมในการเพิ่ม Statistics และ Risk/Effect Measures
                 if stats is not None:
                     # เดิม: rep_elements.append({'type': 'table', 'header': 'Statistics', 'data': stats})
                     rep_elements.append({'type': 'table', 'header': 'Statistics', 'data': stats})
@@ -280,19 +316,35 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
     # --- Agreement (Kappa) ---
     with sub_tab3:
         st.markdown("##### Agreement Analysis (Cohen's Kappa)")
-        st.info("""
-             **💡 Guide:** Evaluates the **agreement** between two raters or two methods classifying items into categories.
-             * **Cohen's Kappa (κ):** Measures agreement adjusting for chance. 
-             * **Interpretation:** 
-                 * < 0: Poor
-                 * 0.01 - 0.20: Slight
-                 * 0.21 - 0.40: Fair
-                 * 0.41 - 0.60: Moderate
-                 * 0.61 - 0.80: Substantial
-                 * 0.81 - 1.00: Perfect
+        
+        with st.expander("💡 Guide: Agreement Analysis (Cohen's Kappa)", expanded=False):
+            st.markdown("""
+            **What is Cohen's Kappa?**
+            
+            Evaluates the **agreement** between two raters or two methods classifying items into categories.
+            
+            **Cohen's Kappa (κ):** Measures agreement adjusting for chance. 
+            
+            **Interpretation (Landis & Koch, 1977):**
+            * < 0: Poor
+            * 0.01 - 0.20: Slight
+            * 0.21 - 0.40: Fair
+            * 0.41 - 0.60: Moderate
+            * 0.61 - 0.80: Substantial
+            * 0.81 - 1.00: Perfect
+            
+            **When to Use:**
+            - Inter-rater reliability assessment
+            - Comparing two diagnostic methods
+            - Test-retest reliability
+            
+            **Common Mistakes:**
+            - Using Kappa for continuous data (should use ICC instead)
+            - Not checking if categories are the same for both raters
+            - Interpreting raw agreement % without adjusting for chance
          """)
         
-        # 🟢 เพิ่ม Logic การเลือกอัตโนมัติ (Auto-select)
+        # 🔵 เพิ่ม Logic การเลือกอัตโนมัติ (Auto-select)
         # all_cols already defined above in render()
         
         # 1. Logic หาคอลัมน์ที่น่าจะเป็น Rater A
@@ -318,7 +370,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
             kv2_default_idx = min(kv1_default_idx + 1, len(all_cols) - 1)
             
         k1, k2 = st.columns(2)
-        # 🟢 FIX BUG: ใช้ index ที่คำนวณได้
+        # 🔵 FIX BUG: ใช้ index ที่คำนวณได้
         kv1 = k1.selectbox("Rater/Method 1:", all_cols, index=kv1_default_idx, key='kappa_v1_diag')
         kv2 = k2.selectbox("Rater/Method 2:", all_cols, index=kv2_default_idx, key='kappa_v2_diag')
         if kv1 == kv2:
@@ -351,11 +403,30 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
     # --- Descriptive ---
     with sub_tab4:
         st.markdown("##### Descriptive Statistics")
-        st.info("""
-            **💡 Guide:** Summarizes the distribution of a single variable.
-            * **Numeric:** Mean, SD, Median, Min, Max, Quartiles.
-            * **Categorical:** Frequency Counts and Percentages.
+        
+        with st.expander("💡 Guide: Descriptive Statistics", expanded=False):
+            st.markdown("""
+            **What is Descriptive Statistics?**
+            
+            Summarizes the distribution of a single variable.
+            
+            **For Numeric Variables:**
+            * Mean, SD, Median, Min, Max, Quartiles (Q1, Q3)
+            
+            **For Categorical Variables:**
+            * Frequency Counts and Percentages
+            
+            **When to Use:**
+            - Understanding data distribution before analysis
+            - Data quality check (outliers, missing values)
+            - Reporting baseline characteristics
+            
+            **Common Mistakes:**
+            - Reporting Mean ± SD for non-normal data (use Median ± IQR)
+            - Not checking for outliers
+            - Ignoring missing data patterns
         """)
+        
         dv = st.selectbox("Select Variable:", all_cols, key='desc_v_diag')
         run_col, dl_col = st.columns([1, 1])
         if 'html_output_desc' not in st.session_state: st.session_state.html_output_desc = None
