@@ -213,10 +213,11 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                     tab = pd.crosstab(X_num, y)
                     if (tab == 0).any().any():  # Zero cell = separation
                         has_perfect_separation = True
-                        logger.warning(f"🔴 Perfect separation detected in: {col}")
+                        logger.warning("🔴 Perfect separation detected in: %s", col)
                         break
-            except:
-                pass
+            except (ValueError, TypeError, KeyError) as e:
+                logger.debug("Skipping separation check for %s: %s", col, e)
+                continue
     
     # 🆕 NEW: AUTO-SELECT METHOD BASED ON DATA QUALITY
     preferred_method = 'bfgs'  # Default fallback
@@ -231,7 +232,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 conditions.append(f"small_sample(n={len(df)}<50)")
             if rare_outcome:
                 conditions.append(f"rare_outcome({(y==1).sum()}<20)")
-            logger.info(f"✅ Auto-selected Firth's method | Conditions: {', '.join(conditions)}")
+            logger.info("✅ Auto-selected Firth's method | Conditions: %s", ', '.join(conditions))
         else:
             preferred_method = 'bfgs'
             logger.info("✅ Auto-selected Standard method (BFGS) | Data quality OK")
@@ -507,14 +508,14 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     # Update Footer Note
     if preferred_method == 'firth':
         if method == 'auto':
-            method_note = f"Firth's Penalized Likelihood (Auto-detected - data quality concern)"
+            method_note = "Firth's Penalized Likelihood (Auto-detected - data quality concern)"
         else:
-            method_note = f"Firth's Penalized Likelihood (User Selected)"
+            method_note = "Firth's Penalized Likelihood (User Selected)"
     elif preferred_method == 'bfgs':
         if method == 'auto':
-            method_note = f"Standard Binary Logistic Regression (Auto-selected - data quality OK)"
+            method_note = "Standard Binary Logistic Regression (Auto-selected - data quality OK)"
         else:
-            method_note = f"Standard Binary Logistic Regression (MLE)"
+            method_note = "Standard Binary Logistic Regression (MLE)"
     elif preferred_method == 'default':
         method_note = "Standard Binary Logistic Regression (Default Optimizer)"
     else:
@@ -539,7 +540,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 <th>aP-value</th>
             </tr>
         </thead>
-        <tbody>{"=".join(html_rows)}</tbody>
+        <tbody>{"\n".join(html_rows)}</tbody>
     </table>
     <div class='summary-box'>
         <b>Method:</b> {method_note}. Complete Case Analysis.<br>
