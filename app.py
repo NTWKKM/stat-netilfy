@@ -26,12 +26,12 @@ logger = get_logger(__name__)
 
 # Initialize logging system (once at app start)
 @st.cache_resource(show_spinner=False)
-def _init_logging():
+def _init_logging() -> bool:
     LoggerFactory.configure()
+    get_logger(__name__).info("📱 Streamlit app started")
     return True
 
 _init_logging()
-logger.info("📱 Streamlit app started")
 
 st.title(f"🏥 {CONFIG.get('ui.page_title', 'Medical Statistical Tool')}")
 
@@ -227,12 +227,13 @@ if st.sidebar.button("📄 Load Example Data"):
 # File Uploader
 upl = st.sidebar.file_uploader("Upload CSV/Excel", type=['csv', 'xlsx'])
 if upl:
+    data_bytes = upl.getvalue()
+    file_size_mb = len(data_bytes) / 1e6
     logger.log_operation("file_upload", "started",   # ✅ LOG START
                        filename=upl.name, 
-                       size=f"{len(upl.getvalue())/1e6:.1f}MB")
+                       size=f"{file_size_mb:.1f}MB")
     
     try:
-        data_bytes = upl.getvalue()
         file_sig = (upl.name, hashlib.sha256(data_bytes).hexdigest())
         
         if st.session_state.get('uploaded_file_sig') != file_sig:
