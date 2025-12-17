@@ -332,8 +332,11 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                 else:
                     nnt_label = "NNT/NNH"
                 
-                # Build Risk Metrics Table
+                # Build Risk Metrics Table with SECTION HEADERS
                 risk_data = [
+                    # ===== RISK METRICS SECTION =====
+                    {"Metric": "RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)", 
+                     "Value": "", "95% CI": "", "Interpretation": "Use for cohort/case-control studies"},
                     {"Metric": "Risk in Exposed (R1)", "Value": f"{risk_exp:.4f}", 
                      "95% CI": "-", "Interpretation": f"Risk of '{label_event}' in {label_exp}"},
                     {"Metric": "Risk in Unexposed (R0)", "Value": f"{risk_unexp:.4f}", 
@@ -349,8 +352,9 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                     {"Metric": "Odds Ratio (OR)", "Value": f"{or_value:.4f}", 
                      "95% CI": f"({or_ci_lower:.4f} - {or_ci_upper:.4f})" if np.isfinite(or_ci_lower) else "N/A",
                      "Interpretation": f"Odds of '{label_event}' ({label_exp} vs {label_unexp})"},
-                    # --- DIAGNOSTIC METRICS HEADER (MERGED & STYLED) ---
-                    {"Metric": "DIAGNOSTIC METRICS (Applies if using diagnostic/screening context)", "Value": "", "95% CI": "", "Interpretation": ""},
+                    # ===== DIAGNOSTIC METRICS SECTION =====
+                    {"Metric": "DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)", 
+                     "Value": "", "95% CI": "", "Interpretation": "Use for diagnostic/screening studies"},
                     {"Metric": "Sensitivity", "Value": f"{sensitivity:.4f}", 
                      "95% CI": f"({se_ci_lower:.4f} - {se_ci_upper:.4f})",
                      "Interpretation": "P(Test+ | Disease+) - True Positive Rate"},
@@ -791,10 +795,14 @@ def generate_report(title, elements):
             is_stats_table = ('Statistic' in data.columns and 'Value' in data.columns 
                               and data.index.name is None)
             html_table = data.to_html(index=not is_stats_table, classes='report-table', escape=True)
-            # Add section-header class to diagnostic metrics row
+            # Add section-header class to section headers
             html_table = html_table.replace(
-                '<td>DIAGNOSTIC METRICS (Applies if using diagnostic/screening context)</td>',
-                '<td class="section-header">DIAGNOSTIC METRICS (Applies if using diagnostic/screening context)</td>'
+                '<td>RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)</td>',
+                '<td class="section-header">RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)</td>'
+            )
+            html_table = html_table.replace(
+                '<td>DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)</td>',
+                '<td class="section-header">DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)</td>'
             )
             html += html_table
         
