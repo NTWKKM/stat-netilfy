@@ -314,7 +314,7 @@ class LoggerFactory:
             # 🟢 FIX #9: Silently fail for Streamlit config
             print(f"[DEBUG] Streamlit logging config skipped: {e}", file=sys.stderr)
 
-_lock: ClassVar[threading.Lock] = threading.Lock()
+    _lock: ClassVar[threading.Lock] = threading.Lock()
 
     @classmethod
     def get_logger(cls, name: str) -> 'Logger':
