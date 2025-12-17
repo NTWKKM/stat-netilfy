@@ -157,7 +157,7 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
 # --- 2. Nelson-Aalen (With Robust CI) 🟢 FIX NA CI ---
 def fit_nelson_aalen(df, duration_col, event_col, group_col):
     """
-    Fit Nelson–Aalen cumulative hazard curves optionally stratified by a grouping column and return a Plotly figure plus group-level statistics.
+    Fit Nelson-Aalen cumulative hazard curves optionally stratified by a grouping column and return a Plotly figure plus group-level statistics.
     
     Drops rows with missing duration or event values. If a group column is provided, rows with missing group values are dropped and curves are plotted per group; otherwise a single overall curve is plotted. When the fitter provides a confidence interval with at least two columns, a shaded 95% CI is added for each group.
     
