@@ -113,7 +113,7 @@ def render(df, _var_meta):
         c_slide, c_num = st.columns([3, 1])
         with c_slide:
             # ใช้ st.session_state.landmark_val เป็น default value
-            st.slider("ైUse Slider:", min_value=0.0, max_value=float(max_t) * 0.99, key='lm_slider_widget', value=min(st.session_state.landmark_val, float(max_t) * 0.99), on_change=update_from_slider, label_visibility="collapsed")
+            st.slider("Use Slider:", min_value=0.0, max_value=float(max_t) * 0.99, key='lm_slider_widget', value=min(st.session_state.landmark_val, float(max_t) * 0.99), on_change=update_from_slider, label_visibility="collapsed")
         with c_num:
             # ใช้ st.session_state.landmark_val เป็น default value
             st.number_input("Enter Value:", min_value=0.0, max_value=float(max_t) * 0.99, key='lm_number_widget', value=min(st.session_state.landmark_val, float(max_t) * 0.99), on_change=update_from_number, step=1.0, label_visibility="collapsed")
