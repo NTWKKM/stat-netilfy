@@ -156,7 +156,11 @@ def render(df, var_meta):
 
             # PSM Settings
             with st.expander("⚙️ Advanced Settings"):
-                caliper = st.slider("Caliper Width (SD of Logit):", 0.05, 1.0, 0.5, 0.05)
+               caliper = st.slider(
+                   "Caliper Width (SD of Logit):", 
+                   0.05, 1.0, 0.5, 0.05,
+                   help="Maximum distance for matching. Higher values allow more matches but may reduce balance. Common range: 0.1-0.5."
+                   )
             
             # --- 3. Run Analysis ---
             if st.button("🚀 Run Matching", key='btn_psm'):
@@ -208,9 +212,13 @@ def render(df, var_meta):
 
                             with t_res3:
                                 if outcome_col != "None":
-                                    st.markdown(f"##### Outcome Comparison: {outcome_col}")
-                                    res_stats = df_matched.groupby(final_treat_col)[outcome_col].mean()
-                                    st.write(res_stats)
+                                    # Validate outcome is numeric
+                                    if not pd.api.types.is_numeric_dtype(df_matched[outcome_col]):
+                                        st.warning(f"⚠️ Outcome variable '{outcome_col}' is not numeric. Comparison skipped.")
+                                    else:
+                                        st.markdown(f"##### Outcome Comparison: {outcome_col}")
+                                        res_stats = df_matched.groupby(final_treat_col)[outcome_col].mean()
+                                        st.write(res_stats)
                                     
                                     st.info("💡 Note: This is a simple comparison. For statistical significance, use the Hypothesis Testing tab with the 'Matched Dataset'.")
                                 else:
