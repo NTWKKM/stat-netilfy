@@ -4,13 +4,13 @@ import survival_lib
 
 def render(df, _var_meta):
     """
-    Render a Streamlit UI for fitting a time-dependent (start-stop) Cox proportional hazards model.
+    Render Streamlit controls to configure, fit, and report a time-dependent (start-stop) Cox proportional hazards model.
     
-    Displays controls to select ID, start time, stop time, event indicator, and time-dependent covariates; validates that at least one covariate is selected and that the selected time/event/covariate columns are numeric, shows a spinner while fitting, calls survival_lib.fit_cox_time_varying, and presents model results or errors.
+    Validates that at least one covariate is selected and that the selected start, stop, event, and covariate columns are numeric; calls survival_lib.fit_cox_time_varying to fit the model; displays results or errors in the UI; and stores a generated HTML report in st.session_state["html_output_adv_survival"] for download.
     
     Parameters:
         df (pandas.DataFrame): Input dataset in long (start-stop) format containing ID, start, stop, event, and covariate columns.
-        _var_meta (Any): Optional variable metadata (not required by the UI; provided for compatibility with the tabs API).
+        _var_meta (Any): Optional variable metadata provided for compatibility with the tabs API (not used by the UI).
     """
     st.subheader("⏳ Advanced Survival Analysis")
     st.info("""
@@ -33,7 +33,7 @@ def render(df, _var_meta):
     
     start_col = c2.selectbox("▶️ Start Time:", [c for c in all_cols if c != id_col], key='td_start')
     stop_col = c3.selectbox("⏹️ Stop Time:", [c for c in all_cols if c not in [id_col, start_col]], key='td_stop')
-    event_col = c4.selectbox("💀 Event (at Stop):", [c for c in all_cols if c not in [id_col, start_col, stop_col]], key='td_event')
+    event_col = c4.selectbox("💫 Event (at Stop):", [c for c in all_cols if c not in [id_col, start_col, stop_col]], key='td_event')
         
     covs = st.multiselect("Select Time-Dependent Covariates:", 
                              [c for c in all_cols if c not in [id_col, start_col, stop_col, event_col]], 
@@ -82,13 +82,97 @@ def render(df, _var_meta):
                     # Store in session state
                     st.session_state["html_output_adv_survival"] = html_report
     
-    # [แก้ไข] ปรับการเช็ค session state ให้สั้นลง (ตามคำแนะนำ Nitpick)
+    # [แก้ไข] ปรับการเชค session state ให้สั้นลง (ตามคำแนณ Nitpick)
     html_output = st.session_state.get("html_output_adv_survival")
     if html_output:
         st.download_button(
             label="📥 Download Full Report (HTML)",
-            data=html_output,  # ใช้ตัวแปรที่ดึงมาแล้ว
+            data=html_output,  # ใช้ตัวแปรที่ดึงมาแลว
             file_name="adv_survival_report.html",
             mime="text/html",
             key="download_adv_survival"
         )
+    
+    # --- NEW: Reference & Interpretation ---
+    st.markdown("---")
+    with st.expander("📚 Reference & Interpretation"):
+        st.markdown("""
+        ### Time-Dependent Cox Regression Guide
+        
+        **When to Use:**
+        - Variables that change over time
+        - Long-format data (start-stop rows)
+        - Time-varying confounders
+        - Complex follow-up scenarios
+        
+        **vs. Regular Cox:**
+        | Aspect | Regular Cox | Time-Dependent Cox |
+        |--------|-------------|-------------------|
+        | **Covariates** | Constant over time | Change at transitions |
+        | **Data Format** | Wide (one row/person) | Long (start-stop rows) |
+        | **Use Case** | Baseline predictors | Dynamic variables |
+        | **Example** | Age, gender (fixed) | Drug dosage, treatment stage (changing) |
+        
+        ---
+        
+        ### Data Format Requirements
+        
+        **Must be LONG Format (Start-Stop):**
+        ```
+        ID | Start | Stop | Event | Covariate_Value
+        1  |   0   |  30  |   0   |      5
+        1  |  30   |  60  |   1   |      7          <- Same ID, value changes
+        1  |  60   |  90  |   0   |      8
+        2  |   0   |  45  |   0   |      6
+        2  |  45   |  100 |   1   |      9
+        ```
+        
+        **Each row represents:**
+        - Time interval [Start, Stop)
+        - Covariate value during that interval
+        - Event status at Stop time
+        
+        ---
+        
+        ### Key Concepts
+        
+        **Time-Dependent:**
+        - Covariate value updates at transitions
+        - Captures dynamic effect over follow-up
+        - Robust to non-constant confounding ✅
+        
+        **Robust to:**
+        - Changing treatment doses
+        - Protocol changes mid-study
+        - Varying medication compliance
+        - Evolving risk factors
+        
+        **Interpretation:**
+        - Same as regular Cox (HR, p-value)
+        - HR reflects effect per unit change in covariate
+        - Time-averaged effect across person-time
+        
+        ---
+        
+        ### Common Mistakes ❌
+        
+        - **Using wide-format instead of long-format** → Use long-format (start-stop)
+        - **Not updating covariate values** → Update at each transition
+        - **Forgetting to sort by ID, start time** → Sort for correct intervals
+        - **Ignoring gap/overlap in intervals** → Check [Start, Stop] continuity
+        - **Assuming constant when should be time-varying** → Use time-dep Cox if changes
+        
+        ---
+        
+        ### Example Interpretation
+        
+        **Model Output:**
+        - Variable: Drug_Dose (time-varying)
+        - HR = 1.05 (95% CI: 1.02 - 1.08)
+        - p = 0.001
+        
+        **Interpretation:**
+        For every 1-unit increase in drug dose during a follow-up interval, the hazard increases by 5%, controlling for time effects. This association is statistically significant (p < 0.05). ✅
+        
+        **Note:** Effects are averaged across the entire follow-up, accounting for dose changes over time.
+        """)

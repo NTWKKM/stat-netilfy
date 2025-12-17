@@ -7,28 +7,30 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
     """
     Render Streamlit UI panels for diagnostic tests and statistics.
     
-    Displays five interactive tabs for common diagnostic analyses:
+    Displays five interactive tabs for diagnostic analyses:
     - ROC Curve & AUC
-    - Chi-Square & Risk (2x2) with RR/OR/NNT
+    - Chi-Square & Risk (2x2) with RR/OR/NNT - THE CHI-SQUARE HOME
     - Agreement (Cohen's Kappa)
-    - Reliability (Intraclass Correlation Coefficient, ICC)
     - Descriptive statistics
+    - Reference & Interpretation
     
-    Each tab provides controls for selecting columns from `df`, running the analysis, viewing results as embedded HTML, and downloading an HTML report. Generated report HTML is stored in Streamlit session state under keys: `html_output_roc`, `html_output_chi`, `html_output_kappa`, `html_output_icc`, and `html_output_desc`.
+    Each tab provides controls for selecting columns from `df`, running the analysis, viewing results as embedded HTML, and downloading an HTML report. Generated report HTML is stored in Streamlit session state under keys: `html_output_roc`, `html_output_chi`, `html_output_kappa`, and `html_output_desc`.
     
     Parameters:
         df (pandas.DataFrame): Input dataset containing the variables to analyze; column names are used for UI selections.
         _var_meta (Any): Metadata about variables (unused for visible output selection unless integrated by UI); present for potential future use.
     """
-    st.subheader("2. Diagnostic Test & Statistics")
-    # 🟢 UPDATE: เพิ่ม Tab "Reliability (ICC)" เป็น Tab ที่ 4
+    st.subheader("🧪 4. Diagnostic Tests (ROC)")
+    
+    # 🟢 IMPORTANT: Now 5 subtabs (added Reference & Interpretation)
     sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5 = st.tabs([
         "📈 ROC Curve & AUC", 
-        "🎲 Chi-Square & Risk-RR,OR,NNT (Categorical)", 
+        "🎲 Chi-Square & Risk Analysis (2x2)", 
         "🤝 Agreement (Kappa)", 
-        "📏 Reliability (ICC)", # 🟢 NEW TAB
-        "📊 Descriptive"
+        "📊 Descriptive",
+        "ℹ️ Reference & Interpretation"
     ])
+    
     all_cols = df.columns.tolist()
     if not all_cols:
         st.error("Dataset has no columns to analyze.")
@@ -38,7 +40,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
     with sub_tab1:
         st.markdown("##### ROC Curve Analysis")
         st.info("""
-    **💡 Guide:** Evaluates the performance of a **continuous diagnostic test** (e.g., 'lab value' or 'risk index') against a **binary Gold Standard** (e.g., 'cancer' or 'not cancer').
+    **💡 Guide:** Evaluates the performance of a **continuous diagnostic test** (e.g., 'lab value' or 'risk index') against a **binary Gold Standard** (e.g., 'disease' or 'no disease').
 
     * **AUC (Area Under Curve):** Measures overall test discrimination ability (0.5 = random guess, 1.0 = perfect test).
     * **Youden Index (J):** Identifies the **optimal cut-off point** by maximizing the difference between Sensitivity and (1 - Specificity).
@@ -102,17 +104,32 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
             else:
                 st.button("📥 Download Report", disabled=True, key='ph_roc_diag')
 
-    # --- Chi-Square ---
+    # --- Chi-Square & Risk Analysis (2x2) ---
     with sub_tab2:
-        st.markdown("##### Chi-Square Test & Risk Analysis")
+        st.markdown("##### 🎲 Chi-Square & Risk Analysis (2x2 Contingency Table)")
         st.info("""
-            **💡 Guide:** Used to analyze the association between **two categorical variables**.
+            **💡 Guide - THE HOME OF CHI-SQUARE ANALYSIS:** Used to analyze the association between **two categorical variables**.
+            
+            ### 📊 What You Get from 2x2 Tables:
+            
+            **Association Test:**
             * **Chi-Square Test:** Determines if there is a significant association between the variables (P-value).
-            * **Risk/Odds Ratio:** For **2x2 tables**, the tool provides **automatically calculated** metrics: **Risk Ratio (RR)**, **Odds Ratio (OR)**, and **Number Needed to Treat (NNT)**.
+            * **Method Options:** Pearson (standard), Yates' correction (conservative), Fisher's Exact Test (for small samples)
+            
+            **Effect/Risk Metrics (automatically calculated for 2x2):**
+            * **Odds Ratio (OR):** Odds of outcome in exposed vs unexposed groups
+            * **Risk Ratio (RR):** Risk of outcome in exposed vs unexposed (for cohort studies)
+            * **Number Needed to Treat (NNT):** How many patients to treat to prevent 1 outcome
+            * **Confidence Intervals (95% CI):** For all metrics
+            
+            **Diagnostic Metrics (if applicable context):**
+            * **Sensitivity/Specificity:** Test accuracy
+            * **PPV/NPV:** Predictive values
+            * **LR+/LR-:** Likelihood ratios
             
             **Variable Selection:**
-            * **Variable 1 (Row):** Typically the **Exposure**, **Risk Factor**, or **Intervention**.
-            * **Variable 2 (Column):** Typically the **Outcome** or **Event** of interest.
+            * **Variable 1 (Row):** Typically the **Exposure**, **Risk Factor**, **Intervention**, or **Test Result**
+            * **Variable 2 (Column):** Typically the **Outcome**, **Event**, **Gold Standard**, or **Disease Status**
         """)
 
         c1, c2, c3 = st.columns(3)
@@ -135,22 +152,16 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         )
         
         # Positive Label Selectors
-        # from ._common import get_pos_label_settings <-- to fix after wthy this code not work properly
         def get_pos_label_settings(df: pd.DataFrame, col_name: str) -> Tuple[List[str], int]:
             """
-            Helper function to get unique values from a column, convert them to strings, 
-            sort them, and determine a default index (preferring '1', then '0').
-
-            Handles the case where the column might be empty after dropna.
-
-            Args:
-                df: The DataFrame containing the data.
-                col_name: The name of the column to process.
-
+            Return sorted non-null unique string values from a DataFrame column and a sensible default selection index.
+            
+            Parameters:
+                df (pd.DataFrame): DataFrame containing the column.
+                col_name (str): Name of the column to extract values from.
+            
             Returns:
-                A tuple containing:
-                1. A sorted list of unique non-null string values.
-                2. The default index for selection (0, or index of '1'/'0').
+                tuple(list[str], int): A tuple where the first element is a sorted list of the column's unique non-null values as strings, and the second element is the default index to select (index of '1' if present, otherwise index of '0' if present, otherwise 0).
             """
             # 🟢 NOTE: Need to handle the case where the column might be empty after dropna
             # Convert to string and drop NA values before getting unique values
@@ -263,7 +274,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
             else: 
                 st.button("📥 Download Report", disabled=True, key='ph_chi_diag')
        
-    # --- 🟢 NEW: Agreement (Kappa) ---
+    # --- Agreement (Kappa) ---
     with sub_tab3:
         st.markdown("##### Agreement Analysis (Cohen's Kappa)")
         st.info("""
@@ -334,55 +345,8 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
             else:
                 st.button("📥 Download Report", disabled=True, key='ph_kappa_diag')
 
-    # --- 🟢 NEW: Reliability (ICC) ---
+    # --- Descriptive ---
     with sub_tab4:
-        st.markdown("##### Reliability Analysis (Intraclass Correlation Coefficient - ICC)")
-        st.info("""
-            **💡 Guide:** Evaluates the reliability/agreement between 2 or more raters/methods for **Numeric/Continuous** variables.
-            * **ICC(2,1) Absolute Agreement:** Use when you care if the absolute scores are the same (e.g., Method A vs Method B).
-            * **ICC(3,1) Consistency:** Use when you care if the ranking is consistent, even if absolute scores differ (e.g., systematic bias).
-        """)
-        
-        # 🟢 Auto-select เฉพาะ Numeric Columns เพื่อความปลอดภัย
-        numeric_cols = df.select_dtypes(include="number").columns.tolist()
-        
-        # Auto-select columns with 'measurement' or 'rater' or 'machine'
-        default_icc_cols = [c for c in numeric_cols if any(k in c.lower() for k in ['measure', 'machine', 'rater', 'score', 'read'])]
-        if len(default_icc_cols) < 2:
-            default_icc_cols = numeric_cols[:2] if len(numeric_cols) >= 2 else []
-        
-        icc_cols = st.multiselect("Select Variables (Raters/Methods):", numeric_cols, default=default_icc_cols, key='icc_vars_diag')
-        
-        icc_run, icc_dl = st.columns([1, 1])
-        if 'html_output_icc' not in st.session_state: 
-            st.session_state.html_output_icc = None
-        
-        if icc_run.button("📏 Calculate ICC", key='btn_icc_run'):
-            if len(icc_cols) < 2:
-                st.error("Please select at least 2 numeric columns for ICC.")
-                st.stop()
-            res_df, err, anova_df = diag_test.calculate_icc(df, icc_cols)
-            
-            if err:
-                st.error(err)
-            else:
-                rep_elements = [
-                    {'type': 'text', 'data': f"<b>ICC Analysis:</b> {', '.join(icc_cols)}"},
-                    {'type': 'table', 'header': 'ICC Results (Single Measures)', 'data': res_df},
-                    {'type': 'table', 'header': 'ANOVA Table (Reference)', 'data': anova_df}
-                ]
-                html = diag_test.generate_report("ICC Analysis", rep_elements)
-                st.session_state.html_output_icc = html
-                st.components.v1.html(html, height=400, scrolling=True)
-                
-        with icc_dl:
-            if st.session_state.html_output_icc:
-                st.download_button("📥 Download Report", st.session_state.html_output_icc, "icc_report.html", "text/html", key='dl_icc_diag')
-            else:
-                st.button("📥 Download Report", disabled=True, key='ph_icc_diag')
-                
-    # --- Descriptive (ย้ายมาเป็น sub_tab5) ---
-    with sub_tab5:
         st.markdown("##### Descriptive Statistics")
         st.info("""
             **💡 Guide:** Summarizes the distribution of a single variable.
@@ -406,3 +370,109 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                 st.download_button("📥 Download Report", st.session_state.html_output_desc, "desc.html", "text/html", key='dl_desc_diag')
             else:
                 st.button("📥 Download Report", disabled=True, key='ph_desc_diag')
+
+    # --- Reference & Interpretation (NEW) ---
+    with sub_tab5:
+        st.markdown("##### 📚 Quick Reference: Diagnostic Tests")
+        
+        st.info("""
+        **When to Use Which Test:**
+        
+        | Test | Variables | Purpose | Example |
+        |------|-----------|---------|----------|
+        | **ROC AUC** | 1 continuous + 1 binary | Diagnostic test performance | Blood glucose vs diabetes diagnosis |
+        | **Chi-Square** | 2 categorical | Association between categories | Treatment group vs Outcome (Yes/No) |
+        | **Kappa** | 2 categorical (same categories) | Agreement between raters | Doctor A diagnosis vs Doctor B diagnosis |
+        | **Descriptive** | Any single variable | Data distribution & summary | Patient age, gender, lab values |
+        """)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### ROC Curve (AUC)")
+            st.markdown("""
+            **When to Use:**
+            - Evaluating diagnostic test performance
+            - Finding optimal cut-off thresholds
+            - Comparing multiple diagnostic tests
+            
+            **Interpretation:**
+            - AUC = 0.9-1.0: Excellent test ✅
+            - AUC = 0.8-0.9: Good test ✔️
+            - AUC = 0.7-0.8: Fair test ⚠️
+            - AUC < 0.7: Poor test ❌
+            
+            **Common Mistakes:**
+            - Using non-continuous predictor (should be numeric score)
+            - Not validating on independent test set
+            - Ignoring confidence intervals
+            """)
+            
+            st.markdown("### Chi-Square & Risk Analysis")
+            st.markdown("""
+            **Test Selection:**
+            - Pearson: Large samples (n > 40)
+            - Yates' correction: Small samples
+            - Fisher's Exact: Expected count < 5
+            
+            **Interpretation:**
+            - p < 0.05: Significant association ✅
+            - p ≥ 0.05: No association ❌
+            
+            **Metrics:**
+            - **RR > 1**: Increased risk
+            - **OR > 1**: Increased odds
+            - **NNT < 10**: Excellent ✅
+            - **NNT > 50**: Marginal ⚠️
+            """)
+        
+        with col2:
+            st.markdown("### Agreement (Kappa)")
+            st.markdown("""
+            **Interpretation (Landis & Koch):**
+            - κ < 0: Poor ❌
+            - κ 0.01-0.20: Slight
+            - κ 0.21-0.40: Fair
+            - κ 0.41-0.60: Moderate ✔️
+            - κ 0.61-0.80: Substantial ✅
+            - κ 0.81-1.00: Perfect 🏆
+            
+            **Common Mistakes:**
+            - Using Kappa for continuous data (use ICC instead)
+            - Not checking if categories are the same
+            - Interpreting raw agreement % (need chance adjustment)
+            """)
+            
+            st.markdown("### Descriptive Statistics")
+            st.markdown("""
+            **For Numeric Data:**
+            - Mean ± SD (if normal) ✅
+            - Median ± IQR (if non-normal) ✅
+            - Check normality with Shapiro-Wilk test
+            
+            **For Categorical Data:**
+            - Frequency counts
+            - Percentages
+            
+            **Common Mistakes:**
+            - Mean ± SD for non-normal data ❌
+            - Not checking for outliers
+            - Ignoring missing data patterns
+            """)
+        
+        st.markdown("---")
+        st.markdown("""
+        ### 💡 Quick Decision Guide
+        
+        **Question: My test predicts disease (continuous score vs binary disease status)?**
+        → Use **ROC Curve & AUC** (Tab 1)
+        
+        **Question: Two categorical variables - are they associated?**
+        → Use **Chi-Square** (Tab 2)
+        
+        **Question: Do two raters/methods agree on classification?**
+        → Use **Kappa** (Tab 3)
+        
+        **Question: I just want to understand my data distribution?**
+        → Use **Descriptive Statistics** (Tab 4)
+        """)

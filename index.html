@@ -79,24 +79,25 @@
     <script>
       stlite.mount({
         requirements: [
-            "streamlit", // ลบข้อจำกัดเวอร์ชัน
-            "pandas", // ลบข้อจำกัดเวอร์ชัน
+            "streamlit",
+            "pandas",
             "numpy", 
-            "scipy", // ลบข้อจำกัดเวอร์ชัน
+            "scipy",
             "statsmodels>=0.14.0",
             "openpyxl",
             "matplotlib", 
-            "lifelines==0.30.0", // คงเวอร์ชันเฉพาะเจาะจงตามที่คุณต้องการ
-            "formulaic",      // จำเป็นสำหรับ lifelines
+            "lifelines==0.30.0",
+            "formulaic",
             "scikit-learn",
-            // "seaborn", 
             "firthlogist",
             "plotly-express",
-            "plotly" // ลบข้อจำกัดเวอร์ชัน
+            "plotly"
         ],
         entrypoint: "app.py",
         files: {
           "app.py": { url: "./app.py" },
+          "config.py": { url: "./config.py" },
+          "logger.py": { url: "./logger.py" },
           "survival_lib.py": { url: "./survival_lib.py" },
           "psm_lib.py": { url: "./psm_lib.py" },
           "logic.py": { url: "./logic.py" },
@@ -105,16 +106,14 @@
           "correlation.py": { url: "./correlation.py" },
           
           "tabs/__init__.py": { url: "./tabs/__init__.py" },
+          "tabs/_common.py": { url: "./tabs/_common.py" },
           "tabs/tab_data.py": { url: "./tabs/tab_data.py" },
-          "tabs/tab_table1.py": { url: "./tabs/tab_table1.py" },
+          "tabs/tab_baseline_matching.py": { url: "./tabs/tab_baseline_matching.py" },
           "tabs/tab_diag.py": { url: "./tabs/tab_diag.py" },
           "tabs/tab_corr.py": { url: "./tabs/tab_corr.py" },
           "tabs/tab_logit.py": { url: "./tabs/tab_logit.py" },
           "tabs/tab_survival.py": { url: "./tabs/tab_survival.py" },
-          "tabs/tab_psm.py": { url: "./tabs/tab_psm.py" },
-          
-          // 🟢 เพิ่มไฟล์ใหม่ตรงนี้
-          "tabs/tab_adv_survival.py": { url: "./tabs/tab_adv_survival.py" } 
+          "tabs/tab_adv_survival.py": { url: "./tabs/tab_adv_survival.py" }
         },
       }, document.getElementById("root"));
     </script>

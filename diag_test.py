@@ -7,6 +7,7 @@ import plotly.express as px
 import io, base64
 import streamlit as st
 import html as _html
+import warnings
 
 
 # ========================================
@@ -53,39 +54,97 @@ def calculate_descriptive(df, col):
 
 
 # ========================================
-# 2. CHI-SQUARE & FISHER'S EXACT TEST
+# 2. CI CALCULATION FUNCTIONS
+# ========================================
+
+def calculate_ci_wilson_score(successes, n, ci=0.95):
+    """
+    Wilson Score Interval for binomial proportion
+    More accurate than Wald interval, especially for extreme proportions
+    """
+    if n <= 0:
+        return np.nan, np.nan
+    
+    z = stats.norm.ppf(1 - (1 - ci) / 2)
+    p_hat = successes / n if n > 0 else 0
+    denominator = 1 + (z**2 / n)
+    centre_adjusted_probability = (p_hat + (z**2 / (2 * n))) / denominator
+    adjusted_standard_error = np.sqrt((p_hat * (1 - p_hat) + (z**2 / (4 * n))) / n) / denominator
+    lower = max(0, centre_adjusted_probability - z * adjusted_standard_error)
+    upper = min(1, centre_adjusted_probability + z * adjusted_standard_error)
+    return lower, upper
+
+
+def calculate_ci_log_odds(or_value, se_log_or, ci=0.95):
+    """
+    Confidence Interval for Odds Ratio using log scale
+    """
+    z = stats.norm.ppf(1 - (1 - ci) / 2)
+    log_or = np.log(or_value) if or_value > 0 else np.nan
+    if np.isnan(log_or) or np.isnan(se_log_or) or se_log_or <= 0:
+        return np.nan, np.nan
+    lower_log = log_or - z * se_log_or
+    upper_log = log_or + z * se_log_or
+    return np.exp(lower_log), np.exp(upper_log)
+
+
+def calculate_ci_rr(risk_exp, n_exp, risk_unexp, n_unexp, ci=0.95):
+    """
+    Confidence Interval for Risk Ratio using log scale
+    """
+    rr = risk_exp / risk_unexp if risk_unexp > 0 else np.nan
+    if np.isnan(rr) or rr <= 0:
+        return np.nan, np.nan
+    
+    # Robins standard error
+    se_log_rr = np.sqrt((1 - risk_exp) / (risk_exp * n_exp) + 
+                        (1 - risk_unexp) / (risk_unexp * n_unexp)) if (risk_exp > 0 and risk_unexp > 0) else np.nan
+    
+    if np.isnan(se_log_rr) or se_log_rr <= 0:
+        return np.nan, np.nan
+    
+    z = stats.norm.ppf(1 - (1 - ci) / 2)
+    log_rr = np.log(rr)
+    lower_log = log_rr - z * se_log_rr
+    upper_log = log_rr + z * se_log_rr
+    return np.exp(lower_log), np.exp(upper_log)
+
+
+def calculate_ci_nnt(rd, rd_se, ci=0.95):
+    """
+    Confidence Interval for NNT
+    Based on CI of Risk Difference
+    """
+    if abs(rd) < 0.001:
+        return np.nan, np.nan
+
+    if np.isnan(rd_se) or rd_se <= 0:
+        return np.nan, np.nan
+
+    z = stats.norm.ppf(1 - (1 - ci) / 2)
+    rd_lower = rd - z * rd_se
+    rd_upper = rd + z * rd_se
+
+    # NNT CI is inverse of RD CI (bounds swap)
+    # Handle case where CI crosses zero
+    if rd_lower * rd_upper <= 0:
+        return np.nan, np.nan
+
+    nnt_lower = abs(1 / rd_upper)
+    nnt_upper = abs(1 / rd_lower)
+    return min(nnt_lower, nnt_upper), max(nnt_lower, nnt_upper)
+
+# ========================================
+# 2. CHI-SQUARE & FISHER'S EXACT TEST + DIAGNOSTIC METRICS
 # ========================================
 
 @st.cache_data(show_spinner=False)
 def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_pos=None):
-    """ 
-    Compute a contingency table and perform a Chi-square or Fisher's Exact test between two categorical dataframe columns.
-    Constructs crosstabs (counts, totals, and row percentages), optionally reorders rows/columns based on v1_pos/v2_pos, 
-    and runs the selected statistical test. For 2x2 tables the function also computes common risk metrics 
-    (risk, risk ratio, risk difference, NNT, and odds ratio) when possible.
-    
-    Parameters:
-        df (pandas.DataFrame): Source dataframe containing the columns.
-        col1 (str): Row (exposure) column name to analyze.
-        col2 (str): Column (outcome) column name to analyze.
-        method (str, optional): Test selection string. If it contains "Fisher" the function runs Fisher's Exact Test 
-            (requires a 2x2 table). If it contains "Yates" a Yates-corrected chi-square is used; 
-            otherwise Pearson chi-square is used. Defaults to 'Pearson (Standard)'.
-        v1_pos (str | int, optional): If provided, that row label is moved to the first position in the displayed table 
-            (useful for ordering exposure groups).
-        v2_pos (str | int, optional): If provided, that column label is moved to the first position in the displayed table 
-            (useful for ordering outcome categories).
-    
-    Returns:
-        tuple: (display_tab, stats_res, msg, risk_df)
-            display_tab (pandas.DataFrame): Formatted contingency table for display where each cell is "count (percentage%)", 
-                including totals.
-            stats_res (dict | None): Test results and metadata (e.g., {"Test": ..., "Statistic": ..., "P-value": ..., 
-                "Degrees of Freedom": ..., "N": ...}) or Fisher-specific keys; None on error.
-            msg (str): Human-readable summary of the test result and any warnings (e.g., expected count warnings 
-                or Fisher requirement errors).
-            risk_df (pandas.DataFrame | None): For 2x2 tables, a table of risk metrics (Risk in exposed/unexposed, RR, RD, NNT, OR); 
-                None when not applicable or on failure.
+    """
+    Comprehensive 2x2 contingency table analysis with:
+    - Chi-Square / Fisher's Exact Test
+    - Risk metrics (OR, RR, NNT) with 95% CI
+    - Diagnostic metrics (Sensitivity, Specificity, PPV, NPV, LR+, LR-)
     """
     if col1 not in df.columns or col2 not in df.columns:
         return None, None, "Columns not found", None
@@ -97,31 +156,23 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     tab_raw = pd.crosstab(data[col1], data[col2], margins=True, margins_name="Total")
     tab_row_pct = pd.crosstab(data[col1], data[col2], normalize='index', margins=True, margins_name="Total") * 100
     
-    # --- REORDERING LOGIC --- (เหมือนเดิม)
+    # --- REORDERING LOGIC ---
     all_col_labels = tab_raw.columns.tolist()
     all_row_labels = tab_raw.index.tolist()
     base_col_labels = [col for col in all_col_labels if col != 'Total']
     base_row_labels = [row for row in all_row_labels if row != 'Total']
     
-    # 🟢 Helper Functions (ประกาศครั้งเดียว)
-    def get_original_label(label_str, df_labels):
-        """ 
-        Find the original label from a collection that matches a given string representation.
-        """
+    def get_original_label(label_str: str, df_labels: list) -> any:
         for lbl in df_labels:
             if str(lbl) == label_str:
                 return lbl
         return label_str
     
-    def custom_sort(label):
-        """ 
-        Produce a sort key for a label by converting numeric-like labels to floats and leaving others as strings.
-        Using tuple (priority, value) to handle mixed types safely.
-        """
+    def custom_sort(label) -> tuple:
         try:
-            return (0, float(label))  # ให้ตัวเลขมาก่อนเสมอ
+            return (0, float(label))
         except (ValueError, TypeError):
-            return (1, str(label))  # ตามด้วยตัวหนังสือ
+            return (1, str(label))
     
     # --- Reorder Cols ---
     final_col_order_base = base_col_labels[:]
@@ -131,7 +182,6 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             final_col_order_base.remove(v2_pos_original)
             final_col_order_base.insert(0, v2_pos_original)
     else:
-        # Intentional: Sort ascending (smallest to largest) for deterministic order.
         final_col_order_base.sort(key=custom_sort)
     
     final_col_order = final_col_order_base + ['Total']
@@ -144,7 +194,6 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             final_row_order_base.remove(v1_pos_original)
             final_row_order_base.insert(0, v1_pos_original)
     else:
-        # Intentional: Sort ascending (smallest to largest) for deterministic order.
         final_row_order_base.sort(key=custom_sort)
     
     final_row_order = final_row_order_base + ['Total']
@@ -166,15 +215,15 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                 pct = 100.0
             else:
                 pct = tab_row_pct.loc[row_name, col_name]
-            cell_content = f"{count} ({pct:.1f}%)"
+            cell_content = f"{int(count)} ({pct:.1f}%)"
             row_data.append(cell_content)
         display_data.append(row_data)
     
     display_tab = pd.DataFrame(display_data, columns=col_names, index=index_names)
     display_tab.index.name = col1
     
-    # 3. Stats
-    msg = "" # 🟢 NEW: Initialize msg for warnings only
+    # 2. Stats Test
+    msg = ""
     try:
         is_2x2 = (tab_chi2.shape == (2, 2))
         
@@ -182,19 +231,17 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             if not is_2x2:
                 return display_tab, None, "Error: Fisher's Exact Test requires a 2x2 table.", None
             
-            # Fisher's Exact Test
             odds_ratio, p_value = stats.fisher_exact(tab_chi2)
             method_name = "Fisher's Exact Test"
             
             stats_res = {
                 "Test": method_name,
-                "Statistic (OR)": f"{odds_ratio:.4f}", # Format Value here
-                "P-value": f"{p_value:.4f}",          # Format Value here
+                "Statistic (OR)": f"{odds_ratio:.4f}",
+                "P-value": f"{p_value:.4f}",
                 "Degrees of Freedom": "-",
                 "N": len(data)
             }
         else:
-            # Chi-Square Test
             use_correction = True if "Yates" in method else False
             chi2, p, dof, ex = stats.chi2_contingency(tab_chi2, correction=use_correction)
             method_name = "Chi-Square"
@@ -203,68 +250,135 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             
             stats_res = {
                 "Test": method_name,
-                "Statistic": f"{chi2:.4f}",           # Format Value here
-                "P-value": f"{p:.4f}",                # Format Value here
+                "Statistic": f"{chi2:.4f}",
+                "P-value": f"{p:.4f}",
                 "Degrees of Freedom": f"{dof}",
                 "N": len(data)
             }
             
             # Warning check
             if (ex < 5).any() and is_2x2 and not use_correction:
-                msg += " ⚠️ Warning: Expected count < 5. Consider using Fisher's Exact Test."
+                msg = "⚠️ Warning: Expected count < 5. Consider using Fisher's Exact Test."
         
-        # 4. Risk Metrics (2x2 only)
+        stats_df_for_report = pd.DataFrame(stats_res, index=[0]).T.reset_index()
+        stats_df_for_report.columns = ['Statistic', 'Value']
+
+        # 3. 2x2 Risk & Diagnostic Metrics
         risk_df = None
         if is_2x2:
             try:
-                # ... (Risk calculation logic - เหมือนเดิม)
                 vals = tab_chi2.values
-                a, b = vals[0, 0], vals[0, 1]
-                c, d = vals[1, 0], vals[1, 1]
+                a, b = vals[0, 0], vals[0, 1]  # Exposed: Event, No Event
+                c, d = vals[1, 0], vals[1, 1]  # Unexposed: Event, No Event
+                
                 row_labels = tab_chi2.index.tolist()
                 col_labels = tab_chi2.columns.tolist()
                 label_exp = str(row_labels[0])
                 label_unexp = str(row_labels[1])
                 label_event = str(col_labels[0])
                 
-                risk_exp = a/(a+b) if (a+b)>0 else 0
-                risk_unexp = c/(c+d) if (c+d)>0 else 0
-                rr = risk_exp/risk_unexp if risk_unexp>0 else np.nan
+                # RISK METRICS
+                risk_exp = a / (a + b) if (a + b) > 0 else 0
+                risk_unexp = c / (c + d) if (c + d) > 0 else 0
+                rr = risk_exp / risk_unexp if risk_unexp > 0 else np.nan
                 rd = risk_exp - risk_unexp
-                nnt_abs = abs(1/rd) if rd!=0 else np.inf
+                nnt_abs = abs(1 / rd) if abs(rd) > 0.001 else np.inf
+                
+                # Odds Ratio with CI
+                or_value = (a * d) / (b * c) if (b * c) != 0 else np.nan
+                se_log_or = np.sqrt(1/a + 1/b + 1/c + 1/d) if (a > 0 and b > 0 and c > 0 and d > 0) else np.nan
+                or_ci_lower, or_ci_upper = calculate_ci_log_odds(or_value, se_log_or)
+                
+                # Risk Ratio with CI
+                if (a+b) > 0 and (c+d) > 0 and risk_exp > 0 and risk_unexp > 0:
+                    rr_ci_lower, rr_ci_upper = calculate_ci_rr(risk_exp, a+b, risk_unexp, c+d)
+                else:
+                    rr_ci_lower, rr_ci_upper = np.nan, np.nan
+                
+                # NNT with CI (simplified)
+                # RD SE from 2x2 table: sqrt(p1*(1-p1)/n1 + p2*(1-p2)/n2)
+                rd_se = np.sqrt(
+                    (risk_exp * (1 - risk_exp)) / (a + b) + 
+                    (risk_unexp * (1 - risk_unexp)) / (c + d)
+                ) if (a + b) > 0 and (c + d) > 0 else np.nan
+                nnt_ci_lower, nnt_ci_upper = calculate_ci_nnt(rd, rd_se)
+                
+                # DIAGNOSTIC METRICS (if applicable)
+                # Sensitivity = TP / (TP + FN) = a / (a + c)
+                sensitivity = a / (a + c) if (a + c) > 0 else 0
+                se_ci_lower, se_ci_upper = calculate_ci_wilson_score(a, a + c)
+                
+                # Specificity = TN / (TN + FP) = d / (b + d)
+                specificity = d / (b + d) if (b + d) > 0 else 0
+                sp_ci_lower, sp_ci_upper = calculate_ci_wilson_score(d, b + d)
+                
+                # PPV = TP / (TP + FP) = a / (a + b)
+                ppv = a / (a + b) if (a + b) > 0 else 0
+                ppv_ci_lower, ppv_ci_upper = calculate_ci_wilson_score(a, a + b)
+                
+                # NPV = TN / (TN + FN) = d / (c + d)
+                npv = d / (c + d) if (c + d) > 0 else 0
+                npv_ci_lower, npv_ci_upper = calculate_ci_wilson_score(d, c + d)
+                
+                # Likelihood Ratios
+                lr_plus = sensitivity / (1 - specificity) if (1 - specificity) > 0 else np.nan
+                lr_minus = (1 - sensitivity) / specificity if specificity > 0 else np.nan
+                
+                # NNT Label
                 if rd < 0:
                     nnt_label = "Number Needed to Treat (NNT)"
                 elif rd > 0:
                     nnt_label = "Number Needed to Harm (NNH)"
                 else:
                     nnt_label = "NNT/NNH"
-                odd_ratio, _ = stats.fisher_exact(tab_chi2)
                 
+                # Build Risk Metrics Table with SECTION HEADERS
                 risk_data = [
-                    {"Statistic": f"Risk in {label_exp} (R1)", "Value": f"{risk_exp:.4f}",
-                     "Interpretation": f"Risk of '{label_event}' in group {label_exp}"},
-                    {"Statistic": f"Risk in {label_unexp} (R0)", "Value": f"{risk_unexp:.4f}",
-                     "Interpretation": f"Baseline risk of '{label_event}' in group {label_unexp}"},
-                    {"Statistic": "Risk Ratio (RR)", "Value": f"{rr:.4f}",
+                    # ===== RISK METRICS SECTION =====
+                    {"Metric": "RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)", 
+                     "Value": "", "95% CI": "", "Interpretation": "Use for cohort/case-control studies"},
+                    {"Metric": "Risk in Exposed (R1)", "Value": f"{risk_exp:.4f}", 
+                     "95% CI": "-", "Interpretation": f"Risk of '{label_event}' in {label_exp}"},
+                    {"Metric": "Risk in Unexposed (R0)", "Value": f"{risk_unexp:.4f}", 
+                     "95% CI": "-", "Interpretation": f"Baseline risk of '{label_event}' in {label_unexp}"},
+                    {"Metric": "Risk Ratio (RR)", "Value": f"{rr:.4f}", 
+                     "95% CI": f"({rr_ci_lower:.4f} - {rr_ci_upper:.4f})" if np.isfinite(rr_ci_lower) else "N/A",
                      "Interpretation": f"Risk in {label_exp} is {rr:.2f}x that of {label_unexp}"},
-                    {"Statistic": "Risk Difference (RD)", "Value": f"{rd:.4f}",
-                     "Interpretation": "Absolute difference (R1 - R0)"},
-                    {"Statistic": nnt_label, "Value": f"{nnt_abs:.1f}",
+                    {"Metric": "Risk Difference (RD)", "Value": f"{rd:.4f}", 
+                     "95% CI": "-", "Interpretation": "Absolute risk difference (R1 - R0)"},
+                    {"Metric": nnt_label, "Value": f"{nnt_abs:.1f}", 
+                     "95% CI": f"({nnt_ci_lower:.1f} - {nnt_ci_upper:.1f})" if np.isfinite(nnt_ci_lower) else "N/A",
                      "Interpretation": "Patients to treat to prevent/cause 1 outcome"},
-                    {"Statistic": "Odds Ratio (OR)", "Value": f"{odd_ratio:.4f}",
-                     "Interpretation": "Odds of event (Exp vs Unexp)"}
+                    {"Metric": "Odds Ratio (OR)", "Value": f"{or_value:.4f}", 
+                     "95% CI": f"({or_ci_lower:.4f} - {or_ci_upper:.4f})" if np.isfinite(or_ci_lower) else "N/A",
+                     "Interpretation": f"Odds of '{label_event}' ({label_exp} vs {label_unexp})"},
+                    # ===== DIAGNOSTIC METRICS SECTION =====
+                    {"Metric": "DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)", 
+                     "Value": "", "95% CI": "", "Interpretation": "Use for diagnostic/screening studies"},
+                    {"Metric": "Sensitivity", "Value": f"{sensitivity:.4f}", 
+                     "95% CI": f"({se_ci_lower:.4f} - {se_ci_upper:.4f})",
+                     "Interpretation": "P(Test+ | Disease+) - True Positive Rate"},
+                    {"Metric": "Specificity", "Value": f"{specificity:.4f}", 
+                     "95% CI": f"({sp_ci_lower:.4f} - {sp_ci_upper:.4f})",
+                     "Interpretation": "P(Test- | Disease-) - True Negative Rate"},
+                    {"Metric": "PPV (Positive Predictive Value)", "Value": f"{ppv:.4f}", 
+                     "95% CI": f"({ppv_ci_lower:.4f} - {ppv_ci_upper:.4f})",
+                     "Interpretation": "P(Disease+ | Test+) - Precision"},
+                    {"Metric": "NPV (Negative Predictive Value)", "Value": f"{npv:.4f}", 
+                     "95% CI": f"({npv_ci_lower:.4f} - {npv_ci_upper:.4f})",
+                     "Interpretation": "P(Disease- | Test-) - Negative Precision"},
+                    {"Metric": "LR+ (Likelihood Ratio +)", "Value": f"{lr_plus:.4f}", 
+                     "95% CI": "-", "Interpretation": "Sensitivity / (1 - Specificity)"},
+                    {"Metric": "LR- (Likelihood Ratio -)", "Value": f"{lr_minus:.4f}", 
+                     "95% CI": "-", "Interpretation": "(1 - Sensitivity) / Specificity"},
                 ]
                 risk_df = pd.DataFrame(risk_data)
-            except Exception as e:
+            except (ZeroDivisionError, ValueError, KeyError) as e:
                 risk_df = None
-                msg += f" (Risk metrics unavailable: {e})"
+                msg += f" (Risk metrics unavailable: {e!s})"
         
-        # 🟢 NEW: Convert stats_res to DataFrame for Report
-        stats_df_for_report = pd.DataFrame(stats_res, index=[0]).T.reset_index()
-        stats_df_for_report.columns = ['Statistic', 'Value']
-
-        return display_tab, stats_df_for_report, msg, risk_df # 🟢 RETURN DF
-    
+        return display_tab, stats_df_for_report, msg, risk_df
+            
     except Exception as e:
         return display_tab, None, str(e), None
 
@@ -318,7 +432,7 @@ def calculate_kappa(df, col1, col2):
 
 
 # ========================================
-# 4. ROC CURVE (with Plotly) 🟢 UPDATED ROBUST
+# 4. ROC CURVE
 # ========================================
 
 def auc_ci_hanley_mcneil(auc, n1, n2):
@@ -347,7 +461,7 @@ def auc_ci_delong(y_true, y_scores):
         n_pos = tps[-1]
         n_neg = fps[-1]
         
-        if n_pos == 0 or n_neg == 0:
+        if n_pos <= 1 or n_neg <= 1:
             return np.nan, np.nan, np.nan
         
         auc = roc_auc_score(y_true, y_scores)
@@ -364,13 +478,12 @@ def auc_ci_delong(y_true, y_scores):
         for n in neg_scores:
             v01.append((np.sum(pos_scores > n) + 0.5*np.sum(pos_scores == n)) / n_pos)
         
-        s10 = np.var(v10, ddof=1)
-        s01 = np.var(v01, ddof=1)
+        s10 = np.var(v10, ddof=1) if len(v10) > 1 else 0
+        s01 = np.var(v01, ddof=1) if len(v01) > 1 else 0
         se_auc = np.sqrt((s10 / n_pos) + (s01 / n_neg))
         
         return auc - 1.96*se_auc, auc + 1.96*se_auc, se_auc
     except Exception as e:
-        # Fallback if DeLong fails (e.g., singular matrix or data issues)
         warnings.warn(f"DeLong CI calculation failed: {e}", stacklevel=2)
         return np.nan, np.nan, np.nan
 
@@ -379,7 +492,6 @@ def auc_ci_delong(y_true, y_scores):
 def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
     """
     Analyze ROC curve using Plotly for interactive visualization.
-    Includes robustness checks for constant scores and single-class data.
     """
     data = df[[truth_col, score_col]].dropna()
     y_true_raw = data[truth_col]
@@ -391,9 +503,8 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
     
     y_true = np.where(y_true_raw.astype(str) == pos_label_user, 1, 0)
     
-    # 🟢 Safety Check: Check if score is constant (single value)
     if y_score.nunique() < 2:
-         return None, "Error: Prediction score is constant (single value). Cannot compute ROC.", None, None
+        return None, "Error: Prediction score is constant (single value). Cannot compute ROC.", None, None
 
     n1 = int((y_true == 1).sum())
     n0 = int((y_true == 0).sum())
@@ -508,7 +619,6 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
 def calculate_icc(df, cols):
     """
     คำนวณ ICC(2,1) และ ICC(3,1) โดยใช้ Two-way ANOVA Formula
-    Ref: Shrout & Fleiss (1979), Koo & Li (2016)
     """
     if len(cols) < 2:
         return None, "Please select at least 2 variables (raters/methods).", None
@@ -634,6 +744,21 @@ def generate_report(title, elements):
         table tr:hover {
             background-color: #f0f0f0;
         }
+        table tr.section-header {
+            background-color: #0066cc;
+            color: white;
+            font-weight: bold;
+        }
+        table tr.section-header td {
+            background-color: #0066cc;
+            color: white;
+            font-weight: bold;
+        }
+        table td.section-header {
+            background-color: #0066cc;
+            color: white;
+            font-weight: bold;
+        }
         p {
             line-height: 1.6;
             color: #333;
@@ -667,26 +792,29 @@ def generate_report(title, elements):
             html += f"<p>{_html.escape(str(data))}</p>"
         
         elif element_type == 'table':
-            # Hide index for standard stats tables (Statistic/Value format with unnamed index)
             is_stats_table = ('Statistic' in data.columns and 'Value' in data.columns 
                               and data.index.name is None)
-            html += data.to_html(index=not is_stats_table, classes='report-table', escape=True) 
+            html_table = data.to_html(index=not is_stats_table, classes='report-table', escape=True)
+            # Add section-header class to section headers
+            html_table = html_table.replace(
+                '<td>RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)</td>',
+                '<td class="section-header">RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)</td>'
+            )
+            html_table = html_table.replace(
+                '<td>DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)</td>',
+                '<td class="section-header">DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)</td>'
+            )
+            html += html_table
         
         elif element_type == 'contingency_table':
-            # ... (โค้ด Contingency Table เดิม)
             col_labels = data.columns.tolist()
             row_labels = data.index.tolist()
             exp_name = data.index.name or "Exposure"
             out_name = element.get('outcome_col', 'Outcome')
             
-            # Start of HTML Table Construction
             html += "<table class='report-table'>"
             html += "<thead>"
-            
-            # First Header Row: Spanning Outcome Column
             html += f"<tr><th></th><th colspan='{len(col_labels)}'>{_html.escape(str(out_name))}</th></tr>"
-            
-            # Second Header Row: Exposure and all Column Labels
             html += "<tr>"
             html += f"<th>{_html.escape(str(exp_name))}</th>"
             for col_label in col_labels:
@@ -694,31 +822,23 @@ def generate_report(title, elements):
             html += "</tr>"
             html += "</thead>"
             
-            # Table Body
             html += "<tbody>"
             for idx_label in row_labels:
                 html += "<tr>"
-                # Row Header (Index name)
                 html += f"<td>{_html.escape(str(idx_label))}</td>"
-                # Data Cells
                 for col_label in col_labels:
                     val = data.loc[idx_label, col_label]
-                    # Ensure value is treated as string and escaped
                     html += f"<td>{_html.escape(str(val))}</td>" 
                 html += "</tr>"
             html += "</tbody>"
-            
             html += "</table>"
         
         elif element_type == 'plot':
-            # Support both Plotly and Matplotlib figures
             plot_obj = data
             
             if hasattr(plot_obj, 'to_html'):
-                # Plotly Figure
                 html += plot_obj.to_html(full_html=False, include_plotlyjs='cdn', div_id=f"plot_{id(plot_obj)}")
             else:
-                # Matplotlib Figure - convert to PNG
                 buf = io.BytesIO()
                 plot_obj.savefig(buf, format='png', bbox_inches='tight')
                 b64 = base64.b64encode(buf.getvalue()).decode('utf-8')

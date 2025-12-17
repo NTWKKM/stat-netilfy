@@ -8,12 +8,21 @@ import matplotlib.pyplot as plt
 import warnings
 import io, base64
 import html as _html
+import logging
+_logger = logging.getLogger(__name__)
 
 # Helper function for standardization
 def _standardize_numeric_cols(data, cols) -> None:
     """
-    Standardize numeric columns in-place, BUT SKIP BINARY columns (0/1).
-    This prevents numerical instability in Cox models.
+    Standardize numeric columns in-place while preserving binary (0/1) columns.
+    
+    Numeric columns listed in `cols` are centered to mean zero and scaled to unit variance.
+    Columns containing only the values 0 and 1 are left unchanged. If a column has
+    zero or undefined standard deviation, a warning is emitted and the column is not modified.
+    
+    Parameters:
+        data (pandas.DataFrame): DataFrame whose columns will be standardized in-place.
+        cols (Iterable[str]): Column names to consider for standardization.
     """
     for col in cols:
         if pd.api.types.is_numeric_dtype(data[col]):
@@ -148,8 +157,22 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
 # --- 2. Nelson-Aalen (With Robust CI) 🟢 FIX NA CI ---
 def fit_nelson_aalen(df, duration_col, event_col, group_col):
     """
-    Fits Nelson-Aalen cumulative hazard.
-    Returns: (fig, stats_df)
+    Fit Nelson-Aalen cumulative hazard curves optionally stratified by a grouping column and return a Plotly figure plus group-level statistics.
+    
+    Drops rows with missing duration or event values. If a group column is provided, rows with missing group values are dropped and curves are plotted per group; otherwise a single overall curve is plotted. When the fitter provides a confidence interval with at least two columns, a shaded 95% CI is added for each group.
+    
+    Parameters:
+        df (pandas.DataFrame): Input dataset containing duration, event, and optional group columns.
+        duration_col (str): Name of the column with follow-up time or duration.
+        event_col (str): Name of the column with event indicator (1 for event, 0 for censored).
+        group_col (str or None): Name of the column to stratify by, or None to compute an overall curve.
+    
+    Returns:
+        fig (plotly.graph_objs.Figure): Plotly figure showing cumulative hazard curves and shaded 95% CIs when available.
+        stats_df (pandas.DataFrame): DataFrame with one row per plotted group containing columns `Group`, `N`, and `Events`.
+    
+    Raises:
+        ValueError: If no valid rows remain after dropping missing duration/event values, or if a specified group column is not present in `df`.
     """
     data = df.dropna(subset=[duration_col, event_col])
     if len(data) == 0:
@@ -226,9 +249,26 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
 
     return fig, pd.DataFrame(stats_list)
 
-# --- 3. Cox Proportional Hazards (Robust Version with Progressive L2 Penalization) ---
+# --- 3. Cox Proportional Hazards (Robust with Progressive L2 Penalization & Data Validation) ---
 def fit_cox_ph(df, duration_col, event_col, covariate_cols):
-    # 1. Validation
+    """
+    Fit a Cox Proportional Hazards model after validating and preprocessing covariates.
+    
+    Validates input columns and rows, performs automatic one-hot encoding for categorical covariates (drop_first=True), checks numeric covariates for infinite or extreme values, zero variance, potential perfect separation, and high multicollinearity, standardizes numeric covariates (skipping binary 0/1), and attempts a progressive fitting strategy (standard CoxPH then increasing L2 penalization) until a successful fit is obtained or all attempts fail.
+    
+    Parameters:
+        df (pandas.DataFrame): Input dataset containing duration, event, and covariates.
+        duration_col (str): Name of the duration/time-to-event column.
+        event_col (str): Name of the event indicator column (0/1).
+        covariate_cols (list[str]): List of covariate column names to include in the model.
+    
+    Returns:
+        cph (lifelines.CoxPHFitter or None): Fitted CoxPHFitter instance on success, otherwise None.
+        res_df (pandas.DataFrame or None): Results table with hazard ratios (`HR`), 95% CI bounds, `P-value`, and `Method` when fit succeeds; None on failure.
+        data (pandas.DataFrame): Processed DataFrame used for fitting (after dropping missing rows and any encoding/standardization). Returned even on failure to aid debugging.
+        error_message (str or None): Detailed error message when fitting or validation fails; None on success.
+    """
+    # 1. Basic Validation
     missing = [c for c in [duration_col, event_col, *covariate_cols] if c not in df.columns]
     if missing:
         return None, None, df, f"Missing columns: {missing}"
@@ -239,47 +279,134 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
 
     if data[event_col].sum() == 0:
         return None, None, data, "No events observed (all censored). CoxPH requires at least one event." 
+
+    # 🟢 NEW: Automatic One-Hot Encoding for Categorical/Object columns
+    # Essential for Cox Regression to handle categorical variables
+    try:
+        covars_only = data[covariate_cols]
+        # Find categorical/object columns
+        cat_cols = [c for c in covariate_cols if not pd.api.types.is_numeric_dtype(data[c])]
+        
+        if cat_cols:
+            # Use drop_first=True to prevent multicollinearity (dummy variable trap)
+            covars_encoded = pd.get_dummies(covars_only, columns=cat_cols, drop_first=True)
+            # Update data and covariate list
+            data = pd.concat([data[[duration_col, event_col]], covars_encoded], axis=1)
+            covariate_cols = covars_encoded.columns.tolist()
+    except (ValueError, TypeError, KeyError) as e:
+        return None, None, data, f"Encoding Error: Failed to convert categorical variables. {e}"
     
-    # 2. Check variance
+    # 🟢 NEW: Comprehensive Data Validation BEFORE attempting fit
+    validation_errors = []
+    
     for col in covariate_cols:
         if pd.api.types.is_numeric_dtype(data[col]):
+            # Check 1: Infinite values
+            if np.isinf(data[col]).any():
+                n_inf = np.isinf(data[col]).sum()
+                validation_errors.append(f"Covariate '{col}': Contains {n_inf} infinite values (Inf, -Inf). Check data source.")
+            
+            # Check 2: Extreme values (>±1e10)
+            if (data[col].abs() > 1e10).any():
+                max_val = data[col].abs().max()
+                validation_errors.append(f"Covariate '{col}': Contains extreme values (max={max_val:.2e}). Consider scaling (divide by 1000, log transform, or standardize).")
+            
+            # Check 3: Zero variance (constant column)
             std = data[col].std()
             if pd.isna(std) or std == 0:
-                return None, None, data, f"Covariate '{col}' has zero variance (or insufficient rows)."
+                validation_errors.append(f"Covariate '{col}': Has zero variance (constant values only). Remove this column.")
+            
+            # Check 4: Perfect separation (outcome completely predictable)
+            try:
+                outcomes_0 = data[data[event_col] == 0][col]
+                outcomes_1 = data[data[event_col] == 1][col]
+                
+                if len(outcomes_0) > 0 and len(outcomes_1) > 0:
+                    # Check if ranges completely separate (no overlap)
+                    if (outcomes_0.max() < outcomes_1.min()) or (outcomes_1.max() < outcomes_0.min()):
+                        validation_errors.append(f"Covariate '{col}': Perfect separation detected - outcomes completely separated by this variable. Try removing, combining with other variables, or grouping.")
+            except Exception as e:
+                _logger.debug("Perfect separation check failed for '%s': %s", col, e)
     
-    # 3. Standardize (Skip binary to improve stability)
+    # Check 5: Multicollinearity (high correlation between numeric covariates)
+    numeric_covs = [c for c in covariate_cols if pd.api.types.is_numeric_dtype(data[c])]
+    if len(numeric_covs) > 1:
+        try:
+            corr_matrix = data[numeric_covs].corr().abs()
+            high_corr_pairs = []
+            for i in range(len(corr_matrix.columns)):
+                for j in range(i+1, len(corr_matrix.columns)):
+                    if corr_matrix.iloc[i, j] > 0.95:
+                        col_i = corr_matrix.columns[i]
+                        col_j = corr_matrix.columns[j]
+                        r = corr_matrix.iloc[i, j]
+                        high_corr_pairs.append(f"{col_i} <-> {col_j} (r={r:.3f})")
+            
+            if high_corr_pairs:
+                validation_errors.append("High multicollinearity detected (r > 0.95): " + ", ".join(high_corr_pairs) + ". Try removing one of each correlated pair.")
+        except Exception as e:
+            _logger.debug("Multicollinearity check failed: %s", e)
+    
+    # If validation errors found, report them NOW before trying to fit
+    if validation_errors:
+        error_msg = ("🔴 Data Quality Issues Found (Fix Before Fitting):\n\n" + 
+                     "\n\n".join(f"❌ {e}" for e in validation_errors))
+        return None, None, data, error_msg
+    
+    # 2. Standardize (Skip binary to improve stability)
     _standardize_numeric_cols(data, covariate_cols)
     
-    # 4. Fitting Strategy (Progressive Robustness)
-    # The order of penalizers defines the fallback: Standard (0.0) -> Mild L2 (0.1) -> Stronger L2 (1.0)
-    # L2 Penalization (Ridge) is an effective alternative to Firth's for convergence issues.
-    penalizers_L2 = [0.0, 0.1, 1.0] 
+    # 3. Fitting Strategy (Progressive Robustness)
+    # Try: Standard -> L2(0.1) -> L2(1.0)
+    penalizers = [
+        {"p": 0.0, "name": "Standard CoxPH (Maximum Partial Likelihood)"},
+        {"p": 0.1, "name": "L2 Penalized CoxPH (p=0.1) - Ridge Regression"},
+        {"p": 1.0, "name": "L2 Penalized CoxPH (p=1.0) - Strong Regularization"}
+    ]
+    
     cph = None
     last_error = None
     method_used = None
+    methods_tried = []  # 🟢 Track methods for error reporting
 
-    for p in penalizers_L2:
+    for conf in penalizers:
+        p = conf['p']
+        current_method = conf['name']
+        
+        methods_tried.append(current_method)
+        
         try:
             temp_cph = CoxPHFitter(penalizer=p) 
+            # 🎫 FIX: Removed invalid step_size parameter
+            # CoxPHFitter.fit() only accepts: duration_col, event_col, show_progress
             temp_cph.fit(data, duration_col=duration_col, event_col=event_col)
             cph = temp_cph
-            
-            # Capture the method used
-            if p == 0.0:
-                method_used = "Standard CoxPH (Maximum Partial Likelihood)"
-            else:
-                method_used = f"L2 Penalized CoxPH (p={p}) - Ridge Regression Fallback"
-            
-            break # หยุดทันทีที่ Fit สำเร็จ
+            method_used = current_method  # ✅ SET on success
+            break  # Stop trying - success!
         except Exception as e:
             last_error = e
             continue
 
-    # 5. Error handling
+    # 4. Error handling
     if cph is None:
-        return None, None, data, f"Model Convergence Failed after trying Standard and L2 penalization. Last method used: {method_used if method_used else 'None'}. Details: {last_error}.\nTry checking for high correlation (multicollinearity) or perfect separation."
+        # 🟢 Show which methods were tried + troubleshooting guide
+        methods_str = "\n".join(f"  ❌ {m}" for m in methods_tried)
+        error_msg = (
+            f"Cox Model Convergence Failed\n\n"
+            f"Fitting Methods Attempted:\n{methods_str}\n\n"
+            f"Last Error: {last_error!s}\n\n"
+            f"Troubleshooting Guide:\n"
+            f"  1. Verify your data passed validation checks above\n"
+            f"  2. Try removing ONE covariate at a time to isolate the problem\n"
+            f"  3. For categorical variables: Check if categories separated from outcome\n"
+            f"  4. Try scaling numeric variables to 0-100 or 0-1 range\n"
+            f"  5. Check for rare categories in categorical variables\n"
+            f"  6. Try with fewer covariates (e.g., 2-3 instead of many)\n"
+            f"  7. See: https://lifelines.readthedocs.io/en/latest/Examples.html#problems-with-convergence-in-the-cox-proportional-hazard-model"
+        )
+        return None, None, data, error_msg
 
-    # 6. Format Results
+    # 5. Format Results
     summary = cph.summary.copy()
     summary['HR'] = np.exp(summary['coef'])
     ci = cph.confidence_intervals_
@@ -287,7 +414,7 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     summary['95% CI Upper'] = np.exp(ci.iloc[:, 1])
 
     # Add Method used to results table
-    summary['Method'] = method_used # 🟢 NEW: ระบุวิธีการที่ใช้จริงลงในผลลัพธ์
+    summary['Method'] = method_used # 🟢 Show which method succeeded
     summary.index.name = "Covariate"
 
     res_df = summary[['HR', '95% CI Lower', '95% CI Upper', 'p', 'Method']].rename(columns={'p': 'P-value'})
@@ -338,9 +465,21 @@ def check_cph_assumptions(cph, data):
 # --- 4. Landmark Analysis (KM) 🟢 FIX LM CI ---
 def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
     """
-    Performs Kaplan-Meier Survival Analysis using the Landmark Method.
+    Perform Kaplan–Meier survival analysis using a landmark-time approach and produce a survival plot plus log-rank test results.
     
-    Returns: (fig, stats_df, n_pre_filter, n_post_filter)
+    Parameters:
+        df (pandas.DataFrame): Input data containing duration, event indicator, and group columns.
+        duration_col (str): Name of the column with observed times-to-event.
+        event_col (str): Name of the column with event indicator (1=event, 0=censored).
+        group_col (str): Name of the grouping/stratification column; required for stratified curves and tests.
+        landmark_time (numeric): Time threshold used for the landmark analysis; only records with duration >= landmark_time are included and their times are re-based to time since landmark.
+    
+    Returns:
+        fig (plotly.graph_objects.Figure or None): Plotly figure showing Kaplan–Meier curves and shaded 95% confidence intervals for each group, or None if an error occurred before plotting.
+        stats_df (pandas.DataFrame or None): Single-row DataFrame summarizing the performed log-rank test (test name, statistic, p-value, comparison, Method) or a DataFrame describing an error/note; None if not applicable.
+        n_pre_filter (int): Number of records remaining after dropping rows with missing duration, event, or group (before applying the landmark filter).
+        n_post_filter (int): Number of records remaining after applying the landmark filter (duration >= landmark_time).
+        error (str or None): Error message when the function fails early (e.g., missing columns or insufficient records), otherwise None.
     """
     
     # 1. Data Cleaning
@@ -459,10 +598,26 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
 
     return fig, pd.DataFrame([stats_data]), n_pre_filter, n_post_filter, None
 
-# --- 5. Report Generation ---
+# --- 5. Report Generation 🟢 FIX: Include Plotly JS in HTML ---
 def generate_report_survival(title, elements):
     """
-    Generate HTML report (Renamed to match tab_survival.py calls)
+    Assemble a complete HTML report from a sequence of content elements, embedding tables, figures, and images for offline-friendly consumption.
+    
+    Builds an HTML document with the given title and iterates over `elements` to render supported content types. For Plotly figures, the Plotly JS library is embedded only once with the first Plotly plot and omitted for subsequent Plotly plots so later plots reuse the already-loaded script. Supported element types and expected `data` values:
+    - "header": a string rendered as an H2 section header.
+    - "text": a plain string rendered as a paragraph.
+    - "preformatted": a string rendered inside a <pre> block.
+    - "table": a pandas DataFrame (or DataFrame-like) rendered via DataFrame.to_html().
+    - "plot": a Plotly Figure-like object (with to_html) or a Matplotlib Figure-like object (with savefig).
+    - "image": raw image bytes (PNG) which will be embedded as a base64 data URL.
+    
+    Parameters:
+        title: The report title; will be HTML-escaped.
+        elements: An iterable of dicts describing report elements; each dict should include keys
+            'type' (one of the supported types above) and 'data' (the corresponding content).
+    
+    Returns:
+        html_doc (str): A self-contained HTML string representing the assembled report.
     """
     css_style = """<style>
         body{font-family:Arial;margin:20px;}
@@ -481,10 +636,12 @@ def generate_report_survival(title, elements):
         }
     </style>"""
     
-    plotly_js = '<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>'
-    
     safe_title = _html.escape(str(title))
-    html_doc = f"<!DOCTYPE html><html><head><meta charset='utf-8'>{css_style}{plotly_js}</head><body><h1>{safe_title}</h1>"
+    # 🟢 NEW: Don't include Plotly JS in head - will include with first plot
+    html_doc = f"<!DOCTYPE html><html><head><meta charset='utf-8'>{css_style}</head><body><h1>{safe_title}</h1>"
+    
+    # 🟢 NEW: Track if Plotly JS already included
+    plotly_js_included = False
     
     for el in elements:
         t = el.get('type')
@@ -498,9 +655,16 @@ def generate_report_survival(title, elements):
             html_doc += f"<pre>{_html.escape(str(d))}</pre>"
         elif t == 'table':
             html_doc += d.to_html(classes='table')
-        elif t == 'plot': 
+        elif t == 'plot':
             if hasattr(d, 'to_html'):
-                html_doc += d.to_html(full_html=False, include_plotlyjs=False)
+                # 🟢 SOLUTION: Include Plotly JS with first plot only
+                if not plotly_js_included:
+                    # First plot: include 'cdn' to embed Plotly JS in HTML
+                    html_doc += d.to_html(full_html=False, include_plotlyjs='cdn')
+                    plotly_js_included = True
+                else:
+                    # Subsequent plots: don't include JS (already loaded from first plot)
+                    html_doc += d.to_html(full_html=False, include_plotlyjs=False)
             elif hasattr(d, 'savefig'):
                 buf = io.BytesIO()
                 d.savefig(buf, format='png', bbox_inches='tight')

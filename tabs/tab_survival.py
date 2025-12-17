@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import survival_lib
 import time
-import pandas.api.types as ptypes # 🟢 Import เพื่อความชัดเจนในการใช้ types
+from pandas.api.types import is_numeric_dtype
 
 def render(df, _var_meta):
     """
@@ -36,10 +36,10 @@ def render(df, _var_meta):
     event_idx = next((i for i, c in enumerate(all_cols) if 'event' in c.lower() or 'status' in c.lower() or 'dead' in c.lower()), min(1, len(all_cols)-1))
     
     col_time = c1.selectbox("⏳ Time Variable:", all_cols, index=time_idx, key='surv_time')
-    col_event = c2.selectbox("💀 Event Variable (1=Event):", all_cols, index=event_idx, key='surv_event')
+    col_event = c2.selectbox("💫 Event Variable (1=Event):", all_cols, index=event_idx, key='surv_event')
     
     # Tabs
-    tab_curves, tab_landmark, tab_cox = st.tabs(["📉 Survival Curves (KM/NA)", "📍 Landmark Analysis", "📊 Cox Regression"])
+    tab_curves, tab_landmark, tab_cox, tab_ref = st.tabs(["📈 Survival Curves (KM/NA)", "📑 Landmark Analysis", "📊 Cox Regression", "ℹ️ Reference & Interpretation"])
     
     # ==========================
     # TAB 1: Curves (KM & Nelson-Aalen) - ใช้โค้ดเดิม
@@ -88,13 +88,13 @@ def render(df, _var_meta):
                 st.error(f"Error: {e}")
 
     # ==========================
-    # TAB 2: Landmark Analysis 🟢 UPDATED
+    # TAB 2: Landmark Analysis 🟢 UPDATED WITH AUTO-DETECT
     # ==========================
     with tab_landmark:    
         st.caption("Principle: Exclude patients who had an event or were censored before the Landmark Time.")
         
         # Calculate Max Time (Robust check)
-        max_t = df[col_time].dropna().max() if not df.empty and ptypes.is_numeric_dtype(df[col_time]) and df[col_time].notna().any() else 1.0
+        max_t = df[col_time].dropna().max() if not df.empty and is_numeric_dtype(df[col_time]) and df[col_time].notna().any() else 1.0
         if max_t <= 0:
             max_t = 1.0 
         
@@ -102,9 +102,14 @@ def render(df, _var_meta):
         
         # State Management for Landmark Time
         if 'landmark_val' not in st.session_state:
-            st.session_state.landmark_val = float(max_t) * 0.1
+            st.session_state.landmark_val = float(round(float(max_t) * 0.1))
 
         def update_from_slider() -> None:
+            """
+            Synchronizes the stored landmark time value with the slider widget.
+            
+            Sets st.session_state.landmark_val to the current value of st.session_state.lm_slider_widget so the session state reflects slider changes.
+            """
             st.session_state.landmark_val = st.session_state.lm_slider_widget
         
         def update_from_number() -> None:
@@ -119,9 +124,23 @@ def render(df, _var_meta):
             st.number_input("Enter Value:", min_value=0.0, max_value=float(max_t) * 0.99, key='lm_number_widget', value=min(st.session_state.landmark_val, float(max_t) * 0.99), on_change=update_from_number, step=1.0, label_visibility="collapsed")
             
         landmark_t = st.session_state.landmark_val
-        st.info(f"📍 Current Landmark Time: **{landmark_t:.2f}** ({col_time})")
         
-        col_group = st.selectbox("Compare Group:", [c for c in all_cols if c not in [col_time, col_event]], key='lm_group_sur')
+        # 🟢 NEW: Auto-detect group column for landmark analysis
+        # Priority: 'group' > 'treatment' > 'comorbid'
+        group_idx = 0
+        available_cols = [c for c in all_cols if c not in [col_time, col_event]]
+
+        if not available_cols:
+            st.warning("Landmark analysis requires at least one group/covariate column beyond time and event.")
+            return
+
+        for priority_key in ['group', 'treatment', 'comorbid']:
+            found_idx = next((i for i, c in enumerate(available_cols) if priority_key in c.lower()), None)
+            if found_idx is not None:
+                group_idx = found_idx
+                break
+        
+        col_group = st.selectbox("Compare Group:", available_cols, index=group_idx, key='lm_group_sur')
 
         if st.button("Run Landmark Analysis", key='btn_lm_sur'):
             if col_group is None:
@@ -130,7 +149,7 @@ def render(df, _var_meta):
 
             try:
                 with st.spinner(f"Running Landmark Analysis at t={landmark_t:.2f}..."):
-                    # 🟢 CALL NEW LANDMARK FUNCTION: ให้ฟังก์ชันจัดการ Filtering และ Time Reset เอง
+                    # 🟢 CALL NEW LANDMARK FUNCTION: ให้ฟังก์ชนจัดการ Filtering และ Time Reset เอง
                     fig, stats, n_pre, n_post, err = survival_lib.fit_km_landmark(
                         df, col_time, col_event, col_group, landmark_t
                     )
@@ -236,6 +255,123 @@ def render(df, _var_meta):
         if st.session_state.cox_html:
             st.download_button("📥 Download Full Report (Cox)", st.session_state.cox_html, "cox_report.html", "text/html")
 
-# ฟังก์ชัน render ต้องถูกเรียกใช้จาก app.py หรือไฟล์หลัก
-# if __name__ == '__main__':
-#     render(pd.DataFrame(), {})
+    # ==========================
+    # TAB 4: Reference & Interpretation (NEW)
+    # ==========================
+    with tab_ref:
+        st.markdown("##### 📚 Quick Reference: Survival Analysis")
+        
+        st.info("""
+        **🎰 When to Use What:**
+        
+        | Method | Purpose | Output |
+        |--------|---------|--------|
+        | **KM Curves** | Visualize time-to-event by group | Survival %, median, p-value |
+        | **Nelson-Aalen** | Cumulative hazard over time | H(t) curve, risk accumulation |
+        | **Landmark** | Late/surrogate endpoints | Filtered KM, immortal time removed |
+        | **Cox** | Multiple predictors of survival | HR, CI, p-value per variable |
+        """)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### Kaplan-Meier (KM) Curves")
+            st.markdown("""
+            **When to Use:**
+            - Time-to-event analysis (survival, recurrence)
+            - Comparing survival between groups
+            - Estimating survival at fixed times
+            
+            **Interpretation:**
+            - Y-axis = % surviving
+            - X-axis = time
+            - Step down = event occurred
+            - Median survival = 50% point
+            
+            **Log-Rank Test:**
+            - p < 0.05: Curves differ ✅
+            - p ≥ 0.05: No difference ⚠️
+            
+            **Common Mistakes:**
+            - Not handling censoring ❌
+            - Comparing unequal follow-up times
+            - Assuming flat after last event ❌
+            """)
+            
+            st.markdown("### Landmark Analysis")
+            st.markdown("""
+            **When to Use:**
+            - Evaluating late/surrogate endpoints
+            - Excluding early events
+            - Controlling immortal time bias
+            
+            **Key Steps:**
+            1. Select landmark time (e.g., t=1 year)
+            2. Exclude pre-landmark events
+            3. Reset time to 0 at landmark (✅ done auto)
+            4. Compare post-landmark survival
+            
+            **Common Mistakes:**
+            - Not resetting time ❌
+            - Including pre-landmark events ❌
+            - Too many landmarks (overfitting)
+            """)
+        
+        with col2:
+            st.markdown("### Cox Regression")
+            st.markdown("""
+            **When to Use:**
+            - Multiple survival predictors
+            - Adjusted hazard ratios
+            - Semi-parametric modeling
+            
+            **Interpretation:**
+            
+            **HR (Hazard Ratio):**
+            - HR > 1: Increased risk 🔴
+            - HR < 1: Decreased risk (protective) 🟢
+            - HR = 2 → 2× increased hazard
+            
+            **PH Assumption:**
+            - Plot should be flat ✅
+            - Non-flat → time-dependent effect ⚠️
+            
+            **Common Mistakes:**
+            - Not checking PH assumption ❌
+            - Time-varying covariates (use time-dep Cox)
+            - Too many variables (overfitting)
+            - Ignoring interactions
+            """)
+            
+            st.markdown("### Nelson-Aalen")
+            st.markdown("""
+            **When to Use:**
+            - Cumulative hazard visualization
+            - Risk accumulation over time
+            - Non-parametric alternative to KM
+            
+            **Interpretation:**
+            - Steeper curve = higher hazard
+            - Flat at end = no new events
+            - Useful for diagnosis checking
+            """)
+        
+        st.markdown("---")
+        st.markdown("""
+        ### 💡 Quick Decision Tree
+        
+        **Question: I have time-to-event data, single group?**
+        → **KM/NA Curves** (Tab 1) - Visualize survival trajectory
+        
+        **Question: Compare survival between 2+ groups?**
+        → **KM + Log-Rank** (Tab 1) - Test group differences
+        
+        **Question: Should I use landmark analysis?**
+        → **Landmark** (Tab 2) - Exclude immortal time bias
+        
+        **Question: Multiple predictors affecting survival?**
+        → **Cox Regression** (Tab 3) - Adjusted HR for each variable
+        
+        **Question: Covariates change over time?**
+        → **Time-Dependent Cox** (Advanced Survival tab)
+        """)
