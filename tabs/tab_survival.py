@@ -88,7 +88,7 @@ def render(df, _var_meta):
                 st.error(f"Error: {e}")
 
     # ==========================
-    # TAB 2: Landmark Analysis 🟢 UPDATED
+    # TAB 2: Landmark Analysis 🟢 UPDATED WITH AUTO-DETECT
     # ==========================
     with tab_landmark:    
         st.caption("Principle: Exclude patients who had an event or were censored before the Landmark Time.")
@@ -121,7 +121,18 @@ def render(df, _var_meta):
         landmark_t = st.session_state.landmark_val
         st.info(f"📑 Current Landmark Time: **{landmark_t:.2f}** ({col_time})")
         
-        col_group = st.selectbox("Compare Group:", [c for c in all_cols if c not in [col_time, col_event]], key='lm_group_sur')
+        # 🟢 NEW: Auto-detect group column for landmark analysis
+        # Priority: 'group' > 'treatment' > 'comorbid'
+        group_idx = 0
+        available_cols = [c for c in all_cols if c not in [col_time, col_event]]
+        
+        for priority_key in ['group', 'treatment', 'comorbid']:
+            found_idx = next((i for i, c in enumerate(available_cols) if priority_key in c.lower()), None)
+            if found_idx is not None:
+                group_idx = found_idx
+                break
+        
+        col_group = st.selectbox("Compare Group:", available_cols, index=group_idx, key='lm_group_sur')
 
         if st.button("Run Landmark Analysis", key='btn_lm_sur'):
             if col_group is None:
