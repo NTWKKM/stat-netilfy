@@ -10,10 +10,11 @@ logger = get_logger(__name__)
 def render(df, var_meta):
     st.subheader("📋 Table 1 & Matching")
     
-    # Create two subtabs
-    sub_tab1, sub_tab2 = st.tabs([
+    # Create three subtabs (added Reference & Interpretation)
+    sub_tab1, sub_tab2, sub_tab3 = st.tabs([
         "📊 Baseline Characteristics (Table 1)",
-        "⚖️ Propensity Score Matching"
+        "⚖️ Propensity Score Matching",
+        "ℹ️ Reference & Interpretation"
     ])
     
     # ==========================================
@@ -236,3 +237,87 @@ def render(df, var_meta):
                     except Exception as e:
                         st.error(f"Error during PSM ({type(e).__name__}): {e}")
                         logger.exception("PSM analysis failed")
+
+    # ==========================================
+    # SUBTAB 3: REFERENCE & INTERPRETATION (NEW)
+    # ==========================================
+    with sub_tab3:
+        st.markdown("##### 📚 Quick Reference: Table 1 & Matching")
+        
+        st.info("""
+        **🎯 When to Use What:**
+        
+        | Analysis | Purpose | Output |
+        |----------|---------|--------|
+        | **Table 1** | Compare baseline characteristics | Mean/Median, % counts, p-values |
+        | **PSM** | Balance groups (remove confounding) | SMD pre/post, Love plot, matched data |
+        """)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### Table 1 (Baseline)")
+            st.markdown("""
+            **When to Use:**
+            - RCTs: Assess randomization balance
+            - Observational: Check comparability
+            - Publication standard
+            
+            **Interpretation:**
+            - **p < 0.05**: Variables differ ⚠️
+            - **p ≥ 0.05**: Balanced ✅
+            
+            **Presentation:**
+            - Numeric: Mean ± SD (normal) or Median (IQR)
+            - Categorical: Count (%) and OR
+            - Include N for each group
+            
+            **Common Mistakes:**
+            - Using t-test for non-normal data ❌
+            - Multiple testing without adjustment
+            - Assuming p>0.05 = no confounding
+            """)
+        
+        with col2:
+            st.markdown("### PSM (Propensity Matching)")
+            st.markdown("""
+            **When to Use:**
+            - Observational studies (imbalance)
+            - Can't randomize
+            - Adjust for confounders
+            - Mimic RCT
+            
+            **SMD (Balance Check):**
+            - **SMD < 0.1**: Good ✅
+            - **0.1-0.2**: Acceptable ⚠️
+            - **> 0.2**: Poor ❌
+            
+            **Key Steps:**
+            1. Check Table 1 (p-values)
+            2. Run PSM if imbalanced
+            3. Check SMD pre vs post
+            4. Use matched data for analysis
+            
+            **Common Mistakes:**
+            - Not checking Table 1 first ❌
+            - Only checking p-values after PSM
+            - PSM on balanced groups
+            - Ignoring sample size loss
+            """)
+        
+        st.markdown("---")
+        st.markdown("""
+        ### 💡 Decision Guide
+        
+        **Question: Do my groups differ at baseline?**
+        → Use **Table 1** (Tab 1) to check
+        
+        **Question: They're imbalanced. Can I fix it?**
+        → Use **PSM** (Tab 2) to match
+        
+        **Question: After PSM, are they balanced?**
+        → Check **SMD < 0.1** in Love plot ✅
+        
+        **Question: Now what? Use for analysis?**
+        → YES: Use matched dataset for hypothesis testing
+        """)
