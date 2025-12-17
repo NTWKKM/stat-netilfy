@@ -226,9 +226,25 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
 
     return fig, pd.DataFrame(stats_list)
 
-# --- 3. Cox Proportional Hazards (Robust Version with Progressive L2 Penalization) ---
+# --- 3. Cox Proportional Hazards (Robust with Progressive L2 Penalization & Data Validation) ---
 def fit_cox_ph(df, duration_col, event_col, covariate_cols):
-    # 1. Validation
+    """
+    Fit Cox Proportional Hazards model with comprehensive pre-fit validation.
+    
+    🟢 NEW: Pre-fit validation detects:
+    - Missing values (NaN) - already dropped, but double-check
+    - Infinite values (Inf, -Inf)
+    - Extreme values (>±1e10)
+    - Zero variance columns (constant)
+    - Perfect separation (outcome completely predicted by covariate)
+    - High multicollinearity (r > 0.95)
+    
+    Progressive penalization fallback:
+    1. Standard CoxPH (Maximum Partial Likelihood)
+    2. L2 Penalized (p=0.1) - Ridge regression
+    3. L2 Penalized (p=1.0) - Strong regularization
+    """
+    # 1. Basic Validation
     missing = [c for c in [duration_col, event_col, *covariate_cols] if c not in df.columns]
     if missing:
         return None, None, df, f"Missing columns: {missing}"
@@ -240,46 +256,113 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     if data[event_col].sum() == 0:
         return None, None, data, "No events observed (all censored). CoxPH requires at least one event." 
     
-    # 2. Check variance
+    # 🟢 NEW: Comprehensive Data Validation BEFORE attempting fit
+    validation_errors = []
+    
     for col in covariate_cols:
         if pd.api.types.is_numeric_dtype(data[col]):
+            # Check 1: Infinite values
+            if np.isinf(data[col]).any():
+                n_inf = np.isinf(data[col]).sum()
+                validation_errors.append(f"Covariate '{col}': Contains {n_inf} infinite values (Inf, -Inf). Check data source.")
+            
+            # Check 2: Extreme values (>±1e10)
+            if (data[col].abs() > 1e10).any():
+                max_val = data[col].abs().max()
+                validation_errors.append(f"Covariate '{col}': Contains extreme values (max={max_val:.2e}). Consider scaling (divide by 1000, log transform, or standardize).")
+            
+            # Check 3: Zero variance (constant column)
             std = data[col].std()
             if pd.isna(std) or std == 0:
-                return None, None, data, f"Covariate '{col}' has zero variance (or insufficient rows)."
+                validation_errors.append(f"Covariate '{col}': Has zero variance (constant values only). Remove this column.")
+            
+            # Check 4: Perfect separation (outcome completely predictable)
+            try:
+                outcomes_0 = data[data[event_col] == 0][col]
+                outcomes_1 = data[data[event_col] == 1][col]
+                
+                if len(outcomes_0) > 0 and len(outcomes_1) > 0:
+                    # Check if ranges completely separate (no overlap)
+                    if (outcomes_0.max() < outcomes_1.min()) or (outcomes_1.max() < outcomes_0.min()):
+                        validation_errors.append(f"Covariate '{col}': Perfect separation detected - outcomes completely separated by this variable. Try removing, combining with other variables, or grouping.")
+            except Exception:
+                pass  # Skip if check fails
     
-    # 3. Standardize (Skip binary to improve stability)
+    # Check 5: Multicollinearity (high correlation between numeric covariates)
+    numeric_covs = [c for c in covariate_cols if pd.api.types.is_numeric_dtype(data[c])]
+    if len(numeric_covs) > 1:
+        try:
+            corr_matrix = data[numeric_covs].corr().abs()
+            high_corr_pairs = []
+            for i in range(len(corr_matrix.columns)):
+                for j in range(i+1, len(corr_matrix.columns)):
+                    if corr_matrix.iloc[i, j] > 0.95:
+                        col_i = corr_matrix.columns[i]
+                        col_j = corr_matrix.columns[j]
+                        r = corr_matrix.iloc[i, j]
+                        high_corr_pairs.append(f"{col_i} <-> {col_j} (r={r:.3f})")
+            
+            if high_corr_pairs:
+                validation_errors.append(f"High multicollinearity detected (r > 0.95): " + ", ".join(high_corr_pairs) + ". Try removing one of each correlated pair.")
+        except Exception:
+            pass  # Skip if check fails
+    
+    # If validation errors found, report them NOW before trying to fit
+    if validation_errors:
+        error_msg = ("🔴 Data Quality Issues Found (Fix Before Fitting):\n\n" + 
+                     "\n\n".join(f"❌ {e}" for e in validation_errors))
+        return None, None, data, error_msg
+    
+    # 2. Standardize (Skip binary to improve stability)
     _standardize_numeric_cols(data, covariate_cols)
     
-    # 4. Fitting Strategy (Progressive Robustness)
-    # The order of penalizers defines the fallback: Standard (0.0) -> Mild L2 (0.1) -> Stronger L2 (1.0)
-    # L2 Penalization (Ridge) is an effective alternative to Firth's for convergence issues.
+    # 3. Fitting Strategy (Progressive Robustness)
+    # Try: Standard → L2(0.1) → L2(1.0)
     penalizers_L2 = [0.0, 0.1, 1.0] 
     cph = None
     last_error = None
     method_used = None
+    methods_tried = []  # 🟢 NEW: Track methods for error reporting
 
     for p in penalizers_L2:
+        # 🟢 NEW: Build method name BEFORE attempting fit
+        if p == 0.0:
+            current_method = "Standard CoxPH (Maximum Partial Likelihood)"
+        else:
+            current_method = f"L2 Penalized CoxPH (p={p}) - Ridge Regression"
+        
+        methods_tried.append(current_method)
+        
         try:
             temp_cph = CoxPHFitter(penalizer=p) 
             temp_cph.fit(data, duration_col=duration_col, event_col=event_col)
             cph = temp_cph
-            
-            # Capture the method used
-            if p == 0.0:
-                method_used = "Standard CoxPH (Maximum Partial Likelihood)"
-            else:
-                method_used = f"L2 Penalized CoxPH (p={p}) - Ridge Regression Fallback"
-            
-            break # หยุดทันทีที่ Fit สำเร็จ
+            method_used = current_method  # ✅ SET on success
+            break  # Stop trying - success!
         except Exception as e:
             last_error = e
             continue
 
-    # 5. Error handling
+    # 4. Error handling
     if cph is None:
-        return None, None, data, f"Model Convergence Failed after trying Standard and L2 penalization. Last method used: {method_used if method_used else 'None'}. Details: {last_error}.\nTry checking for high correlation (multicollinearity) or perfect separation."
+        # 🟢 NEW: Show which methods were tried + troubleshooting guide
+        methods_str = "\n".join(f"  ❌ {m}" for m in methods_tried)
+        error_msg = (
+            f"Cox Model Convergence Failed\n\n"
+            f"Fitting Methods Attempted:\n{methods_str}\n\n"
+            f"Last Error: {str(last_error)}\n\n"
+            f"Troubleshooting Guide:\n"
+            f"  1. Verify your data passed validation checks above\n"
+            f"  2. Try removing ONE covariate at a time to isolate the problem\n"
+            f"  3. For comorbid variables: Check if perfectly separated from outcome\n"
+            f"  4. Try scaling numeric variables to 0-100 or 0-1 range\n"
+            f"  5. Check for rare categories in categorical variables\n"
+            f"  6. Try with fewer covariates (e.g., 2-3 instead of many)\n"
+            f"  7. See: https://lifelines.readthedocs.io/en/latest/Examples.html#problems-with-convergence-in-the-cox-proportional-hazard-model"
+        )
+        return None, None, data, error_msg
 
-    # 6. Format Results
+    # 5. Format Results
     summary = cph.summary.copy()
     summary['HR'] = np.exp(summary['coef'])
     ci = cph.confidence_intervals_
@@ -287,7 +370,7 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     summary['95% CI Upper'] = np.exp(ci.iloc[:, 1])
 
     # Add Method used to results table
-    summary['Method'] = method_used # 🟢 NEW: ระบุวิธีการที่ใช้จริงลงในผลลัพธ์
+    summary['Method'] = method_used # 🟢 NEW: Show which method succeeded
     summary.index.name = "Covariate"
 
     res_df = summary[['HR', '95% CI Lower', '95% CI Upper', 'p', 'Method']].rename(columns={'p': 'P-value'})
@@ -460,13 +543,12 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
     return fig, pd.DataFrame([stats_data]), n_pre_filter, n_post_filter, None
 
 # --- 5. Report Generation 🟢 FIX: Include Plotly JS in HTML ---
-def generate_report_survival(title, elements, offline=False):
+def generate_report_survival(title, elements):
     """
     Generate HTML report with proper Plotly JS inclusion.
     
-    🟢 FIX: Include Plotly JS with first plot only.
-    Set offline=True for self-contained HTML (larger file, works offline).
-    Default uses CDN (smaller file, requires internet).
+    🟢 FIX: Include Plotly JS with first plot only for self-contained HTML.
+    This ensures graphs render correctly even when offline or with strict CSP.
     Subsequent plots reuse the same JS library (efficient).
     """
     css_style = """<style>
@@ -510,7 +592,7 @@ def generate_report_survival(title, elements, offline=False):
                 # 🟢 SOLUTION: Include Plotly JS with first plot only
                 if not plotly_js_included:
                     # First plot: include 'cdn' to embed Plotly JS in HTML
-                    html_doc += d.to_html(full_html=False, include_plotlyjs=True if offline else 'cdn')
+                    html_doc += d.to_html(full_html=False, include_plotlyjs='cdn')
                     plotly_js_included = True
                 else:
                     # Subsequent plots: don't include JS (already loaded from first plot)
