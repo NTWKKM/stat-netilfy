@@ -243,8 +243,9 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     
     Progressive penalization fallback:
     1. Standard CoxPH (Maximum Partial Likelihood)
-    2. L2 Penalized (p=0.1) - Ridge regression
-    3. L2 Penalized (p=1.0) - Strong regularization
+    2. Standard CoxPH with small step_size (For convergence stability)
+    3. L2 Penalized (p=0.1) - Ridge regression
+    4. L2 Penalized (p=1.0) - Strong regularization
     """
     # 1. Basic Validation
     missing = [c for c in [duration_col, event_col, *covariate_cols] if c not in df.columns]
@@ -257,6 +258,23 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
 
     if data[event_col].sum() == 0:
         return None, None, data, "No events observed (all censored). CoxPH requires at least one event." 
+
+    # 🟢 NEW: Automatic One-Hot Encoding for Categorical/Object columns
+    # จำเป็นมากสำหรับ Cox Regression เพื่อป้องกัน Dummy Variable Trap และจัดการกับ Text
+    try:
+        # เลือกเฉพาะคอลัมน์ Covariates เพื่อแปลง (เก็บ Time/Event ไว้เหมือนเดิม)
+        covars_only = data[covariate_cols]
+        # ตรวจสอบว่ามี column ไหนเป็น object หรือ category หรือไม่
+        cat_cols = [c for c in covariate_cols if not pd.api.types.is_numeric_dtype(data[c])]
+        
+        if cat_cols:
+            # ใช้ drop_first=True เพื่อป้องกัน Multicollinearity (Perfect Correlation)
+            covars_encoded = pd.get_dummies(covars_only, columns=cat_cols, drop_first=True)
+            # อัปเดต data และรายชื่อ covariate_cols ใหม่
+            data = pd.concat([data[[duration_col, event_col]], covars_encoded], axis=1)
+            covariate_cols = covars_encoded.columns.tolist()
+    except Exception as e:
+        return None, None, data, f"Encoding Error: Failed to convert categorical variables. {e}"
     
     # 🟢 NEW: Comprehensive Data Validation BEFORE attempting fit
     validation_errors = []
@@ -319,25 +337,32 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     _standardize_numeric_cols(data, covariate_cols)
     
     # 3. Fitting Strategy (Progressive Robustness)
-    # Try: Standard → L2(0.1) → L2(1.0)
-    penalizers_L2 = [0.0, 0.1, 1.0] 
+    # Try: Standard -> Standard(small step) -> L2(0.1) -> L2(1.0)
+    # เพิ่ม step_size เพื่อแก้ปัญหา 'delta contains nan'
+    configs = [
+        {"p": 0.0, "step": 1.0, "name": "Standard CoxPH (Maximum Partial Likelihood)"},
+        {"p": 0.0, "step": 0.5, "name": "Standard CoxPH (Step Size=0.5)"}, # ช่วยเรื่อง convergence
+        {"p": 0.0, "step": 0.2, "name": "Standard CoxPH (Step Size=0.2)"}, # ช่วยเรื่อง convergence มากขึ้น
+        {"p": 0.1, "step": 1.0, "name": "L2 Penalized CoxPH (p=0.1) - Ridge Regression"},
+        {"p": 1.0, "step": 1.0, "name": "L2 Penalized CoxPH (p=1.0) - Strong Regularization"}
+    ]
+    
     cph = None
     last_error = None
     method_used = None
     methods_tried = []  # 🟢 NEW: Track methods for error reporting
 
-    for p in penalizers_L2:
-        # 🟢 NEW: Build method name BEFORE attempting fit
-        if p == 0.0:
-            current_method = "Standard CoxPH (Maximum Partial Likelihood)"
-        else:
-            current_method = f"L2 Penalized CoxPH (p={p}) - Ridge Regression"
+    for conf in configs:
+        p = conf['p']
+        step = conf['step']
+        current_method = conf['name']
         
         methods_tried.append(current_method)
         
         try:
             temp_cph = CoxPHFitter(penalizer=p) 
-            temp_cph.fit(data, duration_col=duration_col, event_col=event_col)
+            # ใช้ step_size ในการ fit
+            temp_cph.fit(data, duration_col=duration_col, event_col=event_col, step_size=step)
             cph = temp_cph
             method_used = current_method  # ✅ SET on success
             break  # Stop trying - success!
