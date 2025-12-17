@@ -601,7 +601,7 @@ if __name__ == "__main__":
     print("\n[Test 7] Exception logging:")
     try:
         raise ValueError("Simulated error for testing")
-   except Exception:
+    except Exception:
         logger.exception(f"Caught an exception during processing: {type(e).__name__}")
 
     # Test 8: Performance summary
