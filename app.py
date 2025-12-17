@@ -134,25 +134,31 @@ if st.sidebar.button("📄 Load Example Data"):
             sex = np.random.binomial(1, 0.55, n)
             bmi = np.random.normal(24, 4, n).round(1).clip(10, 60)
             
-            # Comorbidity
-            logit_comorb = -5 + 0.05*age + 0.1*bmi
+            # Comorbidity (independent predictor)
+            logit_comorb = -3 + 0.03*age + 0.08*bmi
             p_comorb = 1 / (1 + np.exp(-logit_comorb))
             comorbidity = np.random.binomial(1, p_comorb)
 
-            # --- 2. Treatment Assignment (Selection Bias) ---
-            logit_treat = -2 + 1.5*comorbidity - 0.02*age
-            p_treat = 1 / (1 + np.exp(-logit_treat))
-            group = np.random.binomial(1, p_treat) 
+            # --- 2. Treatment Assignment (RANDOMIZED - NO SELECTION BIAS) ---
+            # 🟢 FIX: Random assignment (p=0.5) not based on comorbidity
+            group = np.random.binomial(1, 0.5, n)
 
             # --- 3. Survival Outcome ---
-            lambda_base = 0.02
-            hazard = lambda_base * np.exp(0.4*comorbidity - 0.8*group)
-            surv_time = np.random.exponential(1/hazard)
+            # Moderate effect sizes to avoid quasi-separation
+            # HR(comorbidity) = exp(0.3) ≈ 1.35 (modest increase in hazard)
+            # HR(treatment) = exp(-0.25) ≈ 0.78 (modest protective effect)
+            lambda_base = 0.008  # Reduced baseline to get reasonable event rate
+            hazard = lambda_base * np.exp(0.3*comorbidity - 0.25*group)
+            surv_time = np.random.exponential(1/hazard, n)
             
-            censor_time = np.random.uniform(0, 100, n)
+            # Censoring (random, independent of covariates)
+            censor_time = np.random.uniform(50, 150, n)
             time_obs = np.minimum(surv_time, censor_time).round(1)
             time_obs = np.maximum(time_obs, 0.1)
             event_death = (surv_time <= censor_time).astype(int)
+            
+            # Realistic event rate: ~35-40% (avoid >50% which can cause convergence issues)
+            print(f"DEBUG: Event rate = {event_death.mean()*100:.1f}%")
 
             # --- 4. Logistic Regression Outcome ---
             logit_cure = 0.5 + 1.2*group - 0.03*age - 0.8*comorbidity
