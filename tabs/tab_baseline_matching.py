@@ -59,10 +59,8 @@ def render(df, var_meta):
             col_group = st.selectbox("Group By (Column):", ["None", *all_cols], index=grp_idx+1, key='t1_group')
             
             # 🟢 Added OR Display Option
-            st.write("---")
-            st.write("**OR Display Style:**")
             or_style_display = st.radio(
-                "Choose Style:",
+                "Choose OR Style:",
                 ["All Levels (Every Level vs Ref)", "Simple (Single Line/Risk vs Ref)"],
                 index=0,
                 key="or_style_radio",
