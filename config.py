@@ -111,7 +111,7 @@ class ConfigManager:
             
             # ========== LOGGING SETTINGS ==========
             "logging": {
-                "enabled": True,
+                "enabled": False, # ลองเปลี่ยนเป็น False เพื่อทดสอบ
                 "level": "INFO",  # DEBUG, INFO, WARNING, ERROR, CRITICAL
                 "format": "[%(asctime)s] [%(levelname)s] %(name)s: %(message)s",
                 "date_format": "%Y-%m-%d %H:%M:%S",
