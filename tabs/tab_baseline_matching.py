@@ -119,9 +119,12 @@ def render(df, var_meta):
         # --- 2. Data Preparation ---
         df_analysis = df.copy()
         unique_treat = df_analysis[treat_col].dropna().unique()
-        
+
+        # Check for all-NaN treatment column
+        if len(unique_treat) == 0:
+            st.error(f"⚠️ Variable '{treat_col}' contains only missing values. Please select a different treatment variable.")
         # Check exactly 2 groups
-        if len(unique_treat) != 2:
+        elif len(unique_treat) != 2:
             st.warning(f"⚠️ Variable '{treat_col}' must have exactly 2 unique values (Found: {len(unique_treat)}). PSM cannot run.")
         else:
             # Check if 0/1 or needs encoding
@@ -236,7 +239,7 @@ def render(df, var_meta):
                                     
                             # Generate Report
                             elements = [
-                                {'type':'text', 'data': f"PSM Matching Report. Treatment: {treat_col} (Mapped 1={target_val if target_val else '1'})"},
+                                {'type':'text', 'data': f"PSM Matching Report. Treatment: {treat_col}" + (f" (Mapped: '{target_val}' → 1)" if target_val else " (Binary: 1=Treated)")},
                                 {'type':'table', 'data': smd_merge},
                                 {'type':'plot', 'data': fig_love}
                             ]
