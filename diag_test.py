@@ -62,6 +62,9 @@ def calculate_ci_wilson_score(successes, n, ci=0.95):
     Wilson Score Interval for binomial proportion
     More accurate than Wald interval, especially for extreme proportions
     """
+    if n <= 0:
+        return np.nan, np.nan
+    
     z = stats.norm.ppf(1 - (1 - ci) / 2)
     p_hat = successes / n if n > 0 else 0
     denominator = 1 + (z**2 / n)
