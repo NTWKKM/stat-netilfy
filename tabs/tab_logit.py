@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from logic import process_data_and_generate_html # Import จาก root
+from logger import get_logger
+logger = get_logger(__name__)
 
 def check_perfect_separation(df, target_col):
     """
@@ -76,7 +78,9 @@ def render(df, var_meta):
         with c1:
             def_idx = 0
             for i, c in enumerate(all_cols):
-                if 'outcome' in c.lower() or 'died' in c.lower(): def_idx = i; break
+                if 'outcome' in c.lower() or 'died' in c.lower():
+                    def_idx = i
+                    break
             target = st.selectbox("Select Outcome (Y):", all_cols, index=def_idx, key='logit_target')
             
         with c2:
@@ -124,6 +128,7 @@ def render(df, var_meta):
                         st.components.v1.html(html, height=600, scrolling=True)
                     except Exception as e:
                         st.error(f"Failed: {e}")
+                        logger.exception("Logistic regression failed")
                         
         with dl_col:
             if st.session_state.html_output_logit:
