@@ -158,7 +158,8 @@ def render(df, var_meta):
                             pd.api.types.is_object_dtype(df_analysis[c])]
                 if cat_covs:
                     df_analysis = pd.get_dummies(df_analysis, columns=cat_covs, drop_first=True)
-                new_cols = [c for c in df_analysis.columns if c not in df.columns]
+                # Exclude encoded treatment from new columns
+                new_cols = [c for c in df_analysis.columns if c not in df.columns and c != final_treat_col]
                 final_cov_cols = [c for c in cov_cols if c not in cat_covs] + new_cols
             else:
                 final_cov_cols = []
