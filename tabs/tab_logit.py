@@ -43,7 +43,6 @@ def render(df, var_meta):
         var_meta (dict | Any): Variable metadata passed through to the report generation routine (used to annotate or format outputs).
     """
     st.subheader("4. Binary Logistic Regression Analysis")
-    ##### Logistic Regression Analysis
     st.info("""
     **💡 Guide:** Models the relationship between predictors and the **probability** of a **binary outcome** (e.g., disease/no disease).
 
@@ -54,7 +53,7 @@ def render(df, var_meta):
     * **P-value:** Tests if the predictor's association with the outcome is statistically significant.
     
     **Variable Selection:**
-    * **Target (Y):** Must be **Binary** (e.g.,Die/Survide, 0/1, Yes/No).
+    * **Target (Y):** Must be **Binary** (e.g., Die/Survive, 0/1, Yes/No).
     * **Features (X):** Can be **Numeric** or **Categorical** (e.g., Age, Gender).
     * **Features (X) Inclusion:** All available features are **automatically included** by default; users can **manually exclude** any unwanted variables.
 """)
@@ -77,7 +76,7 @@ def render(df, var_meta):
         else:
             exclude_cols = st.multiselect("Exclude Variables (Optional):", all_cols, key='logit_exclude_opt')
 
-    # 🟢 NEW: เพิ่มส่วนเลือก Method (User Selection)
+    # 🟢 NEW: เพิ่มส่วนเลือ Method (User Selection)
     method_options = {
         "Auto (Recommended)": "auto",
         "Standard (MLE)": "bfgs",
@@ -88,7 +87,7 @@ def render(df, var_meta):
         list(method_options.keys()),
         index=0,
         horizontal=True,
-        # 🟢 ใช้ """ (Triple Quotes) เพื่อเขียนหลายบรรทัด
+        # 🟢 ใช้ """ (Triple Quotes) เพื่อเขียนหลายบรรทัช
         help="""
         - **Auto:** Automatically selects the most suitable method based on data characteristics and availability.
         - **Standard:** Usual Logistic Regression.
@@ -122,3 +121,71 @@ def render(df, var_meta):
             st.download_button("📥 Download Report", st.session_state.html_output_logit, "logit.html", "text/html", key='dl_logit')
         else:
             st.button("📥 Download Report", disabled=True, key='ph_logit')
+    
+    # --- NEW: Reference & Interpretation ---
+    st.markdown("---")
+    with st.expander("📚 Reference & Interpretation"):
+        st.markdown("""
+        ### Binary Logistic Regression Guide
+        
+        **When to Use:**
+        - Predicting binary outcomes (Disease/No Disease)
+        - Understanding risk/protective factors
+        - Adjusted analysis (controlling for confounders)
+        - Classification models
+        
+        **Key Metrics:**
+        
+        #### Odds Ratio (OR)
+        - **OR = 1**: No effect
+        - **OR > 1**: Increased odds (Risk Factor) 🔴
+        - **OR < 1**: Decreased odds (Protective Factor) 🟢
+        - **Example**: OR = 2.5 → 2.5× increased odds
+        
+        #### Adjusted OR (aOR)
+        - Accounts for other variables in model
+        - More reliable than unadjusted OR ✅
+        - Preferred for reporting ✅
+        
+        #### Confidence Interval (95% CI)
+        - **CI crosses 1.0**: Not statistically significant ⚠️
+        - **CI doesn't cross 1.0**: Statistically significant ✅
+        - Narrower CI = more precise estimate
+        
+        #### P-value
+        - **p < 0.05**: Statistically significant ✅
+        - **p ≥ 0.05**: Not significant ⚠️
+        
+        ---
+        
+        ### Regression Methods
+        
+        | Method | When to Use | Notes |
+        |--------|------------|-------|
+        | **Standard (MLE)** | Default, balanced data | Classic logistic regression |
+        | **Firth's** | Small sample, rare events, separation | Reduces bias, more stable |
+        | **Auto** | Recommended | Picks best method automatically |
+        
+        ---
+        
+        ### Common Mistakes ❌
+        
+        - **Reporting unadjusted OR** without adjustment → Use aOR ✅
+        - **Perfect separation** (entire category = outcome) → Exclude problematic variables
+        - **Not checking CI** (only looking at p-value) → CI provides range of plausible values
+        - **Multicollinearity** (predictors highly correlated) → Check correlations first
+        - **Overfitting** (too many variables) → Use variable selection
+        - **Interpreting OR for log-transformed predictors** → Multiply by e^(log-unit) change
+        
+        ---
+        
+        ### Interpretation Example
+        
+        **Model Output:**
+        - Variable: Smoking
+        - aOR = 1.8 (95% CI: 1.2 - 2.4)
+        - p = 0.003
+        
+        **Interpretation:** 
+        Smoking is associated with 1.8× increased odds of outcome (compared to non-smoking), adjusting for other variables. This difference is statistically significant (p < 0.05), and we're 95% confident the true OR is between 1.2 and 2.4. ✅
+        """)
