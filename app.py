@@ -21,9 +21,6 @@ st.set_page_config(
     }
 )
 
-# Get logger instance
-logger = get_logger(__name__)
-
 # Initialize logging system (once at app start)
 @st.cache_resource(show_spinner=False)
 def _init_logging() -> bool:
@@ -32,6 +29,9 @@ def _init_logging() -> bool:
     return True
 
 _init_logging()
+
+# Get logger instance (after configuration)
+logger = get_logger(__name__)
 
 st.title(f"🏥 {CONFIG.get('ui.page_title', 'Medical Statistical Tool')}")
 
@@ -66,7 +66,8 @@ def check_optional_deps():
         deps_status['firth'] = {'installed': True, 'msg': '✅ Firth regression enabled'}
     except ImportError:
         deps_status['firth'] = {'installed': False, 'msg': '⚠️ Firth regression unavailable - using Standard Logistic Regression (BFGS)'}
-    
+
+    get_logger(__name__).info("Optional dependencies: firth=%s", deps_status['firth']['installed'])
     return deps_status
 
 if 'checked_deps' not in st.session_state:
@@ -283,7 +284,8 @@ if upl:
         else:
             st.sidebar.info("File already loaded.")
             
-    except (ValueError, UnicodeDecodeError, pd.errors.ParserError, ImportError) as e:  
+    except (ValueError, UnicodeDecodeError, pd.errors.ParserError, ImportError, Exception) as e:
+        # Broad catch for unpredictable file format errors
         logger.log_operation("file_upload", "failed", error=str(e))  # ✅ LOG ERROR
         st.sidebar.error(f"Error: {e}")
         st.session_state.df = None
