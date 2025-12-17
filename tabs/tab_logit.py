@@ -114,7 +114,8 @@ def render(df, var_meta):
         st.write("") # Spacer
 
         run_col, dl_col = st.columns([1, 1])
-        if 'html_output_logit' not in st.session_state: st.session_state.html_output_logit = None
+        if 'html_output_logit' not in st.session_state:
+            st.session_state.html_output_logit = None
 
         if run_col.button("🚀 Run Logistic Regression", type="primary"):
             if df[target].nunique() < 2:
