@@ -137,7 +137,12 @@ def render(df, var_meta):
                 
                 with c_sel:
                     target_val = st.selectbox("Select value for 'Treatment/Case' (will be mapped to 1):", unique_treat, key='psm_target_select')
-                
+
+                # Check for missing treatment values
+                if df_analysis[treat_col].isna().any():
+                    st.warning(f"⚠️ Treatment variable '{treat_col}' contains {df_analysis[treat_col].isna().sum()} missing values. These will be excluded from analysis.")
+                    df_analysis = df_analysis.dropna(subset=[treat_col])
+                    
                 final_treat_col = f"{treat_col}_encoded"
                 df_analysis[final_treat_col] = np.where(df_analysis[treat_col] == target_val, 1, 0)
                 
@@ -147,7 +152,10 @@ def render(df, var_meta):
             
             # Handle categorical covariates (One-hot Encoding)
             if cov_cols:
-                cat_covs = [c for c in cov_cols if df_analysis[c].dtype == 'object']
+                # Detect string, object, and categorical dtypes
+                cat_covs = [c for c in cov_cols if pd.api.types.is_string_dtype(df_analysis[c]) or 
+                            pd.api.types.is_categorical_dtype(df_analysis[c]) or 
+                            pd.api.types.is_object_dtype(df_analysis[c])]
                 if cat_covs:
                     df_analysis = pd.get_dummies(df_analysis, columns=cat_covs, drop_first=True)
                 new_cols = [c for c in df_analysis.columns if c not in df.columns]
