@@ -576,8 +576,8 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
         if len(groups) == 2:
             g1, g2 = groups
             res = logrank_test(
-                landmark_data[landmark_data[group_col] == g1]['New_Duration'],
-                landmark_data[landmark_data[group_col] == g2]['New_Duration'],
+                landmark_data[landmark_data[group_col] == g1][_adj_duration],
+                landmark_data[landmark_data[group_col] == g2][_adj_duration],
                 event_observed_A=landmark_data[landmark_data[group_col] == g1][event_col],
                 event_observed_B=landmark_data[landmark_data[group_col] == g2][event_col]
             )
