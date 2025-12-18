@@ -362,8 +362,8 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     
     # If validation errors found, report them NOW before trying to fit
     if validation_errors:
-        error_msg = ("🔴 Data Quality Issues Found (Fix Before Fitting):\n\n" + 
-                     "\n\n".join(f"❌ {e}" for e in validation_errors))
+        error_msg = ("[DATA QUALITY ISSUES] Fix Before Fitting:\n\n" + 
+                     "\n\n".join(f"[ERROR] {e}" for e in validation_errors))
         return None, None, data, error_msg
     
     # 2. Standardize (Skip binary to improve stability)
@@ -403,7 +403,7 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     # 4. Error handling
     if cph is None:
         # 🟢 Show which methods were tried + troubleshooting guide
-        methods_str = "\n".join(f"  ❌ {m}" for m in methods_tried)
+        methods_str = "\n".join(f"  [ERROR] {m}" for m in methods_tried)
         error_msg = (
             f"Cox Model Convergence Failed\n\n"
             f"Fitting Methods Attempted:\n{methods_str}\n\n"
@@ -642,10 +642,10 @@ def generate_report_survival(title, elements):
         html_doc (str): A self-contained HTML string representing the assembled report.
     """
     
-    # Use primary teal color throughout
+    # 🟢 FIX: Use 'text' instead of 'text_primary' (key exists in color palette)
     primary_color = COLORS['primary']
     primary_dark = COLORS['primary_dark']
-    text_color = COLORS['text_primary']
+    text_color = COLORS['text']
     
     css_style = f"""<style>
         body{{
