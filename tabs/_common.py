@@ -1,7 +1,34 @@
-# tabs/_common.py
-
 from typing import List, Tuple  # Or use built-in: list, tuple
 import pandas as pd
+
+# ==========================================
+# 🎨 UNIFIED COLOR PALETTE
+# ==========================================
+# All reports use this consistent teal/green color scheme
+REPORT_COLORS = {
+    "primary": "#218084",      # Teal-500: Main accent (titles, borders)
+    "primary_light": "#50b8c6", # Teal-300: Highlights, hover states
+    "primary_dark": "#1a6473",  # Teal-700: Darker accents
+    "success": "#218084",       # Teal-500: Success/positive metrics
+    "danger": "#c0152f",        # Red-500: Risk/negative metrics
+    "warning": "#a84b2f",       # Orange-500: Warnings/cautions
+    "neutral": "#62676c",       # Slate-500: Neutral/secondary text
+    "bg_light": "#fcfcf9",      # Cream-50: Light background
+    "bg_surface": "#fffffe",    # Cream-100: Surface background
+    "border": "#5e5240",        # Brown-600 at 20% opacity in CSS
+    "text_primary": "#134252",  # Slate-900: Main text
+    "text_secondary": "#62676c" # Slate-500: Secondary text
+}
+
+def get_color_palette():
+    """
+    Returns the unified color palette for consistent styling across all report tabs.
+    
+    Returns:
+        dict: Color palette with keys for primary, success, danger, warning, neutral colors
+              and background/border colors.
+    """
+    return REPORT_COLORS.copy()
 
 def get_pos_label_settings(df: pd.DataFrame, col_name: str) -> tuple[list[str], int]:
     """
