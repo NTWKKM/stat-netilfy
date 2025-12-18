@@ -117,7 +117,7 @@ def render(df):
         numeric_cols = df.select_dtypes(include="number").columns.tolist()
         
         # Auto-select columns with 'measurement', 'rater', 'machine', 'score', 'read' in name
-        default_icc_cols = [c for c in numeric_cols if any(k in c.lower() for k in ['measure', 'machine', 'rater', 'score', 'read', 'icc'])]
+        default_icc_cols = [c for c in numeric_cols if any(k in c.lower() for k in ['measure', 'machine', 'rater', 'read', 'icc'])]
         if len(default_icc_cols) < 2:
             default_icc_cols = numeric_cols[:2] if len(numeric_cols) >= 2 else []
         
