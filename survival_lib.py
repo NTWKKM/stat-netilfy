@@ -158,7 +158,7 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
 def fit_nelson_aalen(df, duration_col, event_col, group_col):
     """
     Fit Nelson-Aalen cumulative hazard curves optionally stratified by a grouping column and return a Plotly figure plus group-level statistics.
-    
+        
     Drops rows with missing duration or event values. If a group column is provided, rows with missing group values are dropped and curves are plotted per group; otherwise a single overall curve is plotted. When the fitter provides a confidence interval with at least two columns, a shaded 95% CI is added for each group.
     
     Parameters:
@@ -253,7 +253,7 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
 def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     """
     Fit a Cox Proportional Hazards model after validating and preprocessing covariates.
-    
+        
     Validates input columns and rows, performs automatic one-hot encoding for categorical covariates (drop_first=True), checks numeric covariates for infinite or extreme values, zero variance, potential perfect separation, and high multicollinearity, standardizes numeric covariates (skipping binary 0/1), and attempts a progressive fitting strategy (standard CoxPH then increasing L2 penalization) until a successful fit is obtained or all attempts fail.
     
     Parameters:
@@ -433,15 +433,21 @@ def check_cph_assumptions(cph, data):
         # Compute residuals
         scaled_schoenfeld = cph.compute_residuals(data, 'scaled_schoenfeld')
         
+        # 🟢 FIX: Align 'times' with the residuals (residuals only exist for events)
+        # scaled_schoenfeld index corresponds to the original data index for event rows
+        times = data.loc[scaled_schoenfeld.index, cph.duration_col]
+        
         for col in scaled_schoenfeld.columns:
             fig, ax = plt.subplots(figsize=(6, 4))
-            ax.scatter(data[cph.duration_col], scaled_schoenfeld[col], alpha=0.5)
+            
+            # Use the aligned 'times'
+            ax.scatter(times, scaled_schoenfeld[col], alpha=0.5)
             
             # Trend line (optional)
             try:
-                z = np.polyfit(data[cph.duration_col], scaled_schoenfeld[col], 1)
+                z = np.polyfit(times, scaled_schoenfeld[col], 1)
                 p = np.poly1d(z)
-                ax.plot(data[cph.duration_col], p(data[cph.duration_col]), "r--", alpha=0.8)
+                ax.plot(times, p(times), "r--", alpha=0.8)
             except Exception as e:
                 warnings.warn(f"Could not fit trend line for {col}: {e}", stacklevel=2)
                 
@@ -465,8 +471,8 @@ def check_cph_assumptions(cph, data):
 # --- 4. Landmark Analysis (KM) 🟢 FIX LM CI ---
 def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
     """
-    Perform Kaplan–Meier survival analysis using a landmark-time approach and produce a survival plot plus log-rank test results.
-    
+    Perform Kaplan–Meier survival analysis using a landmark-time approach.
+        
     Parameters:
         df (pandas.DataFrame): Input data containing duration, event indicator, and group columns.
         duration_col (str): Name of the column with observed times-to-event.
@@ -481,7 +487,6 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
         n_post_filter (int): Number of records remaining after applying the landmark filter (duration >= landmark_time).
         error (str or None): Error message when the function fails early (e.g., missing columns or insufficient records), otherwise None.
     """
-    
     # 1. Data Cleaning
     missing = [c for c in [duration_col, event_col, group_col] if c not in df.columns]
     if missing:
@@ -602,7 +607,7 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
 def generate_report_survival(title, elements):
     """
     Assemble a complete HTML report from a sequence of content elements, embedding tables, figures, and images for offline-friendly consumption.
-    
+      
     Builds an HTML document with the given title and iterates over `elements` to render supported content types. For Plotly figures, the Plotly JS library is embedded only once with the first Plotly plot and omitted for subsequent Plotly plots so later plots reuse the already-loaded script. Supported element types and expected `data` values:
     - "header": a string rendered as an H2 section header.
     - "text": a plain string rendered as a paragraph.
@@ -673,7 +678,7 @@ def generate_report_survival(title, elements):
         elif t == 'image':
             b64 = base64.b64encode(d).decode('utf-8')
             html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
-             
+              
     html_doc += """<div class='report-footer'>
     &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM n Donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
     </div>"""
