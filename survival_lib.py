@@ -161,7 +161,7 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
 def fit_nelson_aalen(df, duration_col, event_col, group_col):
     """
     Fit Nelson-Aalen cumulative hazard curves optionally stratified by a grouping column and return a Plotly figure plus group-level statistics.
-           
+    
     Drops rows with missing duration or event values. If a group column is provided, rows with missing group values are dropped and curves are plotted per group; otherwise a single overall curve is plotted. When the fitter provides a confidence interval with at least two columns, a shaded 95% CI is added for each group.
     
     Parameters:
@@ -255,8 +255,8 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
 # --- 3. Cox Proportional Hazards (Robust with Progressive L2 Penalization & Data Validation) ---
 def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     """
-    Fit a Cox Proportional Hazards model after validating and preprocessing covariates.
-               
+    Fit a Cox Proportional Hazards model after validating and preprocessing covariates.         
+    
     Validates input columns and rows, performs automatic one-hot encoding for categorical covariates (drop_first=True), checks numeric covariates for infinite or extreme values, zero variance, potential perfect separation, and high multicollinearity, standardizes numeric covariates (skipping binary 0/1), and attempts a progressive fitting strategy (standard CoxPH then increasing L2 penalization) until a successful fit is obtained or all attempts fail.
     
     Parameters:
@@ -453,7 +453,8 @@ def check_cph_assumptions(cph, data):
             try:
                 z = np.polyfit(times, scaled_schoenfeld[col], 1)
                 p = np.poly1d(z)
-                ax.plot(times, p(times), "r--", alpha=0.8)
+                sorted_times = np.sort(times)
+                ax.plot(sorted_times, p(sorted_times), "r--", alpha=0.8)
             except Exception as e:
                 warnings.warn(f"Could not fit trend line for {col}: {e}", stacklevel=2)
                 
