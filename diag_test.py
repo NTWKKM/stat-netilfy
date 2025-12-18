@@ -702,12 +702,12 @@ def calculate_icc(df, cols):
 # ========================================
 
 def generate_report(title, elements):
-    """Generate HTML report with unified teal color palette from _common.py"""
+    """Generate HTML report with unified color palette from _common.py"""
     
-    # Use primary teal color throughout
+    # ✅ FIX: Use 'text' instead of 'text_primary'
     primary_color = COLORS['primary']
     primary_dark = COLORS['primary_dark']
-    text_color = COLORS['text_primary']
+    text_color = COLORS['text']  # ✅ FIXED: was 'text_primary'
     
     css_style = f""" 
     <style>
