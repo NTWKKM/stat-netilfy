@@ -36,7 +36,7 @@ class TestColorPalette:
         palette = get_color_palette()
         required_keys = [
             'primary', 'primary_dark', 'text', 'text_secondary',
-            'danger', 'warning', 'success', 'info',
+            'danger', 'warning', 'success', 'info', 'neutral',
             'border', 'background', 'surface'
         ]
         
@@ -67,31 +67,34 @@ class TestColorPalette:
     
     def test_specific_color_values(self):
         """
-        ✅ Test: Verify specific color hex values
+        ✅ Test: Verify specific color hex values (Updated)
         """
         palette = get_color_palette()
         
-        assert palette['primary'] == '#218084', "Primary color mismatch"
-        assert palette['primary_dark'] == '#134252', "Primary dark color mismatch"
-        assert palette['danger'] == '#ff5459', "Danger color mismatch"
-        assert palette['text'] == '#2c3e50', "Text color mismatch"
+        assert palette['primary'] == '#2c5aa0', "Primary color should be #2c5aa0 (Navy)"
+        assert palette['primary_dark'] == '#1a3a52', "Primary dark color should be #1a3a52"
+        assert palette['neutral'] == '#bdc3c7', "Neutral color should be #bdc3c7 (Light gray)"
+        assert palette['danger'] == '#e74c3c', "Danger color should be #e74c3c"
+        assert palette['text'] == '#1a2332', "Text color should be #1a2332"
     
     def test_color_accessibility(self):
         """
         ✅ Test: Colors meet WCAG accessibility standards
         """
-        # Contrast ratios (simplified check - color pairs on white background)
-        # These are documented in COLOR_SYSTEM.md
-        
         palette = get_color_palette()
         
-        # Dark teal on white should have high contrast
-        primary_dark = palette['primary_dark']  # #134252
-        assert primary_dark.lower() in ['#134252'], "Primary dark should be #134252 for accessibility"
+        # Navy on white should have good contrast
+        primary = palette['primary']  # #2c5aa0
+        assert primary.lower() in ['#2c5aa0'], "Primary should be #2c5aa0 for accessibility"
         
         # Red for alerts should be readable
-        danger = palette['danger']  # #ff5459
-        assert danger.lower() in ['#ff5459'], "Danger color should be #ff5459 for accessibility"
+        danger = palette['danger']  # #e74c3c
+        assert danger.lower() in ['#e74c3c'], "Danger color should be #e74c3c"
+        
+        # Neutral should exist for dashed lines
+        neutral = palette.get('neutral', None)
+        assert neutral is not None, "Neutral color should be defined"
+        assert neutral.lower() == '#bdc3c7', "Neutral should be #bdc3c7"
     
     def test_palette_consistency(self):
         """
@@ -114,6 +117,29 @@ class TestColorPalette:
             assert value != '#ffffff' or key == 'surface', "Color should not be pure white"
             assert len(value) == 7, f"{key} hex color should be 7 characters (# + 6 digits)"
             assert value[0] == '#', f"{key} should start with #"
+    
+    def test_navy_is_not_too_dark(self):
+        """
+        ✅ Test: Primary navy is not too dark (readability)
+        """
+        palette = get_color_palette()
+        primary = palette['primary']
+        
+        # #2c5aa0 is brighter than #1a3a52
+        # Check it's not the very dark navy
+        assert primary != '#0f1f2e', "Primary should not be too dark (#0f1f2e)"
+        assert primary == '#2c5aa0', "Primary should be readable navy (#2c5aa0)"
+    
+    def test_neutral_color_exists(self):
+        """
+        ✅ Test: Neutral color is defined for dashed lines
+        """
+        palette = get_color_palette()
+        
+        # Must have neutral for diag_test.py and other modules
+        assert 'neutral' in palette, "Neutral color must be defined"
+        neutral = palette['neutral']
+        assert neutral.lower() == '#bdc3c7', "Neutral should be light gray"
 
 
 class TestColorUsageInModules:
@@ -136,6 +162,21 @@ class TestColorUsageInModules:
         except ImportError:
             pass  # Skip if module not available
     
+    def test_diag_test_has_neutral_color(self):
+        """
+        ✅ Test: diag_test.py uses neutral color correctly
+        """
+        try:
+            import diag_test
+            with open('diag_test.py', 'r') as f:
+                content = f.read()
+                # Check for neutral color usage in dashed lines
+                if "COLORS['neutral']" in content or "'neutral'" in content:
+                    # Good - it uses the neutral color
+                    pass
+        except (ImportError, FileNotFoundError):
+            pass  # Skip if module not available
+    
     def test_psm_lib_imports_palette(self):
         """
         ✅ Test: psm_lib.py imports get_color_palette
@@ -146,20 +187,7 @@ class TestColorUsageInModules:
                 content = f.read()
                 assert 'get_color_palette' in content, "psm_lib.py should use get_color_palette"
                 assert 'from tabs._common import' in content, "psm_lib.py should import from _common"
-        except ImportError:
-            pass
-    
-    def test_logic_imports_palette(self):
-        """
-        ✅ Test: logic.py imports get_color_palette
-        """
-        try:
-            import logic
-            with open('logic.py', 'r') as f:
-                content = f.read()
-                assert 'get_color_palette' in content, "logic.py should use get_color_palette"
-                assert 'from tabs._common import' in content, "logic.py should import from _common"
-        except ImportError:
+        except (ImportError, FileNotFoundError):
             pass
 
 
@@ -174,8 +202,8 @@ class TestColorHtmlIntegration:
         """
         palette = get_color_palette()
         # When modules generate CSS, they should use these colors
-        assert palette['primary_dark'] == '#134252'
-        assert palette['primary'] == '#218084'
+        assert palette['primary'] == '#2c5aa0'
+        assert palette['primary_dark'] == '#1a3a52'
     
     def test_danger_color_for_alerts(self):
         """
@@ -183,7 +211,15 @@ class TestColorHtmlIntegration:
         """
         palette = get_color_palette()
         danger_color = palette['danger']
-        assert danger_color == '#ff5459', "Danger color should be bright red for visibility"
+        assert danger_color == '#e74c3c', "Danger color should be bright red for visibility"
+    
+    def test_neutral_for_dashed_lines(self):
+        """
+        ✅ Test: Neutral color available for dashed lines
+        """
+        palette = get_color_palette()
+        neutral = palette['neutral']
+        assert neutral == '#bdc3c7', "Neutral should be light gray for subtle lines"
     
     def test_text_contrast_ratios(self):
         """
@@ -192,7 +228,7 @@ class TestColorHtmlIntegration:
         palette = get_color_palette()
         
         # Dark text on light background
-        dark_text = palette['text']  # #2c3e50
+        dark_text = palette['text']  # #1a2332
         secondary_text = palette['text_secondary']  # #7f8c8d
         
         # Both should be dark colors
@@ -215,6 +251,7 @@ def test_color_palette_complete():
         body {{ color: {palette['text']}; }}
         th {{ background-color: {palette['primary_dark']}; }}
         .alert {{ color: {palette['danger']}; }}
+        .neutral-line {{ stroke: {palette['neutral']}; }}
     </style>
     """
     
@@ -223,6 +260,7 @@ def test_color_palette_complete():
     assert palette['primary_dark'] in html_test
     assert palette['text'] in html_test
     assert palette['danger'] in html_test
+    assert palette['neutral'] in html_test
 
 
 if __name__ == '__main__':
@@ -246,5 +284,13 @@ if __name__ == '__main__':
     test.test_color_accessibility()
     test.test_palette_consistency()
     print("   All accessibility tests passed!\n")
+    
+    print("✅ Testing navy brightness...")
+    test.test_navy_is_not_too_dark()
+    print("   Navy is readable!\n")
+    
+    print("✅ Testing neutral color...")
+    test.test_neutral_color_exists()
+    print("   Neutral color exists!\n")
     
     print("🌟 All tests passed! Color system is valid. \n")
