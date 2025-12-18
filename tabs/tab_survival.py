@@ -134,42 +134,42 @@ def render(df, _var_meta):
             col_group = st.selectbox("Compare Group:", available_cols, index=group_idx, key='lm_group_sur')
 
             if st.button("Run Landmark Analysis", key='btn_lm_sur'):
-                    try:
-                        with st.spinner(f"Running Landmark Analysis at t={landmark_t:.2f}..."):
-                            fig, stats, n_pre, n_post, err = survival_lib.fit_km_landmark(
-                                df, col_time, col_event, col_group, landmark_t
-                            )
+                try:
+                    with st.spinner(f"Running Landmark Analysis at t={landmark_t:.2f}..."):
+                        fig, stats, n_pre, n_post, err = survival_lib.fit_km_landmark(
+                            df, col_time, col_event, col_group, landmark_t
+                        )
                         
-                        if err:
-                            st.error(err)
-                        elif fig:
-                            st.markdown(f"""
-                            <p style='font-size:1em;'>
-                            Total N before filter: <b>{n_pre}</b> | 
-                            N Included (Survived $\ge$ {landmark_t:.2f}): <b>{n_post}</b> | 
-                            N Excluded: <b>{n_pre - n_post}</b>
-                            </p>
-                            """, unsafe_allow_html=True)
+                    if err:
+                        st.error(err)
+                    elif fig:
+                        st.markdown(f"""
+                        <p style='font-size:1em;'>
+                        Total N before filter: <b>{n_pre}</b> | 
+                        N Included (Survived $\ge$ {landmark_t:.2f}): <b>{n_post}</b> | 
+                        N Excluded: <b>{n_pre - n_post}</b>
+                        </p>
+                        """, unsafe_allow_html=True)
                             
-                            st.plotly_chart(fig, use_container_width=True)
-                            st.markdown("##### Log-Rank Test Results (Post-Landmark)")
-                            st.dataframe(stats)
+                        st.plotly_chart(fig, use_container_width=True)
+                        st.markdown("##### Log-Rank Test Results (Post-Landmark)")
+                        st.dataframe(stats)
                             
-                            elements = [
-                                {'type':'header','data':f'Landmark Analysis (Survival from t={landmark_t:.2f})'},
-                                {'type':'text', 'data': f"N Included: {n_post}, N Excluded: {n_pre - n_post}"},
-                                {'type':'plot','data':fig},
-                                {'type':'table','data':stats}
-                            ]
+                        elements = [
+                            {'type':'header','data':f'Landmark Analysis (Survival from t={landmark_t:.2f})'},
+                            {'type':'text', 'data': f"N Included: {n_post}, N Excluded: {n_pre - n_post}"},
+                            {'type':'plot','data':fig},
+                            {'type':'table','data':stats}
+                        ]
                             
-                            report_html = survival_lib.generate_report_survival(f"Landmark Analysis: {col_time} (t >= {landmark_t})", elements)
-                            st.download_button("📥 Download Report (Landmark)", report_html, "lm_report.html", "text/html")
+                        report_html = survival_lib.generate_report_survival(f"Landmark Analysis: {col_time} (t >= {landmark_t})", elements)
+                        st.download_button("📥 Download Report (Landmark)", report_html, "lm_report.html", "text/html")
                         
-                    except (ValueError, KeyError) as e:
-                        st.error(f"Analysis error: {e}")
-                    except Exception as e:
-                        # Log for debugging: logger.exception("Unexpected error in landmark analysis")
-                        st.error(f"Unexpected error: {e}")
+                except (ValueError, KeyError) as e:
+                    st.error(f"Analysis error: {e}")
+                except Exception as e:
+                    # Log for debugging: logger.exception("Unexpected error in landmark analysis")
+                    st.error(f"Unexpected error: {e}")
 
     # ==========================
     # TAB 3: Cox Regression
