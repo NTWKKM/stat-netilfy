@@ -212,7 +212,8 @@ def render(df, _var_meta):
                             }
                             st.dataframe(res.style.format(format_dict))
                             
-                            st.caption(f"Method Used: {res['Method'].iloc[0]}")
+                            if 'Method' in res.columns and len(res) > 0:
+                                st.caption(f"Method Used: {res['Method'].iloc[0]}")
                             
                             st.markdown("##### 🔍 Proportional Hazards Assumption Check")
                             
