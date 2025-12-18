@@ -1,6 +1,6 @@
 name: Test Color Palette
 
-# เมื่อไหร่รัน?
+# เมื่อไหร่จะรัน?
 on:
   push:           # ทุกครั้ง push code
     branches:
@@ -30,12 +30,11 @@ jobs:
           python-version: '3.9'
           cache: 'pip'  # Cache pip packages
       
-      # Step 3: Install dependencies
+      # Step 3: Install dependencies (including streamlit!)
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest
-          pip install pandas numpy
+          pip install pytest pandas numpy streamlit
       
       # Step 4: Run color palette tests (standalone mode)
       - name: Run Color Palette Tests
@@ -86,10 +85,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
       
-      - name: Install dependencies
+      - name: Install dependencies (including streamlit)
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pandas numpy
+          pip install pytest pandas numpy streamlit
       
       - name: Run tests
         run: python tests/test_color_palette.py
@@ -109,7 +108,7 @@ jobs:
       
       - name: Install linters
         run: |
-          pip install flake8 black
+          pip install flake8 black streamlit
       
       - name: Check code style with flake8
         run: flake8 tests/test_color_palette.py --count --select=E9,F63,F7,F82 --show-source --statistics
