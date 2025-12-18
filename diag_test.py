@@ -295,36 +295,29 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                 else:
                     rr_ci_lower, rr_ci_upper = np.nan, np.nan
                 
-                # NNT with CI (simplified)
-                # RD SE from 2x2 table: sqrt(p1*(1-p1)/n1 + p2*(1-p2)/n2)
+                # NNT with CI
                 rd_se = np.sqrt(
                     (risk_exp * (1 - risk_exp)) / (a + b) + 
                     (risk_unexp * (1 - risk_unexp)) / (c + d)
                 ) if (a + b) > 0 and (c + d) > 0 else np.nan
                 nnt_ci_lower, nnt_ci_upper = calculate_ci_nnt(rd, rd_se)
                 
-                # DIAGNOSTIC METRICS (if applicable)
-                # Sensitivity = TP / (TP + FN) = a / (a + c)
+                # DIAGNOSTIC METRICS
                 sensitivity = a / (a + c) if (a + c) > 0 else 0
                 se_ci_lower, se_ci_upper = calculate_ci_wilson_score(a, a + c)
                 
-                # Specificity = TN / (TN + FP) = d / (b + d)
                 specificity = d / (b + d) if (b + d) > 0 else 0
                 sp_ci_lower, sp_ci_upper = calculate_ci_wilson_score(d, b + d)
                 
-                # PPV = TP / (TP + FP) = a / (a + b)
                 ppv = a / (a + b) if (a + b) > 0 else 0
                 ppv_ci_lower, ppv_ci_upper = calculate_ci_wilson_score(a, a + b)
                 
-                # NPV = TN / (TN + FN) = d / (c + d)
                 npv = d / (c + d) if (c + d) > 0 else 0
                 npv_ci_lower, npv_ci_upper = calculate_ci_wilson_score(d, c + d)
                 
-                # Likelihood Ratios
                 lr_plus = sensitivity / (1 - specificity) if (1 - specificity) > 0 else np.nan
                 lr_minus = (1 - sensitivity) / specificity if specificity > 0 else np.nan
                 
-                # NNT Label
                 if rd < 0:
                     nnt_label = "Number Needed to Treat (NNT)"
                 elif rd > 0:
@@ -334,7 +327,6 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                 
                 # Build Risk Metrics Table with SECTION HEADERS
                 risk_data = [
-                    # ===== RISK METRICS SECTION =====
                     {"Metric": "RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)", 
                      "Value": "", "95% CI": "", "Interpretation": "Use for cohort/case-control studies"},
                     {"Metric": "Risk in Exposed (R1)", "Value": f"{risk_exp:.4f}", 
@@ -352,7 +344,6 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                     {"Metric": "Odds Ratio (OR)", "Value": f"{or_value:.4f}", 
                      "95% CI": f"({or_ci_lower:.4f} - {or_ci_upper:.4f})" if np.isfinite(or_ci_lower) else "N/A",
                      "Interpretation": f"Odds of '{label_event}' ({label_exp} vs {label_unexp})"},
-                    # ===== DIAGNOSTIC METRICS SECTION =====
                     {"Metric": "DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)", 
                      "Value": "", "95% CI": "", "Interpretation": "Use for diagnostic/screening studies"},
                     {"Metric": "Sensitivity", "Value": f"{sensitivity:.4f}", 
@@ -708,71 +699,107 @@ def calculate_icc(df, cols):
 # ========================================
 
 def generate_report(title, elements):
-    """Generate HTML report with support for Plotly figures"""
+    """Generate HTML report with enhanced styling (matches correlation.py)"""
     css_style = """ 
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 20px;
-            background-color: #f9f9f9;
+            background-color: #f5f5f5;
+            color: #333;
         }
         h1 {
-            color: #333;
-            border-bottom: 2px solid #0066cc;
-            padding-bottom: 10px;
+            color: #1565c0;
+            border-bottom: 3px solid #0066cc;
+            padding-bottom: 12px;
+            font-size: 2em;
         }
         h2 {
             color: #0066cc;
-            margin-top: 30px;
+            margin-top: 25px;
+            font-size: 1.4em;
+            border-left: 4px solid #0066cc;
+            padding-left: 10px;
         }
         table {
             border-collapse: collapse;
             width: 100%;
             margin: 20px 0;
             background-color: white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 4px;
+            overflow: hidden;
         }
         table th, table td {
             border: 1px solid #ddd;
-            padding: 12px;
+            padding: 12px 15px;
             text-align: left;
         }
         table th {
             background-color: #0066cc;
             color: white;
+            font-weight: bold;
         }
         table tr:hover {
             background-color: #f0f0f0;
         }
-        table tr.section-header {
-            background-color: #0066cc;
-            color: white;
-            font-weight: bold;
-        }
-        table tr.section-header td {
-            background-color: #0066cc;
-            color: white;
-            font-weight: bold;
-        }
-        table td.section-header {
-            background-color: #0066cc;
-            color: white;
-            font-weight: bold;
+        table tr:nth-child(even) {
+            background-color: #fafafa;
         }
         p {
-            line-height: 1.6;
+            line-height: 1.7;
             color: #333;
+            margin: 10px 0;
+        }
+        .metric-text {
+            font-size: 1.05em;
+            margin: 8px 0;
+        }
+        .metric-label {
+            font-weight: bold;
+            color: #0066cc;
+        }
+        .metric-value {
+            color: #d32f2f;
+            font-weight: bold;
+            background-color: #fff3e0;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        .interpretation {
+            background-color: #e3f2fd;
+            border-left: 4px solid #1976d2;
+            padding: 12px 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            line-height: 1.6;
+        }
+        .warning {
+            background-color: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 12px 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            color: #e65100;
+            line-height: 1.6;
         }
         .report-table {
             border: 1px solid #ddd;
         }
         .report-footer {
-            text-align: right;
-            font-size: 0.75em;
+            text-align: center;
+            font-size: 0.8em;
             color: #666;
-            margin-top: 20px;
+            margin-top: 30px;
             border-top: 1px dashed #ccc;
-            padding-top: 10px;
+            padding-top: 15px;
+        }
+        .report-footer a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+        .report-footer a:hover {
+            text-decoration: underline;
         }
     </style>
     """
@@ -789,20 +816,33 @@ def generate_report(title, elements):
             html += f"<h2>{_html.escape(str(header))}</h2>"
         
         if element_type == 'text':
-            html += f"<p>{_html.escape(str(data))}</p>"
+            text_str = str(data)
+            if ':' in text_str and len(text_str) < 150:
+                parts = text_str.split(':', 1)
+                label = _html.escape(parts[0].strip())
+                value = _html.escape(parts[1].strip())
+                html += f"<p class='metric-text'><span class='metric-label'>{label}:</span> <span class='metric-value'>{value}</span></p>"
+            else:
+                html += f"<p>{_html.escape(text_str)}</p>"
+        
+        elif element_type == 'interpretation':
+            html += f"<div class='interpretation'>{_html.escape(str(data))}</div>"
+        
+        elif element_type == 'warning':
+            html += f"<div class='warning'>⚠️ {_html.escape(str(data))}</div>"
         
         elif element_type == 'table':
             is_stats_table = ('Statistic' in data.columns and 'Value' in data.columns 
                               and data.index.name is None)
             html_table = data.to_html(index=not is_stats_table, classes='report-table', escape=True)
-            # Add section-header class to section headers
+            # Add section-header styling
             html_table = html_table.replace(
                 '<td>RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)</td>',
-                '<td class="section-header">RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)</td>'
+                '<td style="background-color: #0066cc; color: white; font-weight: bold;">RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)</td>'
             )
             html_table = html_table.replace(
                 '<td>DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)</td>',
-                '<td class="section-header">DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)</td>'
+                '<td style="background-color: #0066cc; color: white; font-weight: bold;">DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)</td>'
             )
             html += html_table
         
@@ -845,7 +885,7 @@ def generate_report(title, elements):
                 html += f'<img src="data:image/png;base64,{b64}" style="max-width:100%; margin: 20px 0;" />'
     
     html += """<div class='report-footer'>
-    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM n donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
+    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank">NTWKKM n donate</a> | Powered by GitHub, Gemini, Streamlit
     </div>"""
     
     html += "</body>\n</html>"
