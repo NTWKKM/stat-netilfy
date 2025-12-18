@@ -258,6 +258,8 @@ def generate_table(df, selected_vars, group_col, var_meta, or_style='all_levels'
     """
     or_style: 'all_levels' (Default: Ref=1, others vs Ref) or 'simple' (One line per var)
     """
+    if or_style not in ('all_levels', 'simple'):
+        raise ValueError(f"or_style must be 'all_levels' or 'simple', got '{or_style}'")
     has_group = group_col is not None and group_col != "None"
     groups = []
     
