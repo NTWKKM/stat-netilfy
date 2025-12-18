@@ -274,7 +274,7 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
         return None, None, df, f"Missing columns: {missing}"
 
     # 🟢 FIX: Explicitly select ONLY relevant columns here to prevent unused columns from leaking into the model
-    data = df[[duration_col, event_col] + covariate_cols].dropna().copy()
+    data = df[[duration_col, event_col, *covariate_cols]].dropna().copy()
     
     if len(data) == 0:
         return None, None, data, "No valid data after dropping missing values."
