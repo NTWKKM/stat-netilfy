@@ -1,10 +1,10 @@
-# table_one.py
 import pandas as pd
 import numpy as np
 from scipy import stats
 import statsmodels.api as sm
 import html as _html
 import warnings
+from tabs._common import get_color_palette
 
 def clean_numeric(val):
     if pd.isna(val): 
@@ -258,6 +258,9 @@ def generate_table(df, selected_vars, group_col, var_meta, or_style='all_levels'
     """
     or_style: 'all_levels' (Default: Ref=1, others vs Ref) or 'simple' (One line per var)
     """
+    # Get unified color palette
+    COLORS = get_color_palette()
+    
     if or_style not in ('all_levels', 'simple'):
         raise ValueError(f"or_style must be 'all_levels' or 'simple', got '{or_style}'")
     has_group = group_col is not None and group_col != "None"
@@ -290,22 +293,59 @@ def generate_table(df, selected_vars, group_col, var_meta, or_style='all_levels'
         # Auto-detect "Case" group (prefer 1 or higher value)
         group_1_val = 1 if 1 in group_vals else max(group_vals, key=_group_sort_key)
 
-    # CSS
-    css_style = """
+    # CSS with unified teal colors
+    css_style = f"""
     <style>
-        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; margin: 0; color: #333; }
-        .table-container { 
-            background: white; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
-            padding: 20px; width: 100%; overflow-x: auto; border: 1px solid #ddd; box-sizing: border-box;
-        }
-        table { width: 100%; border-collapse: collapse; font-size: 0.95em; }
-        th { background-color: #2c3e50; color: white; padding: 12px 15px; text-align: center; border: 1px solid #34495e; }
-        th:first-child { text-align: left; }
-        td { padding: 10px 15px; border: 1px solid #e0e0e0; vertical-align: top; color: #333; }
-        tr:nth-child(even) td { background-color: #f9f9f9; }
-        tr:hover td { background-color: #f1f7ff; }
-        .footer-note { margin-top: 15px; font-size: 0.85em; color: #666; font-style: italic; }
-        .report-footer { text-align: right; font-size: 0.75em; color: #666; margin-top: 20px; border-top: 1px dashed #ccc; padding-top: 10px; }
+        body {{ 
+            font-family: 'Segoe UI', sans-serif; 
+            padding: 20px; 
+            background-color: #f4f6f8; 
+            margin: 0; 
+            color: {COLORS['text']}; 
+        }}
+        .table-container {{ 
+            background: white; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+            padding: 20px; 
+            width: 100%; 
+            overflow-x: auto; 
+            border: 1px solid #ddd; 
+            box-sizing: border-box;
+        }}
+        table {{ width: 100%; border-collapse: collapse; font-size: 0.95em; }}
+        th {{ 
+            background-color: {COLORS['primary_dark']}; 
+            color: white; 
+            padding: 12px 15px; 
+            text-align: center; 
+            border: 1px solid {COLORS['primary']}; 
+        }}
+        th:first-child {{ text-align: left; }}
+        td {{ 
+            padding: 10px 15px; 
+            border: 1px solid #e0e0e0; 
+            vertical-align: top; 
+            color: {COLORS['text']}; 
+        }}
+        tr:nth-child(even) td {{ background-color: #f9f9f9; }}
+        tr:hover td {{ background-color: #f1f7ff; }}
+        .footer-note {{ 
+            margin-top: 15px; 
+            font-size: 0.85em; 
+            color: {COLORS['text_secondary']}; 
+            font-style: italic; 
+        }}
+        .report-footer {{ 
+            text-align: right; 
+            font-size: 0.75em; 
+            color: {COLORS['text_secondary']}; 
+            margin-top: 20px; 
+            border-top: 1px dashed #ccc; 
+            padding-top: 10px; 
+        }}
+        a {{ color: {COLORS['primary']}; text-decoration: none; }}
+        a:hover {{ color: {COLORS['primary_dark']}; }}
     </style>
     """
     
@@ -421,7 +461,7 @@ def generate_table(df, selected_vars, group_col, var_meta, or_style='all_levels'
             
             p_str = format_p(p_val)
             if isinstance(p_val, float) and p_val < 0.05:
-                p_str = f"<span style='color:#d32f2f; font-weight:bold;'>{p_str}*</span>"
+                p_str = f"<span style='color:{COLORS['danger']}; font-weight:bold;'>{p_str}*</span>"
                 
             row_html += f"<td style='text-align: center;'>{p_str}</td>"
             row_html += f"<td style='text-align: center; font-size: 0.8em; color: #666;'>{test_name}</td>"
@@ -453,7 +493,7 @@ def generate_table(df, selected_vars, group_col, var_meta, or_style='all_levels'
     
     html += "</div>"
     
-    html += """<div class='report-footer'>
+    html += f"""<div class='report-footer'>
     &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM n Donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
     </div></body></html>"""
 
