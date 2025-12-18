@@ -80,7 +80,8 @@ def render(df):
                 else:
                     # 🟢 FIX: res is dict, convert to DataFrame for table display
                     rep = [
-                        {'type':'text', 'data':f"Method: {res['Method']}<br>Variables: {cv1} vs {cv2}"},
+                        {'type':'text', 'data':f"Method: {res['Method']}"},
+                        {'type':'text', 'data':{Variables: {cv1} vs {cv2}"},
                         {'type':'table', 'header':'Statistics', 'data':pd.DataFrame([res])}, 
                         {'type':'plot', 'header':'Scatter Plot', 'data':fig}
                     ]
@@ -143,7 +144,7 @@ def render(df):
                 st.error(err)
             else:
                 rep_elements = [
-                    {'type': 'text', 'data': f"<b>ICC Analysis:</b> {', '.join(icc_cols)}"},
+                    {'type': 'text', 'data': f"ICC Analysis: {', '.join(icc_cols)}"},
                     {'type': 'table', 'header': 'ICC Results (Single Measures)', 'data': res_df},
                     {'type': 'table', 'header': 'ANOVA Table (Reference)', 'data': anova_df}
                 ]
