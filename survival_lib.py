@@ -9,6 +9,11 @@ import warnings
 import io, base64
 import html as _html
 import logging
+from tabs._common import get_color_palette
+
+# Get unified color palette
+COLORS = get_color_palette()
+
 _logger = logging.getLogger(__name__)
 
 # Helper function for standardization
@@ -50,6 +55,7 @@ def _hex_to_rgba(hex_color, alpha) -> str:
 def fit_km_logrank(df, duration_col, event_col, group_col):
     """
     Fits KM curves and performs Log-rank test.
+    Uses unified teal color palette from _common.py.
     Returns: (fig, stats_df)
     """
     data = df.dropna(subset=[duration_col, event_col])
@@ -161,6 +167,7 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
 def fit_nelson_aalen(df, duration_col, event_col, group_col):
     """
     Fit Nelson-Aalen cumulative hazard curves optionally stratified by a grouping column and return a Plotly figure plus group-level statistics.
+    Uses unified teal color palette from _common.py.
     
     Drops rows with missing duration or event values. If a group column is provided, rows with missing group values are dropped and curves are plotted per group; otherwise a single overall curve is plotted. When the fitter provides a confidence interval with at least two columns, a shaded 95% CI is added for each group.
     
@@ -479,6 +486,7 @@ def check_cph_assumptions(cph, data):
 def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
     """
     Perform Kaplan-Meier survival analysis using a landmark-time approach.
+    Uses unified teal color palette from _common.py.
                 
     Parameters:
         df (pandas.DataFrame): Input data containing duration, event indicator, and group columns.
@@ -611,10 +619,11 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
 
     return fig, pd.DataFrame([stats_data]), n_pre_filter, n_post_filter, None
 
-# --- 5. Report Generation 🟢 FIX: Include Plotly JS in HTML ---
+# --- 5. Report Generation 🟢 FIX: Include Plotly JS in HTML & Unified Colors ---
 def generate_report_survival(title, elements):
     """
     Assemble a complete HTML report from a sequence of content elements, embedding tables, figures, and images for offline-friendly consumption.
+    Uses unified teal color palette from _common.py.
     
     Builds an HTML document with the given title and iterates over `elements` to render supported content types. For Plotly figures, the Plotly JS library is embedded only once with the first Plotly plot and omitted for subsequent Plotly plots so later plots reuse the already-loaded script. Supported element types and expected `data` values:
     - "header": a string rendered as an H2 section header.
@@ -632,21 +641,83 @@ def generate_report_survival(title, elements):
     Returns:
         html_doc (str): A self-contained HTML string representing the assembled report.
     """
-    css_style = """<style>
-        body{font-family:Arial;margin:20px;}
-        table{border-collapse:collapse;width:100%;margin:10px 0;}
-        th,td{border:1px solid #ddd;padding:8px;}
-        th{background-color:#0066cc;color:white;}
-        h1{color:#333;border-bottom:2px solid #0066cc;}
-        h2{color:#0066cc;}
-        .report-footer {
-            text-align: right;
+    
+    # Use primary teal color throughout
+    primary_color = COLORS['primary']
+    primary_dark = COLORS['primary_dark']
+    text_color = COLORS['text_primary']
+    
+    css_style = f"""<style>
+        body{{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            margin: 20px;
+            background-color: #f8f9fa;
+            color: {text_color};
+            line-height: 1.6;
+        }}
+        h1{{
+            color: {primary_dark};
+            border-bottom: 3px solid {primary_color};
+            padding-bottom: 12px;
+            font-size: 2em;
+            margin-bottom: 20px;
+        }}
+        h2{{
+            color: {primary_dark};
+            border-left: 5px solid {primary_color};
+            padding-left: 12px;
+            margin: 25px 0 15px 0;
+        }}
+        table{{
+            border-collapse: collapse;
+            width: 100%;
+            margin: 10px 0;
+            background-color: white;
+            border-radius: 6px;
+        }}
+        th, td{{
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }}
+        th{{
+            background-color: {primary_color};
+            color: white;
+            font-weight: 600;
+        }}
+        tr:hover{{
+            background-color: #f8f9fa;
+        }}
+        tr:nth-child(even){{
+            background-color: #fcfcfc;
+        }}
+        p{{
+            margin: 12px 0;
+            color: {text_color};
+        }}
+        pre{{
+            background-color: #f4f4f4;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            border-left: 4px solid {primary_color};
+        }}
+        .report-footer {{
+            text-align: center;
             font-size: 0.75em;
             color: #666;
-            margin-top: 20px;
+            margin-top: 40px;
             border-top: 1px dashed #ccc;
             padding-top: 10px;
-        }
+        }}
+        .report-footer a {{
+            color: {primary_color};
+            text-decoration: none;
+        }}
+        .report-footer a:hover {{
+            color: {primary_dark};
+            text-decoration: underline;
+        }}
     </style>"""
     
     safe_title = _html.escape(str(title))
@@ -667,7 +738,7 @@ def generate_report_survival(title, elements):
         elif t == 'preformatted':
             html_doc += f"<pre>{_html.escape(str(d))}</pre>"
         elif t == 'table':
-            html_doc += d.to_html(classes='table')
+            html_doc += d.to_html()
         elif t == 'plot':
             if hasattr(d, 'to_html'):
                 # 🟢 SOLUTION: Include Plotly JS with first plot only
@@ -682,13 +753,13 @@ def generate_report_survival(title, elements):
                 buf = io.BytesIO()
                 d.savefig(buf, format='png', bbox_inches='tight')
                 b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-                html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
+                html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'  
         elif t == 'image':
             b64 = base64.b64encode(d).decode('utf-8')
             html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
     
-    html_doc += """<div class='report-footer'>
-    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM n Donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
+    html_doc += f"""<div class='report-footer'>
+    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank">NTWKKM n Donate</a> | All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
     </div>"""
     html_doc += "</body>\n</html>"
     
