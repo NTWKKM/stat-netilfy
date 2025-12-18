@@ -152,6 +152,7 @@ def compute_or_vs_ref(row_series, cat_target, cat_ref, group_series, g1_val):
         
         return compute_or_ci(a, b, c, d)
     except Exception:
+        # Consider logging: logger.debug("OR calculation failed", exc_info=True)
         return "-"
 
 # --- 🟢 UPDATED: Calculate OR & 95% CI for Continuous (Robust Logistic Regression) ---
@@ -403,7 +404,7 @@ def generate_table(df, selected_vars, group_col, var_meta, or_style='all_levels'
                                 
                             or_cell_content = "<br>".join(lines)
                     else:
-                         or_cell_content = "-" # Not enough categories
+                        or_cell_content = "-" # Not enough categories
                 else:
                     # Robust Continuous OR (Always one line per unit)
                     or_cell_content = calculate_or_continuous_logit(df, col, group_col, group_1_val)
