@@ -589,7 +589,7 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
                 'Method': f'Landmark at {landmark_time}'
             }
         elif len(groups) > 2:
-            res = multivariate_logrank_test(landmark_data['New_Duration'], landmark_data[group_col], landmark_data[event_col])
+            res = multivariate_logrank_test(landmark_data[_adj_duration], landmark_data[group_col], landmark_data[event_col])
             stats_data = {
                 'Test': 'Log-Rank (Multivariate)',
                 'Statistic': res.test_statistic,
