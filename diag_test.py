@@ -699,106 +699,122 @@ def calculate_icc(df, cols):
 # ========================================
 
 def generate_report(title, elements):
-    """Generate HTML report with enhanced styling (matches correlation.py)"""
+    """Generate HTML report with professional color palette (synchronized with correlation.py)"""
     css_style = """ 
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
             margin: 20px;
-            background-color: #f5f5f5;
-            color: #333;
+            background-color: #f8f9fa;
+            color: #2c3e50;
+            line-height: 1.6;
         }
         h1 {
-            color: #1565c0;
-            border-bottom: 3px solid #0066cc;
+            color: #1a5276;
+            border-bottom: 3px solid #2980b9;
             padding-bottom: 12px;
             font-size: 2em;
+            margin-bottom: 20px;
         }
         h2 {
-            color: #0066cc;
+            color: #1a5276;
             margin-top: 25px;
-            font-size: 1.4em;
-            border-left: 4px solid #0066cc;
-            padding-left: 10px;
+            font-size: 1.35em;
+            border-left: 5px solid #3498db;
+            padding-left: 12px;
+            margin-bottom: 15px;
         }
         table {
             border-collapse: collapse;
             width: 100%;
             margin: 20px 0;
             background-color: white;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            border-radius: 6px;
             overflow: hidden;
         }
         table th, table td {
-            border: 1px solid #ddd;
+            border: 1px solid #ecf0f1;
             padding: 12px 15px;
             text-align: left;
         }
         table th {
-            background-color: #0066cc;
+            background-color: #34495e;
             color: white;
-            font-weight: bold;
+            font-weight: 600;
+            letter-spacing: 0.5px;
         }
         table tr:hover {
-            background-color: #f0f0f0;
+            background-color: #f8f9fa;
         }
         table tr:nth-child(even) {
-            background-color: #fafafa;
+            background-color: #fcfcfc;
         }
         p {
-            line-height: 1.7;
-            color: #333;
-            margin: 10px 0;
+            margin: 12px 0;
+            color: #2c3e50;
         }
         .metric-text {
-            font-size: 1.05em;
-            margin: 8px 0;
+            font-size: 1.02em;
+            margin: 10px 0;
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
         }
         .metric-label {
-            font-weight: bold;
-            color: #0066cc;
+            font-weight: 600;
+            color: #34495e;
+            min-width: 160px;
         }
         .metric-value {
-            color: #d32f2f;
-            font-weight: bold;
-            background-color: #fff3e0;
-            padding: 2px 6px;
-            border-radius: 3px;
+            color: #2980b9;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+            background-color: #ecf0f1;
+            padding: 4px 8px;
+            border-radius: 4px;
+            letter-spacing: 0.3px;
         }
         .interpretation {
-            background-color: #e3f2fd;
-            border-left: 4px solid #1976d2;
-            padding: 12px 15px;
-            margin: 15px 0;
-            border-radius: 4px;
-            line-height: 1.6;
+            background: linear-gradient(135deg, #ecf0f1 0%, #f8f9fa 100%);
+            border-left: 4px solid #3498db;
+            padding: 14px 15px;
+            margin: 16px 0;
+            border-radius: 5px;
+            line-height: 1.7;
+            color: #2c3e50;
+        }
+        .interpretation::before {
+            content: "ℹ️ ";
+            margin-right: 8px;
         }
         .warning {
-            background-color: #fff3e0;
-            border-left: 4px solid #ff9800;
-            padding: 12px 15px;
-            margin: 15px 0;
-            border-radius: 4px;
-            color: #e65100;
-            line-height: 1.6;
+            background: linear-gradient(135deg, #fef5e7 0%, #f9f6f0 100%);
+            border-left: 4px solid #f39c12;
+            padding: 14px 15px;
+            margin: 16px 0;
+            border-radius: 5px;
+            color: #7d6608;
+            line-height: 1.7;
         }
         .report-table {
-            border: 1px solid #ddd;
+            border: 1px solid #ecf0f1;
         }
         .report-footer {
             text-align: center;
-            font-size: 0.8em;
-            color: #666;
-            margin-top: 30px;
-            border-top: 1px dashed #ccc;
-            padding-top: 15px;
+            font-size: 0.85em;
+            color: #7f8c8d;
+            margin-top: 40px;
+            border-top: 1px solid #ecf0f1;
+            padding-top: 20px;
         }
         .report-footer a {
-            color: #0066cc;
+            color: #3498db;
             text-decoration: none;
+            transition: color 0.3s ease;
         }
         .report-footer a:hover {
+            color: #2980b9;
             text-decoration: underline;
         }
     </style>
@@ -829,7 +845,7 @@ def generate_report(title, elements):
             html += f"<div class='interpretation'>{_html.escape(str(data))}</div>"
         
         elif element_type == 'warning':
-            html += f"<div class='warning'>⚠️ {_html.escape(str(data))}</div>"
+            html += f"<div class='warning'>{_html.escape(str(data))}</div>"
         
         elif element_type == 'table':
             is_stats_table = ('Statistic' in data.columns and 'Value' in data.columns 
@@ -838,11 +854,11 @@ def generate_report(title, elements):
             # Add section-header styling
             html_table = html_table.replace(
                 '<td>RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)</td>',
-                '<td style="background-color: #0066cc; color: white; font-weight: bold;">RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)</td>'
+                '<td style="background-color: #34495e; color: white; font-weight: bold;">RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)</td>'
             )
             html_table = html_table.replace(
                 '<td>DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)</td>',
-                '<td style="background-color: #0066cc; color: white; font-weight: bold;">DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)</td>'
+                '<td style="background-color: #34495e; color: white; font-weight: bold;">DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)</td>'
             )
             html += html_table
         
