@@ -171,6 +171,7 @@ def render(df, _var_meta):
                     except (ValueError, KeyError) as e:
                         st.error(f"Analysis error: {e}")
                     except Exception as e:
+                        # Log for debugging: logger.exception("Unexpected error in landmark analysis")
                         st.error(f"Unexpected error: {e}")
 
     # ==========================
