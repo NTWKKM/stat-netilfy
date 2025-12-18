@@ -134,9 +134,6 @@ def render(df, _var_meta):
             col_group = st.selectbox("Compare Group:", available_cols, index=group_idx, key='lm_group_sur')
 
             if st.button("Run Landmark Analysis", key='btn_lm_sur'):
-                if col_group is None:
-                    st.error("Please select a Group Variable for comparison.")
-                else:
                     try:
                         with st.spinner(f"Running Landmark Analysis at t={landmark_t:.2f}..."):
                             fig, stats, n_pre, n_post, err = survival_lib.fit_km_landmark(
