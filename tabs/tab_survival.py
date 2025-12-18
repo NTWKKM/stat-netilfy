@@ -88,6 +88,7 @@ def render(df, _var_meta):
                     st.download_button("📥 Download Report (NA)", report_html, "na_report.html", "text/html")
                     
             except Exception as e:
+                logger.exception("Unexpected error in survival curves analysis")
                 st.error(f"Error: {e}")
 
     # ==========================
@@ -246,6 +247,7 @@ def render(df, _var_meta):
                     st.error(f"Analysis error: {e}")
                     st.session_state.cox_res = None
                 except Exception as e:
+                    logger.exception("Unexpected error in Cox regression analysis")
                     st.error(f"Unexpected error: {e}")
                     st.session_state.cox_res = None
 
