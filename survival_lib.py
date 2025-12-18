@@ -39,7 +39,10 @@ def _standardize_numeric_cols(data, cols) -> None:
 
 # 🟢 NEW HELPER: Convert Hex to RGBA string for Plotly fillcolor
 def _hex_to_rgba(hex_color, alpha) -> str:
+    """Convert hex color to RGBA string. Expects 6-digit hex format (e.g., '#RRGGBB')."""
     hex_color = hex_color.lstrip('#')
+    if len(hex_color) != 6:
+        raise ValueError(f"Invalid hex color format: expected 6 characters, got {len(hex_color)}")
     rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
     return f'rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha})'
 
@@ -158,7 +161,7 @@ def fit_km_logrank(df, duration_col, event_col, group_col):
 def fit_nelson_aalen(df, duration_col, event_col, group_col):
     """
     Fit Nelson-Aalen cumulative hazard curves optionally stratified by a grouping column and return a Plotly figure plus group-level statistics.
-        
+           
     Drops rows with missing duration or event values. If a group column is provided, rows with missing group values are dropped and curves are plotted per group; otherwise a single overall curve is plotted. When the fitter provides a confidence interval with at least two columns, a shaded 95% CI is added for each group.
     
     Parameters:
@@ -253,7 +256,7 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
 def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     """
     Fit a Cox Proportional Hazards model after validating and preprocessing covariates.
-            
+               
     Validates input columns and rows, performs automatic one-hot encoding for categorical covariates (drop_first=True), checks numeric covariates for infinite or extreme values, zero variance, potential perfect separation, and high multicollinearity, standardizes numeric covariates (skipping binary 0/1), and attempts a progressive fitting strategy (standard CoxPH then increasing L2 penalization) until a successful fit is obtained or all attempts fail.
     
     Parameters:
@@ -284,6 +287,7 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
 
     # 🟢 NEW: Automatic One-Hot Encoding for Categorical/Object columns
     # Essential for Cox Regression to handle categorical variables
+    original_covariate_cols = list(covariate_cols) # 🟢 Preserve original names for debugging
     try:
         covars_only = data[covariate_cols]
         # Find categorical/object columns
@@ -296,7 +300,7 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
             data = pd.concat([data[[duration_col, event_col]], covars_encoded], axis=1)
             covariate_cols = covars_encoded.columns.tolist()
     except (ValueError, TypeError, KeyError) as e:
-        return None, None, data, f"Encoding Error: Failed to convert categorical variables. {e}"
+        return None, None, data, f"Encoding Error (Original vars: {original_covariate_cols}): Failed to convert categorical variables. {e}"
     
     # 🟢 NEW: Comprehensive Data Validation BEFORE attempting fit
     validation_errors = []
@@ -381,7 +385,7 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
             temp_cph = CoxPHFitter(penalizer=p) 
             # 🎫 FIX: Removed invalid step_size parameter
             # CoxPHFitter.fit() only accepts: duration_col, event_col, show_progress
-            temp_cph.fit(data, duration_col=duration_col, event_col=event_col)
+            temp_cph.fit(data, duration_col=duration_col, event_col=event_col, show_progress=False)
             cph = temp_cph
             method_used = current_method  # ✅ SET on success
             break  # Stop trying - success!
@@ -474,7 +478,7 @@ def check_cph_assumptions(cph, data):
 def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
     """
     Perform Kaplan-Meier survival analysis using a landmark-time approach.
-            
+                
     Parameters:
         df (pandas.DataFrame): Input data containing duration, event indicator, and group columns.
         duration_col (str): Name of the column with observed times-to-event.
@@ -505,7 +509,8 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
         return None, None, n_pre_filter, n_post_filter, "Error: Insufficient patients (N < 2) survived until the landmark time."
     
     # 3. Recalculate Duration (Crucial Step)
-    landmark_data['New_Duration'] = landmark_data[duration_col] - landmark_time
+    _adj_duration = '_landmark_adjusted_duration'
+    landmark_data[_adj_duration] = landmark_data[duration_col] - landmark_time
     
     # 4. KM Fitting (Standardized Plotting)
     groups = sorted(landmark_data[group_col].unique(), key=lambda v: str(v))
@@ -519,8 +524,8 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
         if len(df_g) > 0:
             kmf = KaplanMeierFitter()
             
-            # Fit using the New_Duration
-            kmf.fit(df_g['New_Duration'], df_g[event_col], label=label)
+            # Fit using the adjusted duration
+            kmf.fit(df_g[_adj_duration], df_g[event_col], label=label)
 
             # --- 🟢 FIX: Check existence and access CI by position ---
             ci_exists = hasattr(kmf, 'confidence_interval_') and not kmf.confidence_interval_.empty
@@ -680,8 +685,7 @@ def generate_report_survival(title, elements):
         elif t == 'image':
             b64 = base64.b64encode(d).decode('utf-8')
             html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
-
-    
+              
     html_doc += """<div class='report-footer'>
     &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM n Donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
     </div>"""
