@@ -473,7 +473,7 @@ def check_cph_assumptions(cph, data):
 # --- 4. Landmark Analysis (KM) 🟢 FIX LM CI ---
 def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
     """
-    Perform Kaplan–Meier survival analysis using a landmark-time approach.
+    Perform Kaplan-Meier survival analysis using a landmark-time approach.
             
     Parameters:
         df (pandas.DataFrame): Input data containing duration, event indicator, and group columns.
