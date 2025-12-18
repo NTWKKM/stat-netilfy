@@ -81,7 +81,7 @@ def render(df):
                     # 🟢 FIX: res is dict, convert to DataFrame for table display
                     rep = [
                         {'type':'text', 'data':f"Method: {res['Method']}"},
-                        {'type':'text', 'data':{Variables: {cv1} vs {cv2}"},
+                        {'type':'text', 'data':f"Variables: {cv1} vs {cv2}"},
                         {'type':'table', 'header':'Statistics', 'data':pd.DataFrame([res])}, 
                         {'type':'plot', 'header':'Scatter Plot', 'data':fig}
                     ]
