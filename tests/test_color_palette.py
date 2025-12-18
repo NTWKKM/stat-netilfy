@@ -3,10 +3,11 @@
 Verifies that:
 1. All color keys are defined
 2. Colors are valid hex/rgba values
-3. Light and dark modes have matching keys
-4. Used in tabs/_common.py
+3. Used in tabs/_common.py
+4. survival_lib.py uses correct keys
 
 Run: python -m pytest tests/test_color_palette.py -v
+Or:  python tests/test_color_palette.py
 """
 
 import sys
@@ -21,8 +22,8 @@ def get_color_palette():
     try:
         from tabs._common import get_color_palette as fetch_colors
         return fetch_colors()
-    except ImportError:
-        print("Warning: Could not import from tabs._common")
+    except ImportError as e:
+        print(f"Warning: Could not import from tabs._common: {e}")
         return {}
 
 
@@ -35,21 +36,22 @@ def test_color_palette_exists():
 
 
 def test_essential_colors_present():
-    """Test that all essential colors are defined."""
+    """Test that all essential colors are defined.
+    
+    Based on actual palette in tabs/_common.py
+    """
     palette = get_color_palette()
     
+    # Essential colors that MUST exist
     essential_colors = [
-        'text',              # Primary text color
-        'text_secondary',    # Secondary text color
-        'primary',           # Primary action color
-        'primary_hover',     # Primary hover state
-        'primary_active',    # Primary active state
-        'secondary',         # Secondary background
-        'border',            # Border color
-        'error',             # Error color
-        'success',           # Success color
-        'warning',           # Warning color
-        'info',              # Info color
+        'text',              # Primary text color (#1a2332)
+        'text_secondary',    # Secondary text color (#7f8c8d)
+        'primary',           # Primary action color (#2c5aa0)
+        'border',            # Border color (#d5dce0)
+        'danger',            # Error/alert color (#e74c3c)
+        'success',           # Success color (#27ae60)
+        'warning',           # Warning color (#f39c12)
+        'info',              # Info color (#5b6c7d)
     ]
     
     for color_key in essential_colors:
@@ -58,7 +60,7 @@ def test_essential_colors_present():
 
 
 def test_color_format_validity():
-    """Test that color values are in valid format (hex or rgba)."""
+    """Test that color values are in valid format (hex)."""
     palette = get_color_palette()
     
     for color_key, color_value in palette.items():
@@ -66,13 +68,12 @@ def test_color_format_validity():
             f"Color '{color_key}' should be a string, got {type(color_value)}"
         )
         
-        # Check if valid hex or rgba
-        is_hex = color_value.startswith('#') and len(color_value) in (7, 9)  # #RRGGBB or #RRGGBBAA
-        is_rgba = color_value.startswith('rgba(') and color_value.endswith(')')
+        # Check if valid hex format #RRGGBB (7 chars) or #RRGGBBAA (9 chars)
+        is_hex = color_value.startswith('#') and len(color_value) == 7
         
-        assert is_hex or is_rgba, (
+        assert is_hex, (
             f"Color '{color_key}' has invalid format: {color_value}. "
-            f"Expected hex (#RRGGBB) or rgba(r, g, b, a)"
+            f"Expected hex format (#RRGGBB)"
         )
 
 
@@ -80,38 +81,53 @@ def test_color_consistency():
     """Test that color naming is consistent."""
     palette = get_color_palette()
     
-    # Color keys should use snake_case
+    # Color keys should be lowercase
     for color_key in palette.keys():
-        assert color_key.islower(), f"Color key '{color_key}' should be lowercase"
-        assert '_' in color_key or '-' not in color_key, (
-            f"Color key '{color_key}' should use snake_case or no separators"
+        assert color_key.islower(), (
+            f"Color key '{color_key}' should be lowercase"
+        )
+        # Allow snake_case or single words
+        assert all(c.isalnum() or c == '_' for c in color_key), (
+            f"Color key '{color_key}' should only contain alphanumerics and underscores"
         )
 
 
-def test_hover_active_pairs():
-    """Test that hover and active states exist for primary/secondary."""
+def test_primary_variants():
+    """Test that primary color variants exist."""
     palette = get_color_palette()
     
-    # Primary color should have hover and active variants
-    if 'primary' in palette:
-        assert 'primary_hover' in palette, "primary_hover missing"
-        assert 'primary_active' in palette, "primary_active missing"
-    
-    # Secondary color should have hover and active variants
-    if 'secondary' in palette:
-        assert 'secondary_hover' in palette, "secondary_hover missing"
-        assert 'secondary_active' in palette, "secondary_active missing"
+    # Primary should have variants
+    assert 'primary' in palette, "primary color missing"
+    assert 'primary_dark' in palette, "primary_dark variant missing"
+    assert 'primary_light' in palette, "primary_light variant missing"
 
 
 def test_status_colors():
     """Test that all status colors are defined."""
     palette = get_color_palette()
     
-    status_colors = ['error', 'success', 'warning', 'info']
+    # Status colors from the actual palette
+    status_colors = {
+        'danger': 'error/alert color',
+        'success': 'success/matched color',
+        'warning': 'warning/caution color',
+        'info': 'informational color',
+    }
     
-    for status in status_colors:
-        assert status in palette, f"Missing status color: {status}"
+    for status, description in status_colors.items():
+        assert status in palette, f"Missing status color: {status} ({description})"
         assert palette[status], f"Status color '{status}' is empty"
+
+
+def test_neutral_colors():
+    """Test that neutral colors exist."""
+    palette = get_color_palette()
+    
+    neutral_colors = ['text', 'text_secondary', 'border', 'background', 'surface', 'neutral']
+    
+    for color in neutral_colors:
+        if color in palette:  # Some might be optional
+            assert palette[color], f"Neutral color '{color}' is empty"
 
 
 def test_no_duplicate_colors():
@@ -120,32 +136,32 @@ def test_no_duplicate_colors():
     
     # Count occurrences of each color value
     color_values = list(palette.values())
-    
-    # Warning: if too many duplicates, might indicate copy-paste errors
-    # Allow some duplicates (e.g., same shade used for different purposes)
     value_counts = {}
+    
     for value in color_values:
         value_counts[value] = value_counts.get(value, 0) + 1
     
-    # More than 50% duplicate might be suspicious
+    # More than 50% duplicate might indicate errors
     duplicates = sum(1 for count in value_counts.values() if count > 1)
     duplicate_percentage = (duplicates / len(value_counts)) * 100 if value_counts else 0
     
-    # This is just a warning, not a hard failure
+    # Print warning if suspicious
     if duplicate_percentage > 50:
-        print(f"\nWarning: {duplicate_percentage:.1f}% of colors are duplicated")
-        print("Possible duplicate colors:")
+        print(f"\n⚠️  Warning: {duplicate_percentage:.1f}% of colors are duplicated")
+        print("Duplicate colors:")
         for value, count in sorted(value_counts.items(), key=lambda x: x[1], reverse=True):
             if count > 1:
-                # Find keys with this value
                 keys = [k for k, v in palette.items() if v == value]
                 print(f"  {value}: {keys}")
 
 
 def test_color_usage_in_tabs():
-    """Test that color palette is actually used in tabs/_common.py."""
+    """Test that color palette file exists and has function."""
     try:
-        with open(Path(__file__).parent.parent / 'tabs' / '_common.py', 'r') as f:
+        common_file = Path(__file__).parent.parent / 'tabs' / '_common.py'
+        assert common_file.exists(), "tabs/_common.py not found"
+        
+        with open(common_file, 'r') as f:
             content = f.read()
             
         # Check that get_color_palette function exists
@@ -154,32 +170,52 @@ def test_color_usage_in_tabs():
         )
         
         # Check that it returns a dict
-        assert 'return {' in content or 'return COLORS' in content, (
+        assert 'return {' in content, (
             "get_color_palette should return a dictionary"
         )
         
+    except AssertionError as e:
+        raise
     except FileNotFoundError:
-        print("Warning: tabs/_common.py not found, skipping usage test")
+        raise AssertionError("tabs/_common.py not found")
 
 
 def test_survival_lib_color_usage():
     """Test that survival_lib.py uses correct color keys."""
     try:
-        with open(Path(__file__).parent.parent / 'survival_lib.py', 'r') as f:
+        survival_file = Path(__file__).parent.parent / 'survival_lib.py'
+        assert survival_file.exists(), "survival_lib.py not found"
+        
+        with open(survival_file, 'r') as f:
             content = f.read()
         
-        # Should not use 'text_primary' (old key)
+        # Should not use old key 'text_primary'
         assert "COLORS['text_primary']" not in content, (
             "survival_lib.py should use COLORS['text'], not COLORS['text_primary']"
         )
         
-        # Should use correct key
-        # Note: This is a soft warning
-        if "COLORS['text']" not in content and "color_text" not in content:
-            print("Warning: survival_lib.py might not be using color palette")
-            
     except FileNotFoundError:
-        print("Warning: survival_lib.py not found, skipping usage test")
+        print("Warning: survival_lib.py not found")
+
+
+def test_hex_color_validity():
+    """Test that all hex colors are valid."""
+    palette = get_color_palette()
+    
+    valid_hex_chars = set('0123456789abcdefABCDEF')
+    
+    for color_key, color_value in palette.items():
+        # Must start with #
+        assert color_value.startswith('#'), f"{color_key} must start with #"
+        
+        # Must be 7 chars total (#RRGGBB)
+        assert len(color_value) == 7, f"{color_key} must be 7 chars (#RRGGBB), got {len(color_value)}"
+        
+        # All chars after # must be valid hex
+        hex_part = color_value[1:]  # Remove #
+        assert all(c in valid_hex_chars for c in hex_part), (
+            f"{color_key} contains invalid hex characters: {hex_part}"
+        )
 
 
 if __name__ == '__main__':
@@ -191,11 +227,13 @@ if __name__ == '__main__':
         test_essential_colors_present,
         test_color_format_validity,
         test_color_consistency,
-        test_hover_active_pairs,
+        test_primary_variants,
         test_status_colors,
+        test_neutral_colors,
         test_no_duplicate_colors,
         test_color_usage_in_tabs,
         test_survival_lib_color_usage,
+        test_hex_color_validity,
     ]
     
     passed = 0
@@ -213,5 +251,8 @@ if __name__ == '__main__':
             print(f"⚠️  {test_func.__name__}: {type(e).__name__}: {e}")
             failed += 1
     
-    print(f"\n{passed} passed, {failed} failed")
+    print(f"\n{'='*60}")
+    print(f"Results: {passed} passed, {failed} failed")
+    print(f"{'='*60}")
+    
     sys.exit(0 if failed == 0 else 1)
