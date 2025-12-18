@@ -66,6 +66,41 @@ def get_stats_categorical_str(counts, total):
         res.append(f"{_html.escape(str(cat))}: {count} ({pct:.1f}%)")
     return "<br>".join(res)
 
+# --- Helper: Calculate OR & 95% CI from 2x2 table ---
+def compute_or_ci(a, b, c, d):
+    """
+    Calculates OR and 95% CI from 2x2 contingency table cells.
+    Applies Haldane-Anscombe correction if any cell is zero.
+    
+    Args:
+        a, b, c, d: Cell counts from 2x2 table
+        
+    Returns:
+        Formatted string "OR (lower-upper)" or "-" if invalid
+    """
+    try:
+        # Haldane-Anscombe correction if ANY cell is zero
+        if min(a, b, c, d) == 0:
+            a += 0.5
+            b += 0.5
+            c += 0.5
+            d += 0.5
+            
+        or_val = (a * d) / (b * c)
+        
+        if or_val == 0 or np.isinf(or_val):
+            return "-"
+
+        # 95% CI (Natural Log Method)
+        ln_or = np.log(or_val)
+        se = np.sqrt(1/a + 1/b + 1/c + 1/d)
+        lower = np.exp(ln_or - 1.96 * se)
+        upper = np.exp(ln_or + 1.96 * se)
+        
+        return f"{or_val:.2f} ({lower:.2f}-{upper:.2f})"
+    except Exception:
+        return "-"
+
 # --- 🟢 UPDATED: Calculate OR & 95% CI (One-vs-Rest) for Categorical [Legacy/Fallback] ---
 def compute_or_for_row(row_series, cat_val, group_series, g1_val):
     try:
@@ -84,22 +119,7 @@ def compute_or_for_row(row_series, cat_val, group_series, g1_val):
         c = (~row_bin & group_bin).sum()
         d = (~row_bin & ~group_bin).sum()
         
-        # Haldane-Anscombe correction if ANY cell is zero
-        if min(a, b, c, d) == 0:
-            a += 0.5; b += 0.5; c += 0.5; d += 0.5
-            
-        or_val = (a * d) / (b * c)
-        
-        if or_val == 0 or np.isinf(or_val):
-            return "-"
-
-        # 95% CI (Natural Log Method)
-        ln_or = np.log(or_val)
-        se = np.sqrt(1/a + 1/b + 1/c + 1/d)
-        lower = np.exp(ln_or - 1.96 * se)
-        upper = np.exp(ln_or + 1.96 * se)
-        
-        return f"{or_val:.2f} ({lower:.2f}-{upper:.2f})"
+        return compute_or_ci(a, b, c, d)
     except Exception:
         return "-"
 
@@ -130,22 +150,7 @@ def compute_or_vs_ref(row_series, cat_target, cat_ref, group_series, g1_val):
         c = (~exposure & outcome).sum()     # Unexposed (Ref) & Case
         d = (~exposure & ~outcome).sum()    # Unexposed (Ref) & Control
         
-        # Haldane-Anscombe correction
-        if min(a, b, c, d) == 0:
-            a += 0.5; b += 0.5; c += 0.5; d += 0.5
-            
-        or_val = (a * d) / (b * c)
-        
-        if or_val == 0 or np.isinf(or_val):
-            return "-"
-
-        # 95% CI
-        ln_or = np.log(or_val)
-        se = np.sqrt(1/a + 1/b + 1/c + 1/d)
-        lower = np.exp(ln_or - 1.96 * se)
-        upper = np.exp(ln_or + 1.96 * se)
-        
-        return f"{or_val:.2f} ({lower:.2f}-{upper:.2f})"
+        return compute_or_ci(a, b, c, d)
     except Exception:
         return "-"
 
