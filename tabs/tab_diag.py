@@ -87,7 +87,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                 if err: st.error(err)
                 else:
                     rep = [
-                        {'type':'text', 'data':f"Analysis: <b>{score}</b> vs <b>{truth}</b>"},
+                        {'type':'text', 'data':f"Analysis: {score} vs {truth}"},
                         {'type':'plot', 'data':fig},
                         {'type':'table', 'header':'Key Statistics', 'data':pd.DataFrame([res]).T},
                         {'type':'table', 'header':'Diagnostic Performance', 'data':coords_df}
@@ -331,7 +331,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                 st.error(err)
             else:
                 rep_elements = [
-                    {'type': 'text', 'data': f"<b>Agreement Analysis:</b> {kv1} vs {kv2}"},
+                    {'type': 'text', 'data': f"Agreement Analysis: {kv1} vs {kv2}"},
                     {'type': 'table', 'header': 'Kappa Statistics', 'data': res_df},
                     {'type': 'contingency_table', 'header': 'Confusion Matrix (Crosstab)', 'data': conf_mat, 'outcome_col': kv2}
                 ]
