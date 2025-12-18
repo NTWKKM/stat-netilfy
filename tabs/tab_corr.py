@@ -55,8 +55,8 @@ def render(df):
         cm = c1.selectbox("Correlation Coefficient:", ["Pearson", "Spearman"], key='coeff_type_tab')
         
         # 🟢 UPDATE: Auto-select default continuous variables
-        cv1_default_name = 'Lab_Calcium'
-        cv2_default_name = 'Lab_Albumin'
+        cv1_default_name = 'Lab_HbA1c'
+        cv2_default_name = 'Lab_Glucose'
         
         cv1_idx = next((i for i, c in enumerate(all_cols) if c == cv1_default_name), 0)
         cv2_idx = next((i for i, c in enumerate(all_cols) if c == cv2_default_name), min(1, len(all_cols)-1))
@@ -117,7 +117,7 @@ def render(df):
         numeric_cols = df.select_dtypes(include="number").columns.tolist()
         
         # Auto-select columns with 'measurement', 'rater', 'machine', 'score', 'read' in name
-        default_icc_cols = [c for c in numeric_cols if any(k in c.lower() for k in ['measure', 'machine', 'rater', 'score', 'read', 'icc'])]
+        default_icc_cols = [c for c in numeric_cols if any(k in c.lower() for k in ['measure', 'machine', 'rater', 'read', 'icc'])]
         if len(default_icc_cols) < 2:
             default_icc_cols = numeric_cols[:2] if len(numeric_cols) >= 2 else []
         

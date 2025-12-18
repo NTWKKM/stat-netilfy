@@ -4,6 +4,9 @@ import numpy as np
 import survival_lib
 import time
 from pandas.api.types import is_numeric_dtype
+import logging
+
+logger = logging.getLogger(__name__)
 
 def render(df, _var_meta):
     """
@@ -25,7 +28,7 @@ def render(df, _var_meta):
     # Global Selectors
     c1, c2 = st.columns(2)
     
-    # Auto-detect logic (ใช้โค้ดเดิม)
+    # Auto-detect logic
     time_idx = 0
     for k in ['stop', 'time', 'dur']:
         found = next((i for i, c in enumerate(all_cols) if k in c.lower()), None)
@@ -42,7 +45,7 @@ def render(df, _var_meta):
     tab_curves, tab_landmark, tab_cox, tab_ref = st.tabs(["📈 Survival Curves (KM/NA)", "📑 Landmark Analysis", "📊 Cox Regression", "ℹ️ Reference & Interpretation"])
     
     # ==========================
-    # TAB 1: Curves (KM & Nelson-Aalen) - ใช้โค้ดเดิม
+    # TAB 1: Curves (KM & Nelson-Aalen)
     # ==========================
     with tab_curves:
         c1, c2 = st.columns([1, 2])
@@ -85,10 +88,11 @@ def render(df, _var_meta):
                     st.download_button("📥 Download Report (NA)", report_html, "na_report.html", "text/html")
                     
             except Exception as e:
+                logger.exception("Unexpected error in survival curves analysis")
                 st.error(f"Error: {e}")
 
     # ==========================
-    # TAB 2: Landmark Analysis 🟢 UPDATED WITH AUTO-DETECT
+    # TAB 2: Landmark Analysis
     # ==========================
     with tab_landmark:    
         st.caption("Principle: Exclude patients who had an event or were censored before the Landmark Time.")
@@ -105,11 +109,6 @@ def render(df, _var_meta):
             st.session_state.landmark_val = float(round(float(max_t) * 0.1))
 
         def update_from_slider() -> None:
-            """
-            Synchronizes the stored landmark time value with the slider widget.
-            
-            Sets st.session_state.landmark_val to the current value of st.session_state.lm_slider_widget so the session state reflects slider changes.
-            """
             st.session_state.landmark_val = st.session_state.lm_slider_widget
         
         def update_from_number() -> None:
@@ -117,78 +116,67 @@ def render(df, _var_meta):
 
         c_slide, c_num = st.columns([3, 1])
         with c_slide:
-            # ใช้ st.session_state.landmark_val เป็น default value
             st.slider("Use Slider:", min_value=0.0, max_value=float(max_t) * 0.99, key='lm_slider_widget', value=min(st.session_state.landmark_val, float(max_t) * 0.99), on_change=update_from_slider, label_visibility="collapsed")
         with c_num:
-            # ใช้ st.session_state.landmark_val เป็น default value
             st.number_input("Enter Value:", min_value=0.0, max_value=float(max_t) * 0.99, key='lm_number_widget', value=min(st.session_state.landmark_val, float(max_t) * 0.99), on_change=update_from_number, step=1.0, label_visibility="collapsed")
             
         landmark_t = st.session_state.landmark_val
         
-        # 🟢 NEW: Auto-detect group column for landmark analysis
-        # Priority: 'group' > 'treatment' > 'comorbid'
+        # Auto-detect group column for landmark analysis
         group_idx = 0
         available_cols = [c for c in all_cols if c not in [col_time, col_event]]
 
         if not available_cols:
             st.warning("Landmark analysis requires at least one group/covariate column beyond time and event.")
-            return
+        else:
+            for priority_key in ['group', 'treatment', 'comorbid']:
+                found_idx = next((i for i, c in enumerate(available_cols) if priority_key in c.lower()), None)
+                if found_idx is not None:
+                    group_idx = found_idx
+                    break
+            
+            col_group = st.selectbox("Compare Group:", available_cols, index=group_idx, key='lm_group_sur')
 
-        for priority_key in ['group', 'treatment', 'comorbid']:
-            found_idx = next((i for i, c in enumerate(available_cols) if priority_key in c.lower()), None)
-            if found_idx is not None:
-                group_idx = found_idx
-                break
-        
-        col_group = st.selectbox("Compare Group:", available_cols, index=group_idx, key='lm_group_sur')
-
-        if st.button("Run Landmark Analysis", key='btn_lm_sur'):
-            if col_group is None:
-                st.error("Please select a Group Variable for comparison.")
-                return
-
-            try:
-                with st.spinner(f"Running Landmark Analysis at t={landmark_t:.2f}..."):
-                    # 🟢 CALL NEW LANDMARK FUNCTION: ให้ฟังก์ชนจัดการ Filtering และ Time Reset เอง
-                    fig, stats, n_pre, n_post, err = survival_lib.fit_km_landmark(
-                        df, col_time, col_event, col_group, landmark_t
-                    )
-                
-                if err:
-                    st.error(err)
-                elif fig:
-                    # Show Filtering Results
-                    st.markdown(f"""
-                    <p style='font-size:1em;'>
-                    Total N before filter: <b>{n_pre}</b> | 
-                    N Included (Survived $\\ge$ {landmark_t:.2f}): <b>{n_post}</b> | 
-                    N Excluded: <b>{n_pre - n_post}</b>
-                    </p>
-                    """, unsafe_allow_html=True)
-                    
-                    # 🟢 Graph is now correctly zero-based and filtered
-                    st.plotly_chart(fig, use_container_width=True)
-                    st.markdown("##### Log-Rank Test Results (Post-Landmark)")
-                    st.dataframe(stats)
-                    
-                    elements = [
-                        {'type':'header','data':f'Landmark Analysis (Survival from t={landmark_t:.2f})'},
-                        {'type':'text', 'data': f"N Included: {n_post}, N Excluded: {n_pre - n_post}"},
-                        {'type':'plot','data':fig},
-                        {'type':'table','data':stats}
-                    ]
-                    
-                    report_html = survival_lib.generate_report_survival(f"Landmark Analysis: {col_time} (t >= {landmark_t})", elements)
-                    st.download_button("📥 Download Report (Landmark)", report_html, "lm_report.html", "text/html")
-                
-            except (ValueError, KeyError) as e:
-                st.error(f"Analysis error: {e}")
-            except Exception as e:
-                st.error(f"Unexpected error: {e}")
-                # Consider: import traceback; st.exception(e) for debugging
+            if st.button("Run Landmark Analysis", key='btn_lm_sur'):
+                try:
+                    with st.spinner(f"Running Landmark Analysis at t={landmark_t:.2f}..."):
+                        fig, stats, n_pre, n_post, err = survival_lib.fit_km_landmark(
+                            df, col_time, col_event, col_group, landmark_t
+                        )
+                        
+                    if err:
+                        st.error(err)
+                    elif fig:
+                        st.markdown(f"""
+                        <p style='font-size:1em;'>
+                        Total N before filter: <b>{n_pre}</b> | 
+                        N Included (Survived $\ge$ {landmark_t:.2f}): <b>{n_post}</b> | 
+                        N Excluded: <b>{n_pre - n_post}</b>
+                        </p>
+                        """, unsafe_allow_html=True)
+                            
+                        st.plotly_chart(fig, use_container_width=True)
+                        st.markdown("##### Log-Rank Test Results (Post-Landmark)")
+                        st.dataframe(stats)
+                            
+                        elements = [
+                            {'type':'header','data':f'Landmark Analysis (Survival from t={landmark_t:.2f})'},
+                            {'type':'text', 'data': f"N Included: {n_post}, N Excluded: {n_pre - n_post}"},
+                            {'type':'plot','data':fig},
+                            {'type':'table','data':stats}
+                        ]
+                            
+                        report_html = survival_lib.generate_report_survival(f"Landmark Analysis: {col_time} (t >= {landmark_t})", elements)
+                        st.download_button("📥 Download Report (Landmark)", report_html, "lm_report.html", "text/html")
+                        
+                except (ValueError, KeyError) as e:
+                    st.error(f"Analysis error: {e}")
+                except Exception as e:
+                    logger.exception("Unexpected error in landmark analysis")
+                    st.error(f"Unexpected error: {e}")
 
     # ==========================
-    # TAB 3: Cox Regression - ใช้โค้ดเดิม
+    # TAB 3: Cox Regression
     # ==========================
     with tab_cox:
         covariates = st.multiselect("Select Covariates (Predictors):", [c for c in all_cols if c not in [col_time, col_event]], key='surv_cox_vars')
@@ -216,7 +204,18 @@ def render(df, _var_meta):
                             st.session_state.cox_res = res
                             st.success("Analysis Complete!")
                             
-                            st.dataframe(res.style.format("{:.4f}"))
+                            # 🟢 FIXED: Apply formatting ONLY to numeric columns to avoid string error
+                            format_dict = {
+                                'HR': '{:.4f}',
+                                '95% CI Lower': '{:.4f}',
+                                '95% CI Upper': '{:.4f}',
+                                'P-value': '{:.4f}'
+                            }
+                            st.dataframe(res.style.format(format_dict))
+                            
+                            if 'Method' in res.columns and len(res) > 0:
+                                st.caption(f"Method Used: {res['Method'].iloc[0]}")
+                            
                             st.markdown("##### 🔍 Proportional Hazards Assumption Check")
                             
                             if txt_report:
@@ -226,7 +225,7 @@ def render(df, _var_meta):
                             if fig_images:
                                 st.write("**Schoenfeld Residuals Plots:**")
                                 for img_bytes in fig_images:
-                                    st.image(img_bytes, caption="Assumption Check Plot", use_column_width=True)
+                                    st.image(img_bytes, caption="Assumption Check Plot", use_container_width=True)
                             else:
                                 st.info("No assumption plots generated.")
 
@@ -248,15 +247,15 @@ def render(df, _var_meta):
                     st.error(f"Analysis error: {e}")
                     st.session_state.cox_res = None
                 except Exception as e:
+                    logger.exception("Unexpected error in Cox regression analysis")
                     st.error(f"Unexpected error: {e}")
                     st.session_state.cox_res = None
-                    # Consider: import traceback; st.exception(e) for debugging
 
         if st.session_state.cox_html:
             st.download_button("📥 Download Full Report (Cox)", st.session_state.cox_html, "cox_report.html", "text/html")
 
     # ==========================
-    # TAB 4: Reference & Interpretation (NEW)
+    # TAB 4: Reference & Interpretation
     # ==========================
     with tab_ref:
         st.markdown("##### 📚 Quick Reference: Survival Analysis")

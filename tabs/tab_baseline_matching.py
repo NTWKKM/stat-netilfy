@@ -1,3 +1,4 @@
+# tabs/tab_baseline_matching.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -37,7 +38,7 @@ def render(df, var_meta):
         **Presentation:**
         * **Numeric:** Mean ± SD (Normally Distributed Data) or Median (IQR) (**Non**-Normally Distributed Data).
         * **Categorical:** Count (Percentage).
-        * **Odds Ratio (OR):** Automatically calculated for categorical variables when there are **exactly 2 groups** (One-vs-Rest method).
+        * **Odds Ratio (OR):** Automatically calculated for categorical variables when there are **exactly 2 groups**.
         * **P-value & Test Used:** Tests for statistically significant differences in characteristics across groups.
         * **Automatically selects the appropriate test for P-value** (e.g., t-test, Chi-square, Kruskal-Wallis) based on the variable type and distribution.
 
@@ -56,6 +57,18 @@ def render(df, var_meta):
         c1, c2 = st.columns([1, 2])
         with c1:
             col_group = st.selectbox("Group By (Column):", ["None", *all_cols], index=grp_idx+1, key='t1_group')
+            
+            # 🟢 Added OR Display Option
+            or_style_display = st.radio(
+                "Choose OR Style:",
+                ["All Levels (Every Level vs Ref)", "Simple (Single Line/Risk vs Ref)"],
+                index=0,
+                key="or_style_radio",
+                help="All Levels: Shows OR for every sub-group (Detailed). Simple: Shows OR for only one comparison (Concise)."
+            )
+            # Map display string to internal code
+            or_style_code = 'all_levels' if "All Levels" in or_style_display else 'simple'
+            
         with c2:
             def_vars = [c for c in all_cols if c != col_group]
             selected_vars = st.multiselect("Include Variables:", all_cols, default=def_vars, key='t1_vars')
@@ -69,8 +82,8 @@ def render(df, var_meta):
             with st.spinner("Generating..."):
                 try:
                     grp = None if col_group == "None" else col_group
-                    # Calling the generate_table function in table_one.py
-                    html_t1 = table_one.generate_table(df, selected_vars, grp, var_meta)
+                    # Calling the generate_table function in table_one.py with or_style
+                    html_t1 = table_one.generate_table(df, selected_vars, grp, var_meta, or_style=or_style_code)
                     st.session_state.html_output_t1 = html_t1 
                     st.components.v1.html(html_t1, height=600, scrolling=True)
                 except Exception as e:
@@ -241,8 +254,8 @@ def render(df, var_meta):
                                         st.markdown(f"##### Outcome Comparison: {outcome_col}")
                                         res_stats = df_matched.groupby(final_treat_col)[outcome_col].mean()
                                         st.write(res_stats)
-                                    
-                                    st.info("💡 Note: This is a simple comparison. For statistical significance, use the Hypothesis Testing tab with the 'Matched Dataset'.")
+                                        
+                                        st.info("💡 Note: This is a simple comparison. For statistical significance, use the Hypothesis Testing tab with the 'Matched Dataset'.")
                                 else:
                                     st.write("Select an Outcome variable to see comparison.")
                                     

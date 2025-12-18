@@ -122,127 +122,154 @@ st.sidebar.header("1. Data Management")
 
 # Example Data Generator
 if st.sidebar.button("📄 Load Example Data"):
-    logger.log_operation("example_data", "started", n_rows=600)  # ✅ LOG START
+    logger.log_operation("example_data", "started", n_rows=600)  
     
     try:
-        with logger.track_time("generate_example_data", log_level="debug"):  # ✅ TRACK TIMING
-            np.random.seed(999)
+        with logger.track_time("generate_example_data", log_level="debug"): 
+            np.random.seed(42) # Fixed seed for reproducibility
             n = 600 
             
-            # --- 1. Demographics & Confounders ---
-            age = np.random.normal(55, 12, n).astype(int).clip(20, 90)
-            sex = np.random.binomial(1, 0.55, n)
-            bmi = np.random.normal(24, 4, n).round(1).clip(10, 60)
+            # --- 1. Demographics (Baseline) ---
+            # Age: Normal distribution, mean 60, SD 12
+            age = np.random.normal(60, 12, n).astype(int).clip(30, 95)
+            # Sex: 0=Female, 1=Male
+            sex = np.random.binomial(1, 0.5, n)
+            # BMI: Normal, mean 25, SD 5
+            bmi = np.random.normal(25, 5, n).round(1).clip(15, 50)
             
-            # Comorbidity (independent predictor)
-            logit_comorb = -3 + 0.03*age + 0.08*bmi
-            p_comorb = 1 / (1 + np.exp(-logit_comorb))
-            comorbidity = np.random.binomial(1, p_comorb)
+            # --- 2. Create Confounding for PSM (Selection Bias) ---
+            # Scenario: Older patients and higher BMI are MORE likely to get the "New Drug" (Treatment=1)
+            # This creates baseline imbalance, making PSM necessary.
+            logit_treat = -4.5 + (0.05 * age) + (0.08 * bmi) + (0.2 * sex)
+            p_treat = 1 / (1 + np.exp(-logit_treat))
+            group = np.random.binomial(1, p_treat, n)
+            
+            # --- 3. Comorbidities (Dependent on Age/BMI) ---
+            logit_dm = -5 + (0.04 * age) + (0.1 * bmi)
+            p_dm = 1 / (1 + np.exp(-logit_dm))
+            diabetes = np.random.binomial(1, p_dm, n)
+            
+            logit_ht = -4 + (0.06 * age) + (0.05 * bmi)
+            p_ht = 1 / (1 + np.exp(-logit_ht))
+            hypertension = np.random.binomial(1, p_ht, n)
 
-            # --- 2. Treatment Assignment (RANDOMIZED - NO SELECTION BIAS) ---
-            # 🟢 FIX: Random assignment (p=0.5) not based on comorbidity
-            group = np.random.binomial(1, 0.5, n)
-
-            # --- 3. Survival Outcome ---
-            # Moderate effect sizes to avoid quasi-separation
-            # HR(comorbidity) = exp(0.3) ≈ 1.35 (modest increase in hazard)
-            # HR(treatment) = exp(-0.25) ≈ 0.78 (modest protective effect)
-            lambda_base = 0.008  # Reduced baseline to get reasonable event rate
-            hazard = lambda_base * np.exp(0.3*comorbidity - 0.25*group)
+            # --- 4. Survival Outcome (Time-to-Event) ---
+            # "New Drug" (group=1) is protective (HR < 1)
+            # Age and Comorbidities increase risk (HR > 1)
+            # Baseline hazard chosen to give ~30-40% event rate
+            lambda_base = 0.002 
+            # HR: Group=0.55 (Protective), Age=1.03/yr, DM=1.5
+            linear_predictor = 0.03 * age + 0.4 * diabetes + 0.3 * hypertension - 0.6 * group
+            hazard = lambda_base * np.exp(linear_predictor)
+            
+            # Generate Survival Time (Exponential distribution)
             surv_time = np.random.exponential(1/hazard, n)
             
-            # Censoring (random, independent of covariates)
-            censor_time = np.random.uniform(50, 150, n)
+            # Censoring: Random administrative censoring
+            censor_time = np.random.uniform(0, 100, n) # Follow up up to 100 months
+            
             time_obs = np.minimum(surv_time, censor_time).round(1)
-            time_obs = np.maximum(time_obs, 0.1)
-            event_death = (surv_time <= censor_time).astype(int)
+            time_obs = np.maximum(time_obs, 0.5) # Minimum time 0.5 month
+            status_death = (surv_time <= censor_time).astype(int)
             
-            # Realistic event rate: ~35-40% (avoid >50% which can cause convergence issues)
-            print(f"DEBUG: Event rate = {event_death.mean()*100:.1f}%")
-
-            # --- 4. Logistic Regression Outcome ---
-            logit_cure = 0.5 + 1.2*group - 0.03*age - 0.8*comorbidity
+            # --- 5. Binary Outcome (Logistic Regression) ---
+            # Outcome: "Cured" at 1 year
+            # Treatment increases cure chance, Age decreases it
+            logit_cure = 0.5 + 1.2 * group - 0.04 * age - 0.5 * diabetes
             p_cure = 1 / (1 + np.exp(-logit_cure))
-            outcome_cured = np.random.binomial(1, p_cure)
+            outcome_cured = np.random.binomial(1, p_cure, n)
 
-            # --- 5. Diagnostic Test ---
-            gold_std = np.random.binomial(1, 0.3, n)
-            rapid_test_val = np.where(gold_std==1, 
-                                      np.random.normal(55, 15, n), 
-                                      np.random.normal(35, 10, n))
-            rapid_test_val = np.maximum(rapid_test_val, 0).round(1)
+            # --- 6. Diagnostic Test Data ---
+            # Gold Standard: Disease Status
+            gold_std = np.random.binomial(1, 0.3, n) # 30% Prevalence
             
-            # Kappa Raters
-            dr_a = np.where(gold_std==1, np.random.binomial(1, 0.9, n), np.random.binomial(1, 0.1, n))
-            agree_noise = np.random.binomial(1, 0.85, n)
-            dr_b = np.where(agree_noise==1, dr_a, 1-dr_a)
+            # Continuous Test Score (Rapid Test) - Good separation (AUC ~0.85)
+            # Healthy: Mean 20, SD 10
+            # Diseased: Mean 50, SD 15
+            rapid_score = np.where(gold_std==0, 
+                                   np.random.normal(20, 10, n), 
+                                   np.random.normal(50, 15, n))
+            rapid_score = np.clip(rapid_score, 0, 100).round(1)
+            
+            # Inter-rater Reliability (Kappa)
+            # Rater A: Good accuracy
+            rater_a = np.where(gold_std==1, 
+                               np.random.binomial(1, 0.85, n), # Sensitivity 0.85
+                               np.random.binomial(1, 0.10, n)) # False Positive 0.10
+            
+            # Rater B: Agrees with A mostly, but has some noise
+            agree_prob = 0.85
+            rater_b = np.where(np.random.binomial(1, agree_prob, n)==1, 
+                               rater_a, 
+                               1 - rater_a)
 
-            # --- 6. Correlation ---
-            lab_alb = np.random.normal(3.5, 0.5, n).round(2)
-            lab_ca = 2 + 1.5*lab_alb + np.random.normal(0, 0.3, n)
-            lab_ca = lab_ca.round(2)
+            # --- 7. Correlation Data ---
+            # Example: HbA1c vs Fasting Glucose (Linear relationship + Noise)
+            hba1c = np.random.normal(6.5, 1.5, n).clip(4, 14).round(1)
+            glucose = (hba1c * 15) + np.random.normal(0, 15, n) # Linear eq
+            glucose = glucose.round(0)
 
-            # --- 7. ICC Data ---
-            icc_rater1 = np.random.normal(50, 10, n).round(1)
-            icc_rater2 = icc_rater1 + np.random.normal(0, 3, n)
+            # --- 8. ICC Data (Continuous) ---
+            icc_rater1 = np.random.normal(120, 15, n).round(1) # e.g., Systolic BP
+            # Rater 2 is systematic higher + random noise
+            icc_rater2 = icc_rater1 + 5 + np.random.normal(0, 4, n)
             icc_rater2 = icc_rater2.round(1)
 
             # Create DataFrame
             data = {
                 'ID': range(1, n+1),
-                'Group_Treatment': group, 
-                'Age': age,
-                'Sex': sex,
-                'BMI': bmi,
-                'Comorbidity': comorbidity,
+                'Treatment_Group': group,  
+                'Age_Years': age,
+                'Sex_Male': sex,
+                'BMI_kgm2': bmi,
+                'Comorb_Diabetes': diabetes,
+                'Comorb_Hypertension': hypertension,
                 'Outcome_Cured': outcome_cured,
                 'Time_Months': time_obs,
-                'Status_Death': event_death,
-                'Gold_Standard': gold_std,
-                'Rapid_Test_Score': rapid_test_val, 
-                'Diagnosis_Dr_A': dr_a,
-                'Diagnosis_Dr_B': dr_b,
-                'Lab_Albumin': lab_alb,
-                'Lab_Calcium': lab_ca,
-                'ICC_Rater1': icc_rater1,
-                'ICC_Rater2': icc_rater2,
-                'T_Start': np.zeros(n, dtype=float),
-                'T_Stop': time_obs.astype(float)
+                'Status_Death': status_death,
+                'Gold_Standard_Disease': gold_std,
+                'Test_Score_Rapid': rapid_score, 
+                'Diagnosis_Dr_A': rater_a,
+                'Diagnosis_Dr_B': rater_b,
+                'Lab_HbA1c': hba1c,
+                'Lab_Glucose': glucose,
+                'ICC_SysBP_Rater1': icc_rater1,
+                'ICC_SysBP_Rater2': icc_rater2,
             }
             
             st.session_state.df = pd.DataFrame(data)
         
-        # Set Metadata
+        # Set Metadata (Correctly Mapped)
         st.session_state.var_meta = {
-            'Group_Treatment': {'type':'Categorical', 'map':{0:'Standard Care', 1:'New Drug'}},
-            'Sex': {'type':'Categorical', 'map':{0:'Female', 1:'Male'}},
-            'Comorbidity': {'type':'Categorical', 'map':{0:'No', 1:'Yes'}},
-            'Outcome_Cured': {'type':'Categorical', 'map':{0:'Not Cured', 1:'Cured'}},
-            'Status_Death': {'type':'Categorical', 'map':{0:'Censored', 1:'Dead'}},
-            'Gold_Standard': {'type':'Categorical', 'map':{0:'Healthy', 1:'Disease'}},
-            'Diagnosis_Dr_A': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}},
-            'Diagnosis_Dr_B': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}},
-            'Age': {'type': 'Continuous', 'label': 'Age', 'map': {}},
-            'BMI': {'type': 'Continuous', 'label': 'BMI', 'map': {}},
+            'Treatment_Group': {'type':'Categorical', 'map':{0:'Standard Care', 1:'New Drug'}, 'label': 'Treatment Group'},
+            'Sex_Male': {'type':'Categorical', 'map':{0:'Female', 1:'Male'}, 'label': 'Sex'},
+            'Comorb_Diabetes': {'type':'Categorical', 'map':{0:'No', 1:'Yes'}, 'label': 'Diabetes'},
+            'Comorb_Hypertension': {'type':'Categorical', 'map':{0:'No', 1:'Yes'}, 'label': 'Hypertension'},
+            'Outcome_Cured': {'type':'Categorical', 'map':{0:'Not Cured', 1:'Cured'}, 'label': 'Outcome (Cured)'},
+            'Status_Death': {'type':'Categorical', 'map':{0:'Censored/Alive', 1:'Dead'}, 'label': 'Status (Death)'},
+            'Gold_Standard_Disease': {'type':'Categorical', 'map':{0:'Healthy', 1:'Disease'}, 'label': 'Gold Standard'},
+            'Diagnosis_Dr_A': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}, 'label': 'Diagnosis (Dr. A)'},
+            'Diagnosis_Dr_B': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}, 'label': 'Diagnosis (Dr. B)'},
+            
+            'Age_Years': {'type': 'Continuous', 'label': 'Age (Years)', 'map': {}},
+            'BMI_kgm2': {'type': 'Continuous', 'label': 'BMI (kg/m²)', 'map': {}},
             'Time_Months': {'type': 'Continuous', 'label': 'Time (Months)', 'map': {}},
-            'Rapid_Test_Score': {'type': 'Continuous', 'label': 'Rapid Test Score', 'map': {}},
-            'Lab_Albumin': {'type': 'Continuous', 'label': 'Albumin (g/dL)', 'map': {}},
-            'Lab_Calcium': {'type': 'Continuous', 'label': 'Calcium (mg/dL)', 'map': {}},
-            'ICC_Rater1': {'type': 'Continuous', 'label': 'ICC Rater 1', 'map': {}},
-            'ICC_Rater2': {'type': 'Continuous', 'label': 'ICC Rater 2', 'map': {}},
-            'T_Start': {'type': 'Continuous', 'label': 'Time Start', 'map': {}},
-            'T_Stop': {'type': 'Continuous', 'label': 'Time Stop', 'map': {}},
+            'Test_Score_Rapid': {'type': 'Continuous', 'label': 'Rapid Test Score (0-100)', 'map': {}},
+            'Lab_HbA1c': {'type': 'Continuous', 'label': 'HbA1c (%)', 'map': {}},
+            'Lab_Glucose': {'type': 'Continuous', 'label': 'Fasting Glucose (mg/dL)', 'map': {}},
+            'ICC_SysBP_Rater1': {'type': 'Continuous', 'label': 'Sys BP (Rater 1)', 'map': {}},
+            'ICC_SysBP_Rater2': {'type': 'Continuous', 'label': 'Sys BP (Rater 2)', 'map': {}},
         }
-        st.session_state.uploaded_file_name = "Example Data"
+        st.session_state.uploaded_file_name = "Example Clinical Data"
         
-        logger.log_operation("example_data", "completed",   # ✅ LOG COMPLETION
-                           rows=len(st.session_state.df),
-                           columns=len(st.session_state.df.columns))
-        st.sidebar.success(f"Loaded {n} Example Patients!")
+        logger.log_operation("example_data", "completed", 
+                            rows=len(st.session_state.df),
+                            columns=len(st.session_state.df.columns))
+        st.sidebar.success(f"✅ Loaded {n} Clinical Records (Simulated)")
         st.rerun()
         
     except Exception as e:
-        logger.log_operation("example_data", "failed", error=str(e))  # ✅ LOG ERROR
+        logger.log_operation("example_data", "failed", error=str(e)) 
         st.sidebar.error(f"Error loading example data: {e}")
     
 # File Uploader

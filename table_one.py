@@ -66,7 +66,42 @@ def get_stats_categorical_str(counts, total):
         res.append(f"{_html.escape(str(cat))}: {count} ({pct:.1f}%)")
     return "<br>".join(res)
 
-# --- 🟢 UPDATED: Calculate OR & 95% CI (One-vs-Rest) for Categorical ---
+# --- Helper: Calculate OR & 95% CI from 2x2 table ---
+def compute_or_ci(a, b, c, d):
+    """
+    Calculates OR and 95% CI from 2x2 contingency table cells.
+    Applies Haldane-Anscombe correction if any cell is zero.
+    
+    Args:
+        a, b, c, d: Cell counts from 2x2 table
+        
+    Returns:
+        Formatted string "OR (lower-upper)" or "-" if invalid
+    """
+    try:
+        # Haldane-Anscombe correction if ANY cell is zero
+        if min(a, b, c, d) == 0:
+            a += 0.5
+            b += 0.5
+            c += 0.5
+            d += 0.5
+            
+        or_val = (a * d) / (b * c)
+        
+        if or_val == 0 or np.isinf(or_val):
+            return "-"
+
+        # 95% CI (Natural Log Method)
+        ln_or = np.log(or_val)
+        se = np.sqrt(1/a + 1/b + 1/c + 1/d)
+        lower = np.exp(ln_or - 1.96 * se)
+        upper = np.exp(ln_or + 1.96 * se)
+        
+        return f"{or_val:.2f} ({lower:.2f}-{upper:.2f})"
+    except Exception:
+        return "-"
+
+# --- 🟢 UPDATED: Calculate OR & 95% CI (One-vs-Rest) for Categorical [Legacy/Fallback] ---
 def compute_or_for_row(row_series, cat_val, group_series, g1_val):
     try:
         # Complete-case mask (avoid treating NaN as "not cat" / "group0")
@@ -84,23 +119,40 @@ def compute_or_for_row(row_series, cat_val, group_series, g1_val):
         c = (~row_bin & group_bin).sum()
         d = (~row_bin & ~group_bin).sum()
         
-        # Haldane-Anscombe correction if ANY cell is zero
-        if min(a, b, c, d) == 0:
-            a += 0.5; b += 0.5; c += 0.5; d += 0.5
-            
-        or_val = (a * d) / (b * c)
-        
-        if or_val == 0 or np.isinf(or_val):
-            return "-"
-
-        # 95% CI (Natural Log Method)
-        ln_or = np.log(or_val)
-        se = np.sqrt(1/a + 1/b + 1/c + 1/d)
-        lower = np.exp(ln_or - 1.96 * se)
-        upper = np.exp(ln_or + 1.96 * se)
-        
-        return f"{or_val:.2f} ({lower:.2f}-{upper:.2f})"
+        return compute_or_ci(a, b, c, d)
     except Exception:
+        return "-"
+
+# --- 🟢 NEW: Calculate OR & 95% CI (Target vs Reference) for Categorical ---
+def compute_or_vs_ref(row_series, cat_target, cat_ref, group_series, g1_val):
+    """
+    Calculates OR comparing 'cat_target' vs 'cat_ref'.
+    Rows with other categories are ignored.
+    """
+    try:
+        # Filter: Only rows that are Target OR Reference
+        # Note: row_series and group_series must be aligned (same index)
+        mask_target = (row_series.astype(str) == str(cat_target))
+        mask_ref = (row_series.astype(str) == str(cat_ref))
+        mask_valid = (mask_target | mask_ref) & group_series.notna()
+        
+        rs = row_series[mask_valid]
+        gs = group_series[mask_valid]
+        
+        # Exposure: 1 if Target, 0 if Reference
+        exposure = (rs.astype(str) == str(cat_target))
+        
+        # Outcome: 1 if Case (g1_val)
+        outcome = (gs.astype(str) == str(g1_val))
+        
+        a = (exposure & outcome).sum()      # Exposed (Target) & Case
+        b = (exposure & ~outcome).sum()     # Exposed (Target) & Control
+        c = (~exposure & outcome).sum()     # Unexposed (Ref) & Case
+        d = (~exposure & ~outcome).sum()    # Unexposed (Ref) & Control
+        
+        return compute_or_ci(a, b, c, d)
+    except Exception:
+        # Consider logging: logger.debug("OR calculation failed", exc_info=True)
         return "-"
 
 # --- 🟢 UPDATED: Calculate OR & 95% CI for Continuous (Robust Logistic Regression) ---
@@ -202,7 +254,12 @@ def calculate_p_categorical(df, col, group_col):
         return np.nan, f"Error: {e}"
 
 # --- Main Generator ---
-def generate_table(df, selected_vars, group_col, var_meta):
+def generate_table(df, selected_vars, group_col, var_meta, or_style='all_levels'):
+    """
+    or_style: 'all_levels' (Default: Ref=1, others vs Ref) or 'simple' (One line per var)
+    """
+    if or_style not in ('all_levels', 'simple'):
+        raise ValueError(f"or_style must be 'all_levels' or 'simple', got '{or_style}'")
     has_group = group_col is not None and group_col != "None"
     groups = []
     
@@ -267,7 +324,10 @@ def generate_table(df, selected_vars, group_col, var_meta):
     
     # OR Column Header
     if show_or:
-        html += "<th>OR (95% CI)<br><span style='font-size:0.8em; font-weight:normal'>(vs Others / Per Unit)</span></th>"
+        if or_style == 'simple':
+            html += "<th>OR (95% CI)<br><span style='font-size:0.8em; font-weight:normal'>(Effect vs Ref)</span></th>"
+        else:
+            html += "<th>OR (95% CI)<br><span style='font-size:0.8em; font-weight:normal'>(All Levels vs Ref)</span></th>"
         
     html += "<th>P-value</th>"
     html += "<th>Test Used</th>"
@@ -321,14 +381,34 @@ def generate_table(df, selected_vars, group_col, var_meta):
             if show_or:
                 or_cell_content = "-"
                 if is_cat:
-                    cat_ors = []
-                    for cat in counts_total.index:
-                        # Calculate OR One-vs-Rest
-                        or_res = compute_or_for_row(mapped_full_series, cat, df[group_col], group_1_val)
-                        cat_ors.append(f"{_html.escape(str(cat))}: {or_res}")
-                    or_cell_content = "<br>".join(cat_ors)
+                    # Logic for OR Display Style
+                    cats = counts_total.index.tolist()
+                    if len(cats) >= 2:
+                        ref_cat = cats[0] # Assume first sorted value is Reference
+                        
+                        if or_style == 'simple':
+                            # 1. Simple Mode: One line
+                            # - If Binary: Compare 2nd vs 1st(Ref)
+                            # - If Multi: Compare Last vs 1st(Ref) -> To satisfy "One line"
+                            target_cat = cats[-1]
+                            
+                            or_res = compute_or_vs_ref(mapped_full_series, target_cat, ref_cat, df[group_col], group_1_val)
+                            or_cell_content = f"{or_res}<br><span style='font-size:0.8em; color:#666'>({_html.escape(str(target_cat))} vs {_html.escape(str(ref_cat))})</span>"
+                        
+                        else:
+                            # 2. All Levels Mode (Default): Show Ref line + All comparisons
+                            lines = []
+                            lines.append(f"{_html.escape(str(ref_cat))} (Ref): 1.00")
+                            
+                            for cat in cats[1:]:
+                                or_res = compute_or_vs_ref(mapped_full_series, cat, ref_cat, df[group_col], group_1_val)
+                                lines.append(f"{_html.escape(str(cat))}: {or_res}")
+                                
+                            or_cell_content = "<br>".join(lines)
+                    else:
+                        or_cell_content = "-" # Not enough categories
                 else:
-                    # Robust Continuous OR
+                    # Robust Continuous OR (Always one line per unit)
                     or_cell_content = calculate_or_continuous_logit(df, col, group_col, group_1_val)
                 
                 row_html += f"<td style='text-align: center; white-space: nowrap;'>{or_cell_content}</td>"
@@ -362,7 +442,7 @@ def generate_table(df, selected_vars, group_col, var_meta):
         
         html += f"""<div class='footer-note'>
     <b>OR (Odds Ratio):</b> <br>
-    - Categorical: One-vs-Rest method (Category X vs All Other Categories).<br>
+    - Categorical: { 'Simple (Single level vs Ref)' if or_style=='simple' else 'All Levels (Every level vs Ref)' }.<br>
     - Continuous: Univariate Logistic Regression (Odds change per 1 unit increase).<br>
     Reference group (exposed/case): <b>{_html.escape(str(ref_group_label))}</b> (value: {group_1_val}). Values are OR (95% CI).
     </div>"""
