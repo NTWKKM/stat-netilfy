@@ -135,7 +135,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         c1, c2, c3 = st.columns(3)
         
         # Auto-select V1 and V2
-        v1_default_name = 'Group_Treatment'
+        v1_default_name = 'Treatment_Group'
         v2_default_name = 'Outcome_Cured'
         v1_idx = next((i for i, c in enumerate(all_cols) if c == v1_default_name), 0)
         v2_idx = next((i for i, c in enumerate(all_cols) if c == v2_default_name), min(1, len(all_cols)-1))
