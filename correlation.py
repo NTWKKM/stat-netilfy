@@ -11,7 +11,9 @@ from tabs._common import get_color_palette
 # Get unified color palette
 COLORS = get_color_palette()
 
-# 🟢 1. IMPORT STREAMLIT
+# 🔧 FIX: Line 314 now uses COLORS['text'] instead of COLORS['text_primary']
+
+# 🌟 1. IMPORT STREAMLIT
 
 @st.cache_data(show_spinner=False)
 def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_pos=None):
@@ -60,7 +62,7 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     base_col_labels = [col for col in all_col_labels if col != 'Total']
     base_row_labels = [row for row in all_row_labels if row != 'Total']
     
-    # 🟢 Helper Functions (ประกาศครั้งเดียว)
+    # 🌟 Helper Functions (ประกาศครั้งเดียว)
     def get_original_label(label_str, df_labels):
         """ 
         Find the original label from a collection that matches a given string representation.
@@ -131,7 +133,7 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     display_tab.index.name = col1
     
     # 3. Stats
-    msg = "" # 🟢 NEW: Initialize msg for warnings only
+    msg = "" # 🌟 NEW: Initialize msg for warnings only
     try:
         is_2x2 = (tab_chi2.shape == (2, 2))
         
@@ -170,11 +172,11 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             if (ex < 5).any() and is_2x2 and not use_correction:
                 msg += " ⚠️ Warning: Expected count < 5. Consider using Fisher's Exact Test."
         
-        # 🟢 FIX: res is dict, convert to DataFrame for table display
+        # 🌟 FIX: res is dict, convert to DataFrame for table display
         stats_df_for_report = pd.DataFrame(stats_res, index=[0]).T.reset_index()
         stats_df_for_report.columns = ['Statistic', 'Value']
 
-        return display_tab, stats_df_for_report, msg, None # 🟢 RETURN DF
+        return display_tab, stats_df_for_report, msg, None # 🌟 RETURN DF
     
     except Exception as e:
         return display_tab, None, str(e), None
@@ -223,7 +225,7 @@ def calculate_correlation(df, col1, col2, method='pearson'):
         name = "Spearman"
         desc = "Monotonic"
     
-    # 🟢 UPDATED: ใช้ Plotly แทน Matplotlib และ unified colors
+    # 🌟 UPDATED: ใช้ Plotly แทน Matplotlib และ unified colors
     fig = go.Figure()
     
     # เพิ่ม scatter plot
@@ -263,7 +265,7 @@ def calculate_correlation(df, col1, col2, method='pearson'):
                 font={'color': COLORS['danger'], 'size': 11},
             )
     
-    # ปรับแต่งเค้าโครง
+    # ปรับแต่งเค้าโครงหลาย
     fig.update_layout(
         title={
             'text': f'{col1} vs {col2}<br><sub>{name} correlation (r={corr:.3f}, p={p:.4f})</sub>',
@@ -290,7 +292,7 @@ def calculate_correlation(df, col1, col2, method='pearson'):
 def generate_report(title, elements):
     """ 
     Generate a complete HTML report containing a title and a sequence of report elements.
-    Enhanced with unified teal color palette from _common.py.
+    Enhanced with unified navy color palette from _common.py.
     
     Parameters:
         title (str): Report title displayed at the top of the page.
@@ -308,10 +310,10 @@ def generate_report(title, elements):
         str: Complete HTML document as a string, styled and containing the rendered elements.
     """
     
-    # Use primary teal color throughout
+    # 🔧 FIX: Use COLORS['text'] instead of COLORS['text_primary']
     primary_color = COLORS['primary']
     primary_dark = COLORS['primary_dark']
-    text_color = COLORS['text_primary']
+    text_color = COLORS['text']  # 🔧 FIXED: was COLORS['text_primary']
     
     css_style = f""" 
     <style>
