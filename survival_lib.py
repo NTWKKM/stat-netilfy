@@ -253,7 +253,7 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
 def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     """
     Fit a Cox Proportional Hazards model after validating and preprocessing covariates.
-        
+            
     Validates input columns and rows, performs automatic one-hot encoding for categorical covariates (drop_first=True), checks numeric covariates for infinite or extreme values, zero variance, potential perfect separation, and high multicollinearity, standardizes numeric covariates (skipping binary 0/1), and attempts a progressive fitting strategy (standard CoxPH then increasing L2 penalization) until a successful fit is obtained or all attempts fail.
     
     Parameters:
@@ -273,7 +273,9 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     if missing:
         return None, None, df, f"Missing columns: {missing}"
 
-    data = df.dropna(subset=[duration_col, event_col, *covariate_cols]).copy()
+    # 🟢 FIX: Explicitly select ONLY relevant columns here to prevent unused columns from leaking into the model
+    data = df[[duration_col, event_col] + covariate_cols].dropna().copy()
+    
     if len(data) == 0:
         return None, None, data, "No valid data after dropping missing values."
 
@@ -472,7 +474,7 @@ def check_cph_assumptions(cph, data):
 def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
     """
     Perform Kaplan–Meier survival analysis using a landmark-time approach.
-        
+            
     Parameters:
         df (pandas.DataFrame): Input data containing duration, event indicator, and group columns.
         duration_col (str): Name of the column with observed times-to-event.
@@ -607,7 +609,7 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
 def generate_report_survival(title, elements):
     """
     Assemble a complete HTML report from a sequence of content elements, embedding tables, figures, and images for offline-friendly consumption.
-      
+    
     Builds an HTML document with the given title and iterates over `elements` to render supported content types. For Plotly figures, the Plotly JS library is embedded only once with the first Plotly plot and omitted for subsequent Plotly plots so later plots reuse the already-loaded script. Supported element types and expected `data` values:
     - "header": a string rendered as an H2 section header.
     - "text": a plain string rendered as a paragraph.
