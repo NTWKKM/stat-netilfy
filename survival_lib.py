@@ -42,7 +42,7 @@ def _hex_to_rgba(hex_color, alpha) -> str:
     """Convert hex color to RGBA string. Expects 6-digit hex format (e.g., '#RRGGBB')."""
     hex_color = hex_color.lstrip('#')
     if len(hex_color) != 6:
-        raise ValueError(f"Invalid hex color format: expected 6 characters, got {len(hex_color)}")
+        raise ValueError(f"Invalid hex color: got {len(hex_color)} chars, expected 6")
     rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
     return f'rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha})'
 
