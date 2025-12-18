@@ -20,7 +20,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         df (pandas.DataFrame): Input dataset containing the variables to analyze; column names are used for UI selections.
         _var_meta (Any): Metadata about variables (unused for visible output selection unless integrated by UI); present for potential future use.
     """
-    st.subheader("🧪 4. Diagnostic Tests (ROC)")
+    st.subheader("🧪 Diagnostic Tests (ROC)")
     
     # 🟢 IMPORTANT: Now 5 subtabs (added Reference & Interpretation)
     sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5 = st.tabs([
