@@ -8,7 +8,10 @@ import io, base64
 import streamlit as st
 import html as _html
 import warnings
+from tabs._common import get_color_palette
 
+# Get unified color palette
+COLORS = get_color_palette()
 
 # ========================================
 # 1. DESCRIPTIVE STATISTICS
@@ -538,7 +541,7 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
         "Positive Label": pos_label_user
     }
     
-    # Create Plotly ROC curve
+    # Create Plotly ROC curve using unified colors
     fig = go.Figure()
     
     # ROC curve
@@ -547,7 +550,7 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
         y=tpr,
         mode='lines',
         name=f'ROC Curve (AUC={auc_val:.3f})',
-        line={'color': 'darkorange', 'width': 2},
+        line={'color': COLORS['primary'], 'width': 2},
         hovertemplate='FPR: %{x:.3f}<br>TPR: %{y:.3f}<extra></extra>'
     ))
     
@@ -557,7 +560,7 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
         y=[0, 1],
         mode='lines',
         name='Chance (AUC=0.5)',
-        line={'color': 'gray', 'width': 1, 'dash': 'dash'},
+        line={'color': COLORS['neutral'], 'width': 1, 'dash': 'dash'},
         hoverinfo='skip'
     ))
     
@@ -567,7 +570,7 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
         y=[tpr[best_idx]],
         mode='markers',
         name=f'Optimal (Sens={tpr[best_idx]:.3f}, Spec={1-fpr[best_idx]:.3f})',
-        marker={'size': 10, 'color': 'red'},
+        marker={'size': 10, 'color': COLORS['danger']},
         hovertemplate='Sensitivity: %{y:.3f}<br>Specificity: %{customdata:.3f}<extra></extra>',
         customdata=[1 - fpr[best_idx]],
     ))
@@ -699,32 +702,38 @@ def calculate_icc(df, cols):
 # ========================================
 
 def generate_report(title, elements):
-    """Generate HTML report with professional color palette (synchronized with correlation.py)"""
-    css_style = """ 
+    """Generate HTML report with unified teal color palette from _common.py"""
+    
+    # Use primary teal color throughout
+    primary_color = COLORS['primary']
+    primary_dark = COLORS['primary_dark']
+    text_color = COLORS['text_primary']
+    
+    css_style = f""" 
     <style>
-        body {
+        body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
             margin: 20px;
             background-color: #f8f9fa;
-            color: #2c3e50;
+            color: {text_color};
             line-height: 1.6;
-        }
-        h1 {
-            color: #1a5276;
-            border-bottom: 3px solid #2980b9;
+        }}
+        h1 {{
+            color: {primary_dark};
+            border-bottom: 3px solid {primary_color};
             padding-bottom: 12px;
             font-size: 2em;
             margin-bottom: 20px;
-        }
-        h2 {
-            color: #1a5276;
+        }}
+        h2 {{
+            color: {primary_dark};
             margin-top: 25px;
             font-size: 1.35em;
-            border-left: 5px solid #3498db;
+            border-left: 5px solid {primary_color};
             padding-left: 12px;
             margin-bottom: 15px;
-        }
-        table {
+        }}
+        table {{
             border-collapse: collapse;
             width: 100%;
             margin: 20px 0;
@@ -732,91 +741,91 @@ def generate_report(title, elements):
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
             border-radius: 6px;
             overflow: hidden;
-        }
-        table th, table td {
+        }}
+        table th, table td {{
             border: 1px solid #ecf0f1;
             padding: 12px 15px;
             text-align: left;
-        }
-        table th {
-            background-color: #34495e;
+        }}
+        table th {{
+            background-color: {primary_color};
             color: white;
             font-weight: 600;
             letter-spacing: 0.5px;
-        }
-        table tr:hover {
+        }}
+        table tr:hover {{
             background-color: #f8f9fa;
-        }
-        table tr:nth-child(even) {
+        }}
+        table tr:nth-child(even) {{
             background-color: #fcfcfc;
-        }
-        p {
+        }}
+        p {{
             margin: 12px 0;
-            color: #2c3e50;
-        }
-        .metric-text {
+            color: {text_color};
+        }}
+        .metric-text {{
             font-size: 1.02em;
             margin: 10px 0;
             display: flex;
             align-items: baseline;
             gap: 8px;
-        }
-        .metric-label {
+        }}
+        .metric-label {{
             font-weight: 600;
-            color: #34495e;
+            color: {primary_dark};
             min-width: 160px;
-        }
-        .metric-value {
-            color: #2980b9;
+        }}
+        .metric-value {{
+            color: {primary_color};
             font-weight: 600;
             font-family: 'Courier New', monospace;
             background-color: #ecf0f1;
             padding: 4px 8px;
             border-radius: 4px;
             letter-spacing: 0.3px;
-        }
-        .interpretation {
+        }}
+        .interpretation {{
             background: linear-gradient(135deg, #ecf0f1 0%, #f8f9fa 100%);
-            border-left: 4px solid #3498db;
+            border-left: 4px solid {primary_color};
             padding: 14px 15px;
             margin: 16px 0;
             border-radius: 5px;
             line-height: 1.7;
-            color: #2c3e50;
-        }
-        .interpretation::before {
+            color: {text_color};
+        }}
+        .interpretation::before {{
             content: "ℹ️ ";
             margin-right: 8px;
-        }
-        .warning {
+        }}
+        .warning {{
             background: linear-gradient(135deg, #fef5e7 0%, #f9f6f0 100%);
-            border-left: 4px solid #f39c12;
+            border-left: 4px solid {COLORS['warning']};
             padding: 14px 15px;
             margin: 16px 0;
             border-radius: 5px;
             color: #7d6608;
             line-height: 1.7;
-        }
-        .report-table {
+        }}
+        .report-table {{
             border: 1px solid #ecf0f1;
-        }
-        .report-footer {
+        }}
+        .report-footer {{
             text-align: center;
             font-size: 0.85em;
             color: #7f8c8d;
             margin-top: 40px;
             border-top: 1px solid #ecf0f1;
             padding-top: 20px;
-        }
-        .report-footer a {
-            color: #3498db;
+        }}
+        .report-footer a {{
+            color: {primary_color};
             text-decoration: none;
             transition: color 0.3s ease;
-        }
-        .report-footer a:hover {
-            color: #2980b9;
+        }}
+        .report-footer a:hover {{
+            color: {primary_dark};
             text-decoration: underline;
-        }
+        }}
     </style>
     """
     
@@ -854,11 +863,11 @@ def generate_report(title, elements):
             # Add section-header styling
             html_table = html_table.replace(
                 '<td>RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)</td>',
-                '<td style="background-color: #34495e; color: white; font-weight: bold;">RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)</td>'
+                f'<td style="background-color: {primary_color}; color: white; font-weight: bold;">RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)</td>'
             )
             html_table = html_table.replace(
                 '<td>DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)</td>',
-                '<td style="background-color: #34495e; color: white; font-weight: bold;">DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)</td>'
+                f'<td style="background-color: {primary_color}; color: white; font-weight: bold;">DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)</td>'
             )
             html += html_table
         
@@ -900,7 +909,7 @@ def generate_report(title, elements):
                 b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
                 html += f'<img src="data:image/png;base64,{b64}" style="max-width:100%; margin: 20px 0;" />'
     
-    html += """<div class='report-footer'>
+    html += f"""<div class='report-footer'>
     &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank">NTWKKM n donate</a> | Powered by GitHub, Gemini, Streamlit
     </div>"""
     
