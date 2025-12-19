@@ -1,6 +1,6 @@
 import streamlit as st
 
-def get_color_palette():
+def get_color_palette() -> dict[str, str]:
     """
     Returns a unified color palette dictionary for all modules.
     🎨 Navy Theme - Professional medical statistical analysis aesthetic
@@ -46,7 +46,7 @@ def get_color_palette():
     }
 
 
-def get_color_info():
+def get_color_info() -> dict:
     """
     Returns information about the color palette for documentation.
     """
