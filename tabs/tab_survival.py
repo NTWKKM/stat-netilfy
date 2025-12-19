@@ -12,7 +12,7 @@ def render(df, _var_meta):
     """
     Render an interactive Streamlit UI for survival analysis including Kaplan-Meier, Nelson-Aalen, landmark analysis, and Cox regression workflows.
     """
-    st.subheader("5. Survival Analysis")
+    st.subheader("⏳ Survival Analysis")
     st.info("""
 **💡 Guide:**
 * **Survival Analysis** models the relationship between predictors and the **Time-to-Event**.
