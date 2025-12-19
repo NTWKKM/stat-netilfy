@@ -10,7 +10,7 @@ logger = get_logger(__name__)
 
 def render(df, var_meta):
     """
-    Render the "Table 1 & Matching" Streamlit interface with three subtabs for baseline characteristics, propensity score matching, and reference/interpretation.
+    Render the "Table 1 & Matching" Streamlit interface with four subtabs for baseline characteristics, propensity score matching, matched data view, and reference/interpretation.
     
     Displays interactive controls to select grouping variables, characteristics, treatment/outcome/covariates, and advanced matching settings; generates Table 1 HTML, performs propensity score calculation and 1:1 nearest-neighbor matching, shows balance diagnostics (SMD and Love plot), previews/downloads matched data, and provides explanatory guidance. Handles session state for persisted HTML output and displays user-facing errors and warnings when inputs are invalid.
     
@@ -20,10 +20,11 @@ def render(df, var_meta):
     """
     st.subheader("📋 Table 1 & Matching")
     
-    # Create three subtabs (added Reference & Interpretation)
-    sub_tab1, sub_tab2, sub_tab3 = st.tabs([
+    # 🟢 NEW: Create four subtabs (added Matched Data View)
+    sub_tab1, sub_tab2, sub_tab3, sub_tab4 = st.tabs([
         "📊 Baseline Characteristics (Table 1)",
         "⚖️ Propensity Score Matching",
+        "✅ Matched Data View",  # 🟢 NEW SUBTAB
         "ℹ️ Reference & Interpretation"
     ])
     
@@ -110,6 +111,7 @@ def render(df, var_meta):
         **Step 1:** Check baseline imbalance in **Subtab 1 (Table 1)** - Look at P-values and group differences
         **Step 2:** If imbalanced (p<0.05 or differences exist) → Run PSM below
         **Step 3:** Check balance after matching using SMD table (SMD < 0.1 = good balance)
+        **Step 4:** View matched data in **Subtab 3 (Matched Data View)** and use for subsequent analyses
         """)
 
         all_cols = df.columns.tolist()
@@ -216,12 +218,19 @@ def render(df, var_meta):
                         else:
                             st.success(f"✅ Matching Complete! {msg}")
                             
+                            # 🟢 NEW: Store matched data in session state
+                            st.session_state.df_matched = df_matched
+                            st.session_state.is_matched = True
+                            st.session_state.matched_treatment_col = treat_col
+                            st.session_state.matched_covariates = cov_cols
+                            logger.info("💾 Matched data stored in session state. Rows: %d", len(df_matched))
+                            
                             # C. Check Balance (SMD)
                             smd_pre = psm_lib.calculate_smd(df_ps, final_treat_col, final_cov_cols)
                             smd_post = psm_lib.calculate_smd(df_matched, final_treat_col, final_cov_cols)
                             
                             # Tabs for results
-                            t_res1, t_res2, t_res3 = st.tabs(["📊 Balance Check (Love Plot)", "📋 Matched Data", "📉 Outcome Analysis"])
+                            t_res1, t_res2, t_res3 = st.tabs(["📊 Balance Check (Love Plot)", "📋 Matched Data Preview", "📉 Outcome Analysis"])
                             
                             with t_res1:
                                 c_plot, c_tab = st.columns([2, 1])
@@ -239,8 +248,9 @@ def render(df, var_meta):
                                 c_tab.caption("*SMD < 0.1 indicates good balance.*")
 
                             with t_res2:
-                                st.write(f"Matched Dataset ({len(df_matched)} rows):")
-                                st.dataframe(df_matched.head(50))
+                                st.write(f"✅ Matched Dataset Preview ({len(df_matched)} rows):")
+                                st.dataframe(df_matched.head(50), use_container_width=True)
+                                st.info("📌 Full matched data is available in the **Matched Data View** subtab.")
                                 
                                 csv = df_matched.to_csv(index=False).encode('utf-8')
                                 st.download_button("📥 Download Matched CSV", csv, "matched_data.csv", "text/csv", key='dl_matched')
@@ -273,9 +283,119 @@ def render(df, var_meta):
                         logger.exception("PSM analysis failed")
 
     # ==========================================
-    # SUBTAB 3: REFERENCE & INTERPRETATION (NEW)
+    # SUBTAB 3: MATCHED DATA VIEW (🟢 NEW)
     # ==========================================
     with sub_tab3:
+        st.markdown("### ✅ Matched Data View & Export")
+        
+        if st.session_state.is_matched and st.session_state.df_matched is not None:
+            df_m = st.session_state.df_matched
+            
+            st.success(f"""
+            ✅ **Matched Dataset Ready**
+            - Total rows: **{len(df_m)}**
+            - Original rows: **{len(df)}**
+            - Excluded: **{len(df) - len(df_m)}** rows
+            - Treatment variable: **{st.session_state.matched_treatment_col}**
+            """)
+            
+            # Summary Statistics
+            with st.expander("📊 Summary Statistics", expanded=True):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("**Group Sizes:**")
+                    if st.session_state.matched_treatment_col in df_m.columns:
+                        grp_counts = df_m[st.session_state.matched_treatment_col].value_counts().sort_index()
+                        st.write(grp_counts)
+                with col2:
+                    st.markdown("**Data Types:**")
+                    dtype_counts = df_m.dtypes.astype(str).value_counts()
+                    st.write(dtype_counts)
+            
+            # Data Filter & Preview
+            with st.expander("🔍 Filter & Preview", expanded=True):
+                # Simple row filter
+                n_display = st.slider("Rows to display:", min_value=10, max_value=len(df_m), value=min(50, len(df_m)), step=10)
+                st.dataframe(df_m.head(n_display), use_container_width=True, height=400)
+            
+            # Download Options
+            st.markdown("### 📥 Export Matched Data")
+            col_csv, col_txt = st.columns(2)
+            
+            with col_csv:
+                csv_data = df_m.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 CSV Format",
+                    data=csv_data,
+                    file_name="matched_data.csv",
+                    mime="text/csv",
+                    key="dl_matched_csv_view"
+                )
+            
+            with col_txt:
+                # Try to export as Excel if openpyxl available
+                try:
+                    import openpyxl
+                    from io import BytesIO
+                    
+                    buffer = BytesIO()
+                    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                        df_m.to_excel(writer, sheet_name='Matched Data', index=False)
+                    
+                    st.download_button(
+                        label="📥 Excel Format",
+                        data=buffer.getvalue(),
+                        file_name="matched_data.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="dl_matched_xlsx_view"
+                    )
+                except ImportError:
+                    st.info("💡 Excel export requires openpyxl package")
+            
+            # Statistics by Treatment Group
+            st.markdown("### 📈 Statistics by Group")
+            if st.session_state.matched_treatment_col in df_m.columns:
+                treat_col_m = st.session_state.matched_treatment_col
+                
+                # Show numeric columns summary
+                numeric_cols = df_m.select_dtypes(include=[np.number]).columns.tolist()
+                numeric_cols = [c for c in numeric_cols if c != treat_col_m]
+                
+                if numeric_cols:
+                    selected_col = st.selectbox("Select numeric variable to compare:", numeric_cols, key='matched_numeric_select')
+                    
+                    summary_tab1, summary_tab2 = st.tabs(["📊 Descriptive Stats", "📉 Visualization"])
+                    
+                    with summary_tab1:
+                        summary_stats = df_m.groupby(treat_col_m)[selected_col].describe()
+                        st.dataframe(summary_stats, use_container_width=True)
+                    
+                    with summary_tab2:
+                        import plotly.express as px
+                        fig = px.box(df_m, x=treat_col_m, y=selected_col, title=f"{selected_col} by {treat_col_m}")
+                        st.plotly_chart(fig, use_container_width=True)
+            
+            # Reset Button
+            if st.button("🔄 Clear Matched Data & Return to Analysis", type="secondary", key='btn_clear_matched'):
+                st.session_state.df_matched = None
+                st.session_state.is_matched = False
+                st.session_state.matched_treatment_col = None
+                st.session_state.matched_covariates = []
+                logger.info("🔄 Matched data cleared")
+                st.rerun()
+        else:
+            st.info("""
+            ℹ️ **No matched data available yet.**
+            
+            1. Go to **Subtab 2 (Propensity Score Matching)**
+            2. Configure variables and run PSM matching
+            3. Return here to view and export matched data
+            """)
+
+    # ==========================================
+    # SUBTAB 4: REFERENCE & INTERPRETATION (FORMERLY SUBTAB 3)
+    # ==========================================
+    with sub_tab4:
         st.markdown("##### 📚 Quick Reference: Table 1 & Matching")
         
         st.info("""
@@ -285,6 +405,7 @@ def render(df, var_meta):
         |----------|---------|--------|
         | **Table 1** | Compare baseline characteristics | Mean/Median, % counts, p-values |
         | **PSM** | Balance groups (remove confounding) | SMD pre/post, Love plot, matched data |
+        | **Matched Data View** | Export & summarize matched cohort | CSV/Excel, descriptive stats |
         """)
         
         col1, col2 = st.columns(2)
@@ -353,5 +474,5 @@ def render(df, var_meta):
         → Check **SMD < 0.1** in Love plot ✅
         
         **Question: Now what? Use for analysis?**
-        → YES: Use matched dataset for hypothesis testing
+        → Export from **Matched Data View** (Tab 3) and select **"✅ Matched Data"** in other analysis tabs ✅
         """)
