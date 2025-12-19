@@ -16,7 +16,7 @@ def render(df):
     Side effects:
         Renders Streamlit controls, informational text, analysis results, and plots; writes HTML reports to st.session_state keys 'html_output_corr_cont' and 'html_output_icc'.
     """
-    st.subheader("📈 5. Correlation & ICC")
+    st.subheader("🎯 Correlation & ICC")
     
     # 🟢 REORGANIZED: 3 subtabs (removed Chi-Square, added ICC)
     sub_tab1, sub_tab2, sub_tab3 = st.tabs([
