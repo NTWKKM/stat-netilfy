@@ -116,6 +116,16 @@ if 'var_meta' not in st.session_state:
 if 'uploaded_file_name' not in st.session_state:
     st.session_state.uploaded_file_name = None
     
+# 🟢 NEW: Initialize matched data session state
+if 'df_matched' not in st.session_state:
+    st.session_state.df_matched = None
+if 'is_matched' not in st.session_state:
+    st.session_state.is_matched = False
+if 'matched_treatment_col' not in st.session_state:
+    st.session_state.matched_treatment_col = None
+if 'matched_covariates' not in st.session_state:
+    st.session_state.matched_covariates = []
+    
 # --- SIDEBAR ---
 st.sidebar.title("MENU")
 st.sidebar.header("1. Data Management")
@@ -339,6 +349,16 @@ if upl:
         st.session_state.uploaded_file_name = None
         st.session_state.uploaded_file_sig = None
 
+# 🟢 NEW: Reset/Clear Matched Data Button
+if st.session_state.is_matched:
+    if st.sidebar.button("🔄 Clear Matched Data", type="secondary"):
+        logger.info("🔄 User cleared matched data")
+        st.session_state.df_matched = None
+        st.session_state.is_matched = False
+        st.session_state.matched_treatment_col = None
+        st.session_state.matched_covariates = []
+        st.rerun()
+
 if st.sidebar.button("⚠️ Reset All Data", type="primary"):
     logger.info("🔄 User reset all data")  # ✅ LOG RESET
     st.session_state.clear()
@@ -420,6 +440,16 @@ if st.session_state.df is not None:
                 st.caption(f"  • **{col}**: {detected_type}")
             if len(cols_to_verify) > 10:
                 st.caption(f"  ... and {len(cols_to_verify) - 10} more")
+
+    # 🟢 Display Matched Data Status
+    if st.session_state.is_matched:
+        st.info(f"""
+        ✅ **Matched Dataset Active**
+        - Original data: {len(df)} rows
+        - Matched data: {len(st.session_state.df_matched)} rows (from {len(df) - len(st.session_state.df_matched)} excluded)
+        - Treatment: {st.session_state.matched_treatment_col}
+        - Use dropdown in each tab to select **"✅ Matched Data"** for analysis
+        """)
 
     # 🟢 FINAL TAB LAYOUT (6 tabs total, merged Table 1 + PSM)
     t0, t1, t2, t3, t4, t5 = st.tabs([
