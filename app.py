@@ -442,7 +442,7 @@ if st.session_state.df is not None:
                 st.caption(f"  ... and {len(cols_to_verify) - 10} more")
 
     # 🟢 Display Matched Data Status
-    if st.session_state.is_matched:
+    if st.session_state.is_matched and st.session_state.df_matched is not None:
         st.info(f"""
         ✅ **Matched Dataset Active**
         - Original data: {len(df)} rows
@@ -450,7 +450,6 @@ if st.session_state.df is not None:
         - Treatment: {st.session_state.matched_treatment_col}
         - Use dropdown in each tab to select **"✅ Matched Data"** for analysis
         """)
-
     # 🟢 FINAL TAB LAYOUT (6 tabs total, merged Table 1 + PSM)
     t0, t1, t2, t3, t4, t5 = st.tabs([
         "📁 Data Management", 
