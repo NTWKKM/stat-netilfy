@@ -8,6 +8,41 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# 🟢 NEW: Helper function to select between original and matched datasets
+def _get_dataset_for_survival(df: pd.DataFrame):
+    """
+    Helper: เลือกระหว่าง original vs matched dataset สำหรับ survival analysis
+    คืนค่า: (selected_df, label_str)
+    """
+    has_matched = (
+        st.session_state.get("is_matched", False)
+        and st.session_state.get("df_matched") is not None
+    )
+
+    if has_matched:
+        col1, _ = st.columns([2, 1])
+        with col1:
+            data_source = st.radio(
+                "📄 เลือกชุดข้อมูล:",
+                ["📊 Original Data", "✅ Matched Data (จาก PSM)"],
+                index=1,  # default Matched สำหรับ survival analysis
+                horizontal=True,
+                key="survival_data_source",
+            )
+
+        if "✅" in data_source:
+            selected_df = st.session_state.df_matched.copy()
+            label = f"✅ Matched Data ({len(selected_df)} rows)"
+        else:
+            selected_df = df
+            label = f"📊 Original Data ({len(df)} rows)"
+    else:
+        selected_df = df
+        label = f"📊 Original Data ({len(df)} rows)"
+
+    return selected_df, label
+
+
 def render(df, _var_meta):
     """
     Render an interactive Streamlit UI for survival analysis including Kaplan-Meier, Nelson-Aalen, landmark analysis, and Cox regression workflows.
@@ -19,7 +54,16 @@ def render(df, _var_meta):
 * **Hazard Ratio (HR):** >1 Increased Hazard (Risk), <1 Decreased Hazard (Protective).
 """)
     
-    all_cols = df.columns.tolist()
+    # 🟢 NEW: Display matched data status and selector
+    if st.session_state.get("is_matched", False):
+        st.info("✅ มี Matched dataset จาก PSM แล้ว สามารถเลือกใช้ด้านล่างได้")
+    
+    # 🟢 NEW: Select dataset (original or matched)
+    surv_df, surv_label = _get_dataset_for_survival(df)
+    st.write(f"**Using:** {surv_label}")
+    st.write(f"**Rows:** {len(surv_df)} | **Columns:** {len(surv_df.columns)}")
+    
+    all_cols = surv_df.columns.tolist()
     
     if len(all_cols) < 2:
         st.error("Dataset must contain at least 2 columns (time and event).")
@@ -56,8 +100,8 @@ def render(df, _var_meta):
             grp = None if col_group == "None" else col_group
             try:
                 if "Kaplan-Meier" in plot_type:
-                    # Run KM
-                    fig, stats_df = survival_lib.fit_km_logrank(df, col_time, col_event, grp)
+                    # Run KM (using surv_df instead of df)
+                    fig, stats_df = survival_lib.fit_km_logrank(surv_df, col_time, col_event, grp)
                     
                     st.plotly_chart(fig, use_container_width=True)
                     
@@ -69,8 +113,8 @@ def render(df, _var_meta):
                     st.download_button("📥 Download Report (KM)", report_html, "km_report.html", "text/html")
                     
                 else:
-                    # Run Nelson-Aalen
-                    fig, stats_df = survival_lib.fit_nelson_aalen(df, col_time, col_event, grp)
+                    # Run Nelson-Aalen (using surv_df instead of df)
+                    fig, stats_df = survival_lib.fit_nelson_aalen(surv_df, col_time, col_event, grp)
                     
                     st.plotly_chart(fig, use_container_width=True)
                     
@@ -97,8 +141,8 @@ def render(df, _var_meta):
     with tab_landmark:    
         st.caption("Principle: Exclude patients who had an event or were censored before the Landmark Time.")
         
-        # Calculate Max Time (Robust check)
-        max_t = df[col_time].dropna().max() if not df.empty and is_numeric_dtype(df[col_time]) and df[col_time].notna().any() else 1.0
+        # Calculate Max Time (Robust check) - using surv_df instead of df
+        max_t = surv_df[col_time].dropna().max() if not surv_df.empty and is_numeric_dtype(surv_df[col_time]) and surv_df[col_time].notna().any() else 1.0
         if max_t <= 0:
             max_t = 1.0 
         
@@ -140,8 +184,9 @@ def render(df, _var_meta):
             if st.button("Run Landmark Analysis", key='btn_lm_sur'):
                 try:
                     with st.spinner(f"Running Landmark Analysis at t={landmark_t:.2f}..."):
+                        # Use surv_df instead of df
                         fig, stats, n_pre, n_post, err = survival_lib.fit_km_landmark(
-                            df, col_time, col_event, col_group, landmark_t
+                            surv_df, col_time, col_event, col_group, landmark_t
                         )
                         
                     if err:
@@ -192,7 +237,8 @@ def render(df, _var_meta):
             else:
                 try:
                     with st.spinner("Fitting Cox Model and Checking Assumptions..."):
-                        cph, res, model_data, err = survival_lib.fit_cox_ph(df, col_time, col_event, covariates)
+                        # Use surv_df instead of df
+                        cph, res, model_data, err = survival_lib.fit_cox_ph(surv_df, col_time, col_event, covariates)
                         
                         if err:
                             st.error(f"Error: {err}")
@@ -295,6 +341,8 @@ def render(df, _var_meta):
             - Not handling censoring ❌
             - Comparing unequal follow-up times
             - Assuming flat after last event ❌
+            
+            **✨ NEW:** Can analyze both Original and Matched datasets!
             """)
             
             st.markdown("### Landmark Analysis")
@@ -373,4 +421,6 @@ def render(df, _var_meta):
         
         **Question: Covariates change over time?**
         → **Time-Dependent Cox** (Advanced Survival tab)
+        
+        **💡 TIP:** After running PSM, switch to **"✅ Matched Data"** to compare survival outcomes in balanced cohort!
         """)
