@@ -758,7 +758,7 @@ def generate_report_survival(title, elements):
             b64 = base64.b64encode(d).decode('utf-8')
             html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
     
-    html_doc += f"""<div class='report-footer'>
+    html_doc += """<div class='report-footer'>
     &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank">NTWKKM n Donate</a> | All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
     </div>"""
     html_doc += "</body>\n</html>"
