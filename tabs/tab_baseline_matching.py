@@ -1,4 +1,3 @@
-# tabs/tab_baseline_matching.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -7,6 +6,41 @@ import psm_lib  # Import from root
 from logger import get_logger
 
 logger = get_logger(__name__)
+
+# 🟢 NEW: Helper function to select between original and matched datasets
+def _get_dataset_for_table1(df: pd.DataFrame):
+    """
+    Helper: เลือกระหว่าง original vs matched dataset สำหรับ Table 1
+    คืนค่า: (selected_df, label_str)
+    """
+    has_matched = (
+        st.session_state.get("is_matched", False)
+        and st.session_state.get("df_matched") is not None
+    )
+
+    if has_matched:
+        col1, _ = st.columns([2, 1])
+        with col1:
+            data_source = st.radio(
+                "📄 เลือกชุดข้อมูล:",
+                ["📊 Original Data", "✅ Matched Data (จาก PSM)"],
+                index=0,  # default Original สำหรับ Table 1
+                horizontal=True,
+                key="table1_data_source",
+            )
+
+        if "✅" in data_source:
+            selected_df = st.session_state.df_matched.copy()
+            label = f"✅ Matched Data ({len(selected_df)} rows)"
+        else:
+            selected_df = df
+            label = f"📊 Original Data ({len(df)} rows)"
+    else:
+        selected_df = df
+        label = f"📊 Original Data ({len(df)} rows)"
+
+    return selected_df, label
+
 
 def render(df, var_meta):
     """
@@ -48,7 +82,16 @@ def render(df, var_meta):
         * **Characteristics:** All other variables (numeric/categorical) to be summarized and compared.
         """)
         
-        all_cols = df.columns.tolist()
+        # 🟢 NEW: Display matched data status and selector
+        if st.session_state.get("is_matched", False):
+            st.info("✅ มี Matched dataset จาก PSM แล้ว สามารถเลือกใช้ด้านล่างได้")
+        
+        # 🟢 NEW: Select dataset (original or matched)
+        t1_df, t1_label = _get_dataset_for_table1(df)
+        st.write(f"**Using:** {t1_label}")
+        st.write(f"**Rows:** {len(t1_df)} | **Columns:** {len(t1_df.columns)}")
+        
+        all_cols = t1_df.columns.tolist()
         grp_idx = 0
         for i, c in enumerate(all_cols):
             if 'group' in c.lower() or 'treat' in c.lower(): 
@@ -84,7 +127,8 @@ def render(df, var_meta):
                 try:
                     grp = None if col_group == "None" else col_group
                     # Calling the generate_table function in table_one.py with or_style
-                    html_t1 = table_one.generate_table(df, selected_vars, grp, var_meta, or_style=or_style_code)
+                    # 🟢 UPDATED: Use t1_df (selected dataset) instead of df
+                    html_t1 = table_one.generate_table(t1_df, selected_vars, grp, var_meta, or_style=or_style_code)
                     st.session_state.html_output_t1 = html_t1 
                     st.components.v1.html(html_t1, height=600, scrolling=True)
                 except Exception as e:
@@ -316,12 +360,12 @@ def render(df, var_meta):
             with st.expander("🔍 Filter & Preview", expanded=True):
                 total_rows = len(df_m)
 
-                # กรณีแถว ≤ 10: ไม่ต้องมี slider แสดงทั้งหมดไปเลย
+                # 🟢 FIXED: กรณีแถว ≤ 10: ไม่ต้องมี slider แสดงทั้งหมดไปเลย
                 if total_rows <= 10:
                     n_display = total_rows
                     st.caption(f"Showing all {total_rows} rows (too few for slider).")
                 else:
-                # ให้ min < max เสมอ
+                    # 🟢 FIXED: ให้ min < max เสมอ
                     min_rows = 10
                     max_rows = total_rows
                     default_rows = min(50, max_rows)
@@ -452,6 +496,8 @@ def render(df, var_meta):
             - Using t-test for non-normal data ❌
             - Multiple testing without adjustment
             - Assuming p>0.05 = no confounding
+            
+            **✨ NEW:** Can now compare both Original and Matched datasets!
             """)
         
         with col2:
@@ -486,7 +532,7 @@ def render(df, var_meta):
         ### 💡 Decision Guide
         
         **Question: Do my groups differ at baseline?**
-        → Use **Table 1** (Tab 1) to check
+        → Use **Table 1** (Tab 1) to check - compare Original vs Matched after PSM ✨
         
         **Question: They're imbalanced. Can I fix it?**
         → Use **PSM** (Tab 2) to match
