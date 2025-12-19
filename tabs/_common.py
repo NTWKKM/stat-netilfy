@@ -1,7 +1,6 @@
-from typing import List, Tuple, Dict
-import pandas as pd
+import streamlit as st
 
-def get_pos_label_settings(df: pd.DataFrame, col_name: str) -> Tuple[List[str], int]:
+def get_color_palette():
     """
     Returns a unified color palette dictionary for all modules.
     🎨 Navy Theme - Professional medical statistical analysis aesthetic
@@ -47,7 +46,7 @@ def get_pos_label_settings(df: pd.DataFrame, col_name: str) -> Tuple[List[str], 
     }
 
 
-def get_color_info() -> dict:
+def get_color_info():
     """
     Returns information about the color palette for documentation.
     """
