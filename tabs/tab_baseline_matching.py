@@ -314,10 +314,31 @@ def render(df, var_meta):
             
             # Data Filter & Preview
             with st.expander("🔍 Filter & Preview", expanded=True):
-                # Simple row filter
-                n_display = st.slider("Rows to display:", min_value=10, max_value=len(df_m), value=min(50, len(df_m)), step=10)
+                total_rows = len(df_m)
+
+                # กรณีแถว ≤ 10: ไม่ต้องมี slider แสดงทั้งหมดไปเลย
+                if total_rows <= 10:
+                    n_display = total_rows
+                    st.caption(f"Showing all {total_rows} rows (too few for slider).")
+                else:
+                # ให้ min < max เสมอ
+                    min_rows = 10
+                    max_rows = total_rows
+                    default_rows = min(50, max_rows)
+
+                    # ถ้าแถวน้อยกว่า 20 ให้ step = 1 จะเลื่อนละเอียดได้
+                    step = 10 if max_rows >= 20 else 1
+
+                    n_display = st.slider(
+                        "Rows to display:",
+                        min_value=min_rows,
+                        max_value=max_rows,
+                        value=default_rows,
+                        step=step,
+                    )
+
                 st.dataframe(df_m.head(n_display), use_container_width=True, height=400)
-            
+
             # Download Options
             st.markdown("### 📥 Export Matched Data")
             col_csv, col_txt = st.columns(2)
