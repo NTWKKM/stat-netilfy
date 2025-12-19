@@ -1,9 +1,7 @@
-# tabs/_common.py
-
-from typing import List, Tuple  # Or use built-in: list, tuple
+from typing import List, Tuple, Dict
 import pandas as pd
 
-def get_pos_label_settings(df: pd.DataFrame, col_name: str) -> tuple[list[str], int]:
+def get_pos_label_settings(df: pd.DataFrame, col_name: str) -> Tuple[List[str], int]:
     """
     Helper function to get unique values from a column, convert them to strings, 
     sort them, and determine a default index (preferring '1', then '0').
