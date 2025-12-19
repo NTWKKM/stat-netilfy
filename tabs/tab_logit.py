@@ -51,7 +51,7 @@ def _get_dataset_for_analysis():
                 ["📊 Original Data", "✅ Matched Data (from PSM)"],
                 index=1,  # Default to matched data if available
                 horizontal=True,
-                key=f"data_source_{id(st.session_state)}"
+                key="logit_data_source"
             )
         
         if "✅" in data_source:
