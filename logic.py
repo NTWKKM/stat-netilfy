@@ -12,7 +12,8 @@ from tabs._common import get_color_palette
 
 # Get logger instance for this module
 logger = get_logger(__name__)
-
+# Get unified color palette
+COLORS = get_color_palette()
 # ✅ TRY IMPORT FIRTHLOGIST
 try:
     from firthlogist import FirthLogisticRegression
@@ -74,7 +75,7 @@ def run_binary_logit(y, X, method='default'):
             fl = FirthLogisticRegression(fit_intercept=False) 
             fl.fit(X_const, y)
             
-            # แปลงผลลัชภ์ให้ตรงกับ Format เดิม (Series/DataFrame)
+            # แปลงผลลัพท์ให้ตรงกับ Format เดิม (Series/DataFrame)
             coef = np.asarray(fl.coef_).reshape(-1)
             if coef.shape[0] != len(X_const.columns):
                 return None, None, None, "Firth output shape mismatch (coef_ vs design matrix)."
@@ -160,8 +161,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     Returns:
         str: An HTML fragment containing a table of variables with descriptive statistics, crude odds ratios (and p-values), and adjusted odds ratios where multivariable modelling was performed. If `outcome_name` is not found in `df`, returns an HTML alert div indicating the missing outcome.
     """
-    # Get unified color palette
-    COLORS = get_color_palette()
     
     # ✅ LOG ANALYSIS START
     logger.log_analysis(
@@ -596,8 +595,6 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None, method='au
     Returns:
         str: The complete HTML report string.
     """ # 🟢 MODIFIED: Restored Docstring
-    # Get unified color palette
-    COLORS = get_color_palette()
     
     css_style = f"""
     <style>
