@@ -44,7 +44,7 @@ def render(df, var_meta):
         df (pandas.DataFrame): Source dataset containing the outcome and predictor columns.
         var_meta (dict | Any): Variable metadata passed through to the report generation routine (used to annotate or format outputs).
     """
-    st.subheader("4. Logistic Regression Analysis")
+    st.subheader("📝 Logistic Regression Analysis")
     
     # Create subtabs (prepared for future: Binary, Multinomial, Ordinal, etc.)
     sub_tab1, sub_tab2 = st.tabs([
