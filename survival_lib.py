@@ -260,7 +260,6 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
     return fig, pd.DataFrame(stats_list)
 
 # --- 3. Cox Proportional Hazards (Robust with Progressive L2 Penalization & Data Validation) ---
-@st.cache_data(show_spinner=False)
 def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     """
     Fit a Cox Proportional Hazards model after validating and preprocessing covariates.         
