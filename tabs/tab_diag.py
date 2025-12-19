@@ -20,7 +20,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         df (pandas.DataFrame): Input dataset containing the variables to analyze; column names are used for UI selections.
         _var_meta (Any): Metadata about variables (unused for visible output selection unless integrated by UI); present for potential future use.
     """
-    st.subheader("🧪 4. Diagnostic Tests (ROC)")
+    st.subheader("🧪 Diagnostic Tests (ROC)")
     
     # 🟢 IMPORTANT: Now 5 subtabs (added Reference & Interpretation)
     sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5 = st.tabs([
@@ -87,7 +87,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                 if err: st.error(err)
                 else:
                     rep = [
-                        {'type':'text', 'data':f"Analysis: <b>{score}</b> vs <b>{truth}</b>"},
+                        {'type':'text', 'data':f"Analysis: {score} vs {truth}"},
                         {'type':'plot', 'data':fig},
                         {'type':'table', 'header':'Key Statistics', 'data':pd.DataFrame([res]).T},
                         {'type':'table', 'header':'Diagnostic Performance', 'data':coords_df}
@@ -331,7 +331,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                 st.error(err)
             else:
                 rep_elements = [
-                    {'type': 'text', 'data': f"<b>Agreement Analysis:</b> {kv1} vs {kv2}"},
+                    {'type': 'text', 'data': f"Agreement Analysis: {kv1} vs {kv2}"},
                     {'type': 'table', 'header': 'Kappa Statistics', 'data': res_df},
                     {'type': 'contingency_table', 'header': 'Confusion Matrix (Crosstab)', 'data': conf_mat, 'outcome_col': kv2}
                 ]

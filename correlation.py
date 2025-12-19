@@ -6,8 +6,14 @@ import plotly.express as px
 import io, base64
 import streamlit as st
 import html as _html
+from tabs._common import get_color_palette
 
-# 🟢 1. IMPORT STREAMLIT
+# Get unified color palette
+COLORS = get_color_palette()
+
+# 🔧 FIX: Line 314 now uses COLORS['text'] instead of COLORS['text_primary']
+
+# 🌟 1. IMPORT STREAMLIT
 
 @st.cache_data(show_spinner=False)
 def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_pos=None):
@@ -56,7 +62,7 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     base_col_labels = [col for col in all_col_labels if col != 'Total']
     base_row_labels = [row for row in all_row_labels if row != 'Total']
     
-    # 🟢 Helper Functions (ประกาศครั้งเดียว)
+    # 🌟 Helper Functions (ประกาศครั้งเดียว)
     def get_original_label(label_str, df_labels):
         """ 
         Find the original label from a collection that matches a given string representation.
@@ -127,7 +133,7 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     display_tab.index.name = col1
     
     # 3. Stats
-    msg = "" # 🟢 NEW: Initialize msg for warnings only
+    msg = "" # 🌟 NEW: Initialize msg for warnings only
     try:
         is_2x2 = (tab_chi2.shape == (2, 2))
         
@@ -166,57 +172,11 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
             if (ex < 5).any() and is_2x2 and not use_correction:
                 msg += " ⚠️ Warning: Expected count < 5. Consider using Fisher's Exact Test."
         
-        # 4. Risk Metrics (2x2 only)
-        risk_df = None
-        if is_2x2:
-            try:
-                # ... (Risk calculation logic - เหมือนเดิม)
-                vals = tab_chi2.values
-                a, b = vals[0, 0], vals[0, 1]
-                c, d = vals[1, 0], vals[1, 1]
-                row_labels = tab_chi2.index.tolist()
-                col_labels = tab_chi2.columns.tolist()
-                label_exp = str(row_labels[0])
-                label_unexp = str(row_labels[1])
-                label_event = str(col_labels[0])
-                
-                risk_exp = a/(a+b) if (a+b)>0 else 0
-                risk_unexp = c/(c+d) if (c+d)>0 else 0
-                rr = risk_exp/risk_unexp if risk_unexp>0 else np.nan
-                rd = risk_exp - risk_unexp
-                nnt_abs = abs(1/rd) if rd!=0 else np.inf
-                if rd < 0:
-                    nnt_label = "Number Needed to Treat (NNT)"
-                elif rd > 0:
-                    nnt_label = "Number Needed to Harm (NNH)"
-                else:
-                    nnt_label = "NNT/NNH"
-                odd_ratio, _ = stats.fisher_exact(tab_chi2)
-                
-                risk_data = [
-                    {"Statistic": f"Risk in {label_exp} (R1)", "Value": f"{risk_exp:.4f}",
-                     "Interpretation": f"Risk of '{label_event}' in group {label_exp}"},
-                    {"Statistic": f"Risk in {label_unexp} (R0)", "Value": f"{risk_unexp:.4f}",
-                     "Interpretation": f"Risk in {label_exp} is {rr:.2f}x that of {label_unexp}"},
-                    {"Statistic": "Risk Ratio (RR)", "Value": f"{rr:.4f}",
-                     "Interpretation": f"Risk in {label_exp} is {rr:.2f}× that of {label_unexp}"},
-                    {"Statistic": "Risk Difference (RD)", "Value": f"{rd:.4f}",
-                     "Interpretation": "Absolute difference (R1 - R0)"},
-                    {"Statistic": nnt_label, "Value": f"{nnt_abs:.1f}",
-                     "Interpretation": "Patients to treat to prevent/cause 1 outcome"},
-                    {"Statistic": "Odds Ratio (OR)", "Value": f"{odd_ratio:.4f}",
-                     "Interpretation": "Odds of event (Exp vs Unexp)"}
-                ]
-                risk_df = pd.DataFrame(risk_data)
-            except Exception as e:
-                risk_df = None
-                msg += f" (Risk metrics unavailable: {e})"
-        
-        # 🟢 NEW: Convert stats_res to DataFrame for Report
+        # 🌟 FIX: res is dict, convert to DataFrame for table display
         stats_df_for_report = pd.DataFrame(stats_res, index=[0]).T.reset_index()
         stats_df_for_report.columns = ['Statistic', 'Value']
 
-        return display_tab, stats_df_for_report, msg, risk_df # 🟢 RETURN DF
+        return display_tab, stats_df_for_report, msg, None # 🌟 RETURN DF
     
     except Exception as e:
         return display_tab, None, str(e), None
@@ -265,7 +225,7 @@ def calculate_correlation(df, col1, col2, method='pearson'):
         name = "Spearman"
         desc = "Monotonic"
     
-    # 🟢 UPDATED: ใช้ Plotly แทน Matplotlib
+    # 🌟 UPDATED: ใช้ Plotly แทน Matplotlib และ unified colors
     fig = go.Figure()
     
     # เพิ่ม scatter plot
@@ -275,7 +235,7 @@ def calculate_correlation(df, col1, col2, method='pearson'):
         mode='markers',
         marker={
             'size': 8,
-            'color': 'rgba(0, 100, 200, 0.6)',
+            'color': COLORS['primary'],
             'line': {'color': 'white', 'width': 0.5},
             'opacity': 0.7
         },
@@ -295,17 +255,17 @@ def calculate_correlation(df, col1, col2, method='pearson'):
                 y=y_line,
                 mode='lines',
                 name='Linear fit',
-                line={'color': 'red', 'width': 2, 'dash': 'dash'},
+                line={'color': COLORS['danger'], 'width': 2, 'dash': 'dash'},
                 hovertemplate='Fitted line<extra></extra>'
             ))
         except Exception as e:
             fig.add_annotation(
                 text=f"Fit line unavailable: {e}",
                 xref="paper", yref="paper", x=0.5, y=1.08, showarrow=False,
-                font={'color': 'darkred', 'size': 11},
+                font={'color': COLORS['danger'], 'size': 11},
             )
     
-    # ปรับแต่งเค้าโครง
+    # ปรับแต่งเค้าโครงหลาย
     fig.update_layout(
         title={
             'text': f'{col1} vs {col2}<br><sub>{name} correlation (r={corr:.3f}, p={p:.4f})</sub>',
@@ -332,73 +292,151 @@ def calculate_correlation(df, col1, col2, method='pearson'):
 def generate_report(title, elements):
     """ 
     Generate a complete HTML report containing a title and a sequence of report elements.
+    Enhanced with unified navy color palette from _common.py.
     
     Parameters:
         title (str): Report title displayed at the top of the page.
         elements (list[dict]): Ordered list of report elements. Each element must include:
-            - type (str): One of 'text', 'table', 'contingency_table', or 'plot'.
+            - type (str): One of 'text', 'table', 'contingency_table', 'interpretation', or 'plot'.
             - data: Content for the element:
                 - 'text': a string paragraph.
                 - 'table': a pandas DataFrame rendered as an HTML table.
-                - 'contingency_table': a pandas DataFrame used to build a custom two-row header contingency table 
-                  (index.name used as exposure label).
+                - 'contingency_table': a pandas DataFrame used to build a custom two-row header contingency table.
+                - 'interpretation': interpretation text with styling.
                 - 'plot': a Plotly Figure to be embedded as interactive HTML.
             - header (str, optional): Section header placed above the element.
-            - outcome_col (str, optional, only for 'contingency_table'): label for the outcome header (defaults to "Outcome").
     
     Returns:
         str: Complete HTML document as a string, styled and containing the rendered elements.
     """
-    css_style = """ 
+    
+    # 🔧 FIX: Use COLORS['text'] instead of COLORS['text_primary']
+    primary_color = COLORS['primary']
+    primary_dark = COLORS['primary_dark']
+    text_color = COLORS['text']  # 🔧 FIXED: was COLORS['text_primary']
+    
+    css_style = f""" 
     <style>
-        body {
-            font-family: Arial, sans-serif;
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
             margin: 20px;
-            background-color: #f9f9f9;
-        }
-        h1 {
-            color: #333;
-            border-bottom: 2px solid #0066cc;
-            padding-bottom: 10px;
-        }
-        h2 {
-            color: #0066cc;
-            margin-top: 30px;
-        }
-        table {
+            background-color: #f8f9fa;
+            color: {text_color};
+            line-height: 1.6;
+        }}
+        h1 {{
+            color: {primary_dark};
+            border-bottom: 3px solid {primary_color};
+            padding-bottom: 12px;
+            font-size: 2em;
+            margin-bottom: 20px;
+        }}
+        h2 {{
+            color: {primary_dark};
+            margin-top: 25px;
+            font-size: 1.35em;
+            border-left: 5px solid {primary_color};
+            padding-left: 12px;
+            margin-bottom: 15px;
+        }}
+        /* Professional Tables */
+        table {{
             border-collapse: collapse;
             width: 100%;
             margin: 20px 0;
             background-color: white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        table th, table td {
-            border: 1px solid #ddd;
-            padding: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            border-radius: 6px;
+            overflow: hidden;
+        }}
+        table th, table td {{
+            border: 1px solid #ecf0f1;
+            padding: 12px 15px;
             text-align: left;
-        }
-        table th {
-            background-color: #0066cc;
+        }}
+        table th {{
+            background-color: {primary_color};
             color: white;
-        }
-        table tr:hover {
-            background-color: #f0f0f0;
-        }
-        p {
-            line-height: 1.6;
-            color: #333;
-        }
-        .report-table {
-            border: 1px solid #ddd;
-        }
-        .report-footer {
-            text-align: right;
-            font-size: 0.75em;
-            color: #666;
-            margin-top: 20px;
-            border-top: 1px dashed #ccc;
-            padding-top: 10px;
-        }
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }}
+        table tr:hover {{
+            background-color: #f8f9fa;
+        }}
+        table tr:nth-child(even) {{
+            background-color: #fcfcfc;
+        }}
+        /* Text formatting */
+        p {{
+            margin: 12px 0;
+            color: {text_color};
+        }}
+        .metric-text {{
+            font-size: 1.02em;
+            margin: 10px 0;
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+        }}
+        .metric-label {{
+            font-weight: 600;
+            color: {primary_dark};
+            min-width: 160px;
+        }}
+        .metric-value {{
+            color: {primary_color};
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+            background-color: #ecf0f1;
+            padding: 4px 8px;
+            border-radius: 4px;
+            letter-spacing: 0.3px;
+        }}
+        /* Interpretation boxes */
+        .interpretation {{
+            background: linear-gradient(135deg, #ecf0f1 0%, #f8f9fa 100%);
+            border-left: 4px solid {primary_color};
+            padding: 14px 15px;
+            margin: 16px 0;
+            border-radius: 5px;
+            line-height: 1.7;
+            color: {text_color};
+        }}
+        .interpretation::before {{
+            content: "ℹ️ ";
+            margin-right: 8px;
+        }}
+        /* Warning boxes */
+        .warning {{
+            background: linear-gradient(135deg, #fef5e7 0%, #f9f6f0 100%);
+            border-left: 4px solid {COLORS['warning']};
+            padding: 14px 15px;
+            margin: 16px 0;
+            border-radius: 5px;
+            color: #7d6608;
+            line-height: 1.7;
+        }}
+        /* Report footer */
+        .report-table {{
+            border: 1px solid #ecf0f1;
+        }}
+        .report-footer {{
+            text-align: center;
+            font-size: 0.85em;
+            color: #7f8c8d;
+            margin-top: 40px;
+            border-top: 1px solid #ecf0f1;
+            padding-top: 20px;
+        }}
+        .report-footer a {{
+            color: {primary_color};
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }}
+        .report-footer a:hover {{
+            color: {primary_dark};
+            text-decoration: underline;
+        }}
     </style>
     """
     
@@ -414,15 +452,28 @@ def generate_report(title, elements):
             html += f"<h2>{_html.escape(str(header))}</h2>"
         
         if element_type == 'text':
-            html += f"<p>{_html.escape(str(data))}</p>"
+            text_str = str(data)
+            # Check if it's a metric (has : separator)
+            if ':' in text_str and len(text_str) < 150:  # Likely a metric, not a full sentence
+                parts = text_str.split(':', 1)
+                label = _html.escape(parts[0].strip())
+                value = _html.escape(parts[1].strip())
+                html += f"<p class='metric-text'><span class='metric-label'>{label}:</span> <span class='metric-value'>{value}</span></p>"
+            else:
+                html += f"<p>{_html.escape(text_str)}</p>"
+        
+        elif element_type == 'interpretation':
+            html += f"<div class='interpretation'>{_html.escape(str(data))}</div>"
+        
+        elif element_type == 'warning':
+            html += f"<div class='warning'>{_html.escape(str(data))}</div>"
         
         elif element_type == 'table':
-            # 🟢 UPDATED: Force index=False for all statistical result tables (e.g., Chi2 stats, Kappa, ICC)
-            # แต่คงไว้สำหรับ Descriptive/Risk Metrics ที่ใช้ Index เป็นชื่อคอลัมน์
-            idx = 'Statistic' in data.columns and 'Value' in data.columns and data.index.name is None
+            # Check if it's a statistics table
+            is_stats_table = ('Statistic' in data.columns and 'Value' in data.columns 
+                              and data.index.name is None)
             
-            # ถ้าเป็นตารางผลลัพธ์สถิติ (Statistic/Value) ให้ซ่อน Index
-            html += data.to_html(index=not idx, classes='report-table') 
+            html += data.to_html(index=not is_stats_table, classes='report-table', escape=True)
         
         elif element_type == 'contingency_table':
             col_labels = data.columns.tolist()
@@ -430,7 +481,6 @@ def generate_report(title, elements):
             exp_name = data.index.name or "Exposure"
             out_name = element.get('outcome_col', 'Outcome')
             
-            # 🟢 MODIFIED: Replaced Markdown pipe table with proper HTML table structure
             html += "<table class='report-table'>"
             html += "<thead>"
             
@@ -454,7 +504,6 @@ def generate_report(title, elements):
                 # Data Cells
                 for col_label in col_labels:
                     val = data.loc[idx_label, col_label]
-                    # Ensure value is treated as string and escaped
                     html += f"<td>{_html.escape(str(val))}</td>" 
                 html += "</tr>"
             html += "</tbody>"
@@ -462,28 +511,21 @@ def generate_report(title, elements):
             html += "</table>"
         
         elif element_type == 'plot':
-            # ตรวจสอบว่าเป็น Plotly Figure หรือ Matplotlib Figure
+            # Check if it's a Plotly Figure
             plot_obj = data
             
-            # ถ้าเป็น Plotly Figure
             if hasattr(plot_obj, 'to_html'):
-                # 🟢 MODIFIED: Use include_plotlyjs='cdn' for portability 
-                # and remove global CDN injection at the bottom.
+                # Plotly Figure
                 html += plot_obj.to_html(full_html=False, include_plotlyjs='cdn', div_id=f"plot_{id(plot_obj)}") 
             else:
-                # ถ้าเป็น Matplotlib Figure - แปลงเป็น PNG และ embed
+                # Matplotlib Figure - convert to PNG and embed
                 buf = io.BytesIO()
                 plot_obj.savefig(buf, format='png', bbox_inches='tight')
                 b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-                html += f'<img src="data:image/png;base64,{b64}" />'
-    
-    # 🟢 REMOVED: Removed the duplicate global CDN script injection
-    # html += """ 
-    # <script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
-    # """
+                html += f'<img src="data:image/png;base64,{b64}" style="max-width:100%; margin: 20px 0;" />'
 
     html += """<div class='report-footer'>
-    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM n donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
+    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank">NTWKKM n donate</a> | Powered by GitHub, Gemini, Streamlit
     </div>"""
     
     html += "</body>\n</html>"

@@ -8,10 +8,12 @@ import streamlit as st  # ✅ IMPORT STREAMLIT
 
 # ✅ FIX #7-8: IMPORT LOGGER (MINIMAL WIRING)
 from logger import get_logger
+from tabs._common import get_color_palette
 
 # Get logger instance for this module
 logger = get_logger(__name__)
-
+# Get unified color palette
+COLORS = get_color_palette()
 # ✅ TRY IMPORT FIRTHLOGIST
 try:
     from firthlogist import FirthLogisticRegression
@@ -69,7 +71,7 @@ def run_binary_logit(y, X, method='default'):
             if not HAS_FIRTH:
                 return None, None, None, "Library 'firthlogist' not installed. Please define requirements.txt or use Standard method."
             
-            # firthlogist: fit_intercept=False เพราะเราใส่ Constant ใน X ไปแล้ว
+            # firthlogist: fit_intercept=False เพราะทำเราใส่ Constant ใน X ไปแล้ว
             fl = FirthLogisticRegression(fit_intercept=False) 
             fl.fit(X_const, y)
             
@@ -115,16 +117,16 @@ def get_label(col_name, var_meta):
     Returns:
         str: An HTML fragment containing a bolded column name and, if available, a secondary label on the next line.
     """
-    # 1. ใช้ชื่อเต็มเป็นค่าเริ่มต้น (ไม่ตัด _ ทิ้งแล้ว)
+    # 1. ใช้ชื่อเต็มหาค่าเริ่มต้น (ไม่ตัด _ ทิ้งแล้ว)
     display_name = col_name 
     
     # 2. ค้นหาคำอธิบาย (Label) ใน Metadata
     secondary_label = ""
     if var_meta:
-        # ลองหาด้วยชื่อเต็มก่อน
+        # ลองหาด้วยกับชื่อเต็มก่อน
         if col_name in var_meta and 'label' in var_meta[col_name]:
             secondary_label = var_meta[col_name]['label']
-        # (Optional) ลองหาด้วยชื่อย่อ เผื่อ config เก่าตั้งไว้
+        # (Optional) ลองหาด้วยกับชื่อย่อ เผื่อ config เก่าตั้งไว้
         elif '_' in col_name:
             parts = col_name.split('_', 1)
             if len(parts) > 1:
@@ -141,8 +143,8 @@ def get_label(col_name, var_meta):
     else:
         return f"<b>{safe_name}</b>"
 
-# ✅ CACHE DATA: ช่วยให้เว็บเร็วขึ้น ไม่ต้องคำนวณใหม่ทุกครั้งที่กดปุ่มอื่น
-# 🟢 NOTE: ต้องเพิ่ม method ลงใน argument เพื่อให้ cache แยกกันตาม method ที่เลือก
+# ✅ CACHE DATA: ช่วยให้เว็บเร็ว ไม่ต้องคำนวณใหม่ทุกครั้งที่กดปุ่มอื่น
+# 🟢 NOTE: ต้องเพิ่ม method ลงใน argument เพื่อให้ cache แยกงานตาม method ที่เลือก
 @st.cache_data(show_spinner=False)
 def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     """
@@ -159,6 +161,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     Returns:
         str: An HTML fragment containing a table of variables with descriptive statistics, crude odds ratios (and p-values), and adjusted odds ratios where multivariable modelling was performed. If `outcome_name` is not found in `df`, returns an HTML alert div indicating the missing outcome.
     """
+    
     # ✅ LOG ANALYSIS START
     logger.log_analysis(
         analysis_type="Logistic Regression",
@@ -179,7 +182,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     
     if len(unique_outcomes) != 2:
         msg = f"""
-        <div class='alert' style='background:#ffebee; border-left:4px solid #d32f2f; padding:12px; border-radius:4px;'>
+        <div class='alert' style='background:#ffebee; border-left:4px solid {COLORS['danger']}; padding:12px; border-radius:4px;'>
             ❌ <b>Invalid Outcome:</b> Expected binary outcome (2 unique values) but found <b>{len(unique_outcomes)}</b>.<br>
             Unique values: {sorted(unique_outcomes)}<br>
             <span style='font-size:0.9em; color:#666; margin-top:8px; display:block;'>💡 Please select a truly binary outcome variable (e.g., Yes/No, Dead/Alive, 0/1)</span>
@@ -190,7 +193,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     
     # NEW: Warn if outcome isn't 0/1
     if not unique_outcomes.issubset({0, 1}):
-        st.warning(f"ℹ Outcome values are {sorted(unique_outcomes)}, not {{0, 1}}. Will be converted to binary.")
+        st.warning(f"i Outcome values are {sorted(unique_outcomes)}, not {{0, 1}}. Will be converted to binary.")
         # Map to binary: first sorted value -> 0, second -> 1
         sorted_outcomes = sorted(unique_outcomes, key=str)
         outcome_map = {sorted_outcomes[0]: 0, sorted_outcomes[1]: 1}
@@ -205,7 +208,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     results_db = {} 
     sorted_cols = sorted(df.columns)
 
-    # 🆕 NEW: DETECT DATA QUALITY FOR AUTO-METHOD SELECTION
+    # 🔍 NEW: DETECT DATA QUALITY FOR AUTO-METHOD SELECTION
     has_perfect_separation = False
     small_sample = len(df) < 50
     rare_outcome = (y == 1).sum() < 20
@@ -227,7 +230,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 logger.debug("Skipping separation check for %s: %s", col, e)
                 continue
     
-    # 🆕 NEW: AUTO-SELECT METHOD BASED ON DATA QUALITY
+    # 🇒️ NEW: AUTO-SELECT METHOD BASED ON DATA QUALITY
     preferred_method = 'bfgs'  # Default fallback
     
     if method == 'auto':
@@ -447,10 +450,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     html_rows = []
     current_sheet = ""
     
-    # 🟢 1. เตรียมรายชื่อคอลัมน์ที่มีผลลัพธ์
+    # 🟢 1. เตรียมรายชื่อคอลัมน์ที่มีผลลัชภ์
     valid_cols_for_html = [c for c in sorted_cols if c in results_db]
 
-    # 🟢 2. ฟังก์ชันเรียงลำดับ (Group -> Name)
+    # 🟢 2. ฟังก์ชนเรียงลำดับ (Group -> Name)
     def sort_key_for_grouping(col_name) -> tuple[str, str]:
         group = col_name.split('_')[0] if '_' in col_name else "Variables"
         return (group, col_name)
@@ -559,7 +562,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 <th>Group 1</th>
                 <th>Crude OR (95% CI)</th>
                 <th>Test Used</th> <th>Crude P-value</th>
-                <th>aOR (95% CI) <sup style='color:#d32f2f; font-weight:bold;'>†</sup><br><span style='font-size:0.8em; font-weight:normal'>(n={final_n_multi})</span></th>
+                <th>aOR (95% CI) <sup style='color:{COLORS['danger']}; font-weight:bold;'>†</sup><br><span style='font-size:0.8em; font-weight:normal'>(n={final_n_multi})</span></th>
                 <th>aP-value</th>
             </tr>
         </thead>
@@ -569,7 +572,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         <b>Method:</b> {method_note}. Complete Case Analysis.<br>
         <i>Univariate comparison uses Chi-square test (Categorical) or Mann-Whitney U test (Continuous).</i>
         <div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee; font-size: 0.9em; color: #666;'>
-            <sup style='color:#d32f2f; font-weight:bold;'>†</sup> <b>Note on aOR:</b> Adjusted Odds Ratios are calculated only for variables with a <b>Crude P-value < 0.20</b> 
+            <sup style='color:{COLORS['danger']}; font-weight:bold;'>†</sup> <b>Note on aOR:</b> Adjusted Odds Ratios are calculated only for variables with a <b>Crude P-value < 0.20</b> 
             (Screening criteria) and sufficient data quality to prevent overfitting.
         </div>
     </div>
@@ -592,27 +595,30 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None, method='au
     Returns:
         str: The complete HTML report string.
     """ # 🟢 MODIFIED: Restored Docstring
-    css_style = """
+    
+    css_style = f"""
     <style>
-        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; }
-        .table-container { background: white; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); overflow-x: auto; }
-        table { width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; min-width: 800px; }
-        th { background-color: #34495e; color: #fff; padding: 12px; position: sticky; top: 0; }
-        td { padding: 12px; border-bottom: 1px solid #eee; vertical-align: top; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
-        .outcome-title { background-color: #2c3e50; color: white; padding: 15px; font-weight: bold; border-radius: 8px 8px 0 0; }
-        .sig-p { color: #d32f2f; font-weight: bold; background-color: #ffebee; padding: 2px 4px; border-radius: 4px; }
-        .sheet-header td { background-color: #e8f4f8; color: #2980b9; font-weight: bold; letter-spacing: 1px; padding: 8px 15px; }
-        .n-badge { font-size: 0.75em; color: #888; background: #eee; padding: 1px 4px; border-radius: 3px; }
-        .summary-box { padding: 15px; background: #fff; font-size: 0.9em; color: #555; }
-        .report-footer {
+        body {{ font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; }}
+        .table-container {{ background: white; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); overflow-x: auto; }}
+        table {{ width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; min-width: 800px; }}
+        th {{ background-color: {COLORS['primary_dark']}; color: #fff; padding: 12px; position: sticky; top: 0; }}
+        td {{ padding: 12px; border-bottom: 1px solid #eee; vertical-align: top; }}
+        tr:nth-child(even) {{ background-color: #f9f9f9; }}
+        .outcome-title {{ background-color: {COLORS['primary_dark']}; color: white; padding: 15px; font-weight: bold; border-radius: 8px 8px 0 0; }}
+        .sig-p {{ color: {COLORS['danger']}; font-weight: bold; background-color: #ffebee; padding: 2px 4px; border-radius: 4px; }}
+        .sheet-header td {{ background-color: #e8f4f8; color: {COLORS['primary']}; font-weight: bold; letter-spacing: 1px; padding: 8px 15px; }}
+        .n-badge {{ font-size: 0.75em; color: #888; background: #eee; padding: 1px 4px; border-radius: 3px; }}
+        .summary-box {{ padding: 15px; background: #fff; font-size: 0.9em; color: #555; }}
+        .report-footer {{
             text-align: right;
             font-size: 0.75em;
-            color: var(--text-color);
+            color: {COLORS['text_secondary']};
             margin-top: 20px;
-            border-top: 1px dashed var(--border-color);
+            border-top: 1px dashed {COLORS['border']};
             padding-top: 10px;
-        }
+        }}
+        a {{ color: {COLORS['primary']}; text-decoration: none; }}
+        a:hover {{ color: {COLORS['primary_dark']}; }}
     </style>
     """
     

@@ -8,6 +8,7 @@ from sklearn.pipeline import Pipeline    # 🟢 NEW: สำหรับสร้
 from sklearn.compose import ColumnTransformer # 🟢 NEW: สำหรับระบุคอลัมน์ที่จะปรับขนาด
 import io, base64
 import html as _html
+from tabs._common import get_color_palette
 
 # --- 1. Propensity Score Calculation ---
 def calculate_ps(df, treatment_col, covariate_cols):
@@ -187,6 +188,9 @@ def plot_love_plot(smd_pre, smd_post):
     """ 
     Create an interactive Love plot using Plotly.
     """
+    # Get unified color palette
+    COLORS = get_color_palette()
+    
     smd_pre = smd_pre.copy()
     smd_pre['Stage'] = 'Unmatched'
     smd_post = smd_post.copy()
@@ -207,8 +211,8 @@ def plot_love_plot(smd_pre, smd_post):
             'Stage': 'Stage'
         },
         color_discrete_map={
-            'Unmatched': 'red',
-            'Matched': 'blue'
+            'Unmatched': COLORS['danger'],
+            'Matched': COLORS['primary']
         },
         # 🟢 FIX: เปลี่ยน 'Matched' เป็น 'diamond' เพื่อให้แตกต่างทางสายตา
         symbol_map={ 
@@ -250,59 +254,69 @@ def generate_psm_report(title, elements):
     """ 
     Generate a styled HTML report.
     """
-    css = """
+    # Get unified color palette
+    COLORS = get_color_palette()
+    
+    css = f"""
     <style>
-        body {
+        body {{
             font-family: Arial, sans-serif;
             margin: 20px;
             background-color: #f9f9f9;
-        }
-        h1 {
-            color: #333;
-            border-bottom: 2px solid #0066cc;
+        }}
+        h1 {{
+            color: {COLORS['text']};
+            border-bottom: 2px solid {COLORS['primary']};
             padding-bottom: 10px;
-        }
-        h2 {
-            color: #0066cc;
+        }}
+        h2 {{
+            color: {COLORS['primary']};
             margin-top: 30px;
-        }
-        table {
+        }}
+        table {{
             border-collapse: collapse;
             width: 100%;
             margin: 20px 0;
             background-color: white;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        table th, table td {
+        }}
+        table th, table td {{
             border: 1px solid #ddd;
             padding: 12px;
             text-align: left;
-        }
-        table th {
-            background-color: #0066cc;
+        }}
+        table th {{
+            background-color: {COLORS['primary_dark']};
             color: white;
-        }
-        table tr:hover {
+        }}
+        table tr:hover {{
             background-color: #f0f0f0;
-        }
-        img {
+        }}
+        img {{
             max-width: 100%;
             height: auto;
             margin: 20px 0;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        p {
+        }}
+        p {{
             line-height: 1.6;
-            color: #333;
-        }
-        .report-footer {
+            color: {COLORS['text']};
+        }}
+        a {{
+            color: {COLORS['primary']};
+            text-decoration: none;
+        }}
+        a:hover {{
+            color: {COLORS['primary_dark']};
+        }}
+        .report-footer {{
             text-align: right;
             font-size: 0.75em;
-            color: #666;
+            color: {COLORS['text_secondary']};
             margin-top: 20px;
             border-top: 1px dashed #ccc;
             padding-top: 10px;
-        }
+        }}
     </style>
     """
 

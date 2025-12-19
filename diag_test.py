@@ -8,7 +8,10 @@ import io, base64
 import streamlit as st
 import html as _html
 import warnings
+from tabs._common import get_color_palette
 
+# Get unified color palette
+COLORS = get_color_palette()
 
 # ========================================
 # 1. DESCRIPTIVE STATISTICS
@@ -295,36 +298,29 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                 else:
                     rr_ci_lower, rr_ci_upper = np.nan, np.nan
                 
-                # NNT with CI (simplified)
-                # RD SE from 2x2 table: sqrt(p1*(1-p1)/n1 + p2*(1-p2)/n2)
+                # NNT with CI
                 rd_se = np.sqrt(
                     (risk_exp * (1 - risk_exp)) / (a + b) + 
                     (risk_unexp * (1 - risk_unexp)) / (c + d)
                 ) if (a + b) > 0 and (c + d) > 0 else np.nan
                 nnt_ci_lower, nnt_ci_upper = calculate_ci_nnt(rd, rd_se)
                 
-                # DIAGNOSTIC METRICS (if applicable)
-                # Sensitivity = TP / (TP + FN) = a / (a + c)
+                # DIAGNOSTIC METRICS
                 sensitivity = a / (a + c) if (a + c) > 0 else 0
                 se_ci_lower, se_ci_upper = calculate_ci_wilson_score(a, a + c)
                 
-                # Specificity = TN / (TN + FP) = d / (b + d)
                 specificity = d / (b + d) if (b + d) > 0 else 0
                 sp_ci_lower, sp_ci_upper = calculate_ci_wilson_score(d, b + d)
                 
-                # PPV = TP / (TP + FP) = a / (a + b)
                 ppv = a / (a + b) if (a + b) > 0 else 0
                 ppv_ci_lower, ppv_ci_upper = calculate_ci_wilson_score(a, a + b)
                 
-                # NPV = TN / (TN + FN) = d / (c + d)
                 npv = d / (c + d) if (c + d) > 0 else 0
                 npv_ci_lower, npv_ci_upper = calculate_ci_wilson_score(d, c + d)
                 
-                # Likelihood Ratios
                 lr_plus = sensitivity / (1 - specificity) if (1 - specificity) > 0 else np.nan
                 lr_minus = (1 - sensitivity) / specificity if specificity > 0 else np.nan
                 
-                # NNT Label
                 if rd < 0:
                     nnt_label = "Number Needed to Treat (NNT)"
                 elif rd > 0:
@@ -334,7 +330,6 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                 
                 # Build Risk Metrics Table with SECTION HEADERS
                 risk_data = [
-                    # ===== RISK METRICS SECTION =====
                     {"Metric": "RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)", 
                      "Value": "", "95% CI": "", "Interpretation": "Use for cohort/case-control studies"},
                     {"Metric": "Risk in Exposed (R1)", "Value": f"{risk_exp:.4f}", 
@@ -352,7 +347,6 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
                     {"Metric": "Odds Ratio (OR)", "Value": f"{or_value:.4f}", 
                      "95% CI": f"({or_ci_lower:.4f} - {or_ci_upper:.4f})" if np.isfinite(or_ci_lower) else "N/A",
                      "Interpretation": f"Odds of '{label_event}' ({label_exp} vs {label_unexp})"},
-                    # ===== DIAGNOSTIC METRICS SECTION =====
                     {"Metric": "DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)", 
                      "Value": "", "95% CI": "", "Interpretation": "Use for diagnostic/screening studies"},
                     {"Metric": "Sensitivity", "Value": f"{sensitivity:.4f}", 
@@ -547,7 +541,7 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
         "Positive Label": pos_label_user
     }
     
-    # Create Plotly ROC curve
+    # Create Plotly ROC curve using unified colors
     fig = go.Figure()
     
     # ROC curve
@@ -556,7 +550,7 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
         y=tpr,
         mode='lines',
         name=f'ROC Curve (AUC={auc_val:.3f})',
-        line={'color': 'darkorange', 'width': 2},
+        line={'color': COLORS['primary'], 'width': 2},
         hovertemplate='FPR: %{x:.3f}<br>TPR: %{y:.3f}<extra></extra>'
     ))
     
@@ -566,7 +560,7 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
         y=[0, 1],
         mode='lines',
         name='Chance (AUC=0.5)',
-        line={'color': 'gray', 'width': 1, 'dash': 'dash'},
+        line={'color': COLORS['neutral'], 'width': 1, 'dash': 'dash'},
         hoverinfo='skip'
     ))
     
@@ -576,7 +570,7 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
         y=[tpr[best_idx]],
         mode='markers',
         name=f'Optimal (Sens={tpr[best_idx]:.3f}, Spec={1-fpr[best_idx]:.3f})',
-        marker={'size': 10, 'color': 'red'},
+        marker={'size': 10, 'color': COLORS['danger']},
         hovertemplate='Sensitivity: %{y:.3f}<br>Specificity: %{customdata:.3f}<extra></extra>',
         customdata=[1 - fpr[best_idx]],
     ))
@@ -708,72 +702,130 @@ def calculate_icc(df, cols):
 # ========================================
 
 def generate_report(title, elements):
-    """Generate HTML report with support for Plotly figures"""
-    css_style = """ 
+    """Generate HTML report with unified color palette from _common.py"""
+    
+    # ✅ FIX: Use 'text' instead of 'text_primary'
+    primary_color = COLORS['primary']
+    primary_dark = COLORS['primary_dark']
+    text_color = COLORS['text']  # ✅ FIXED: was 'text_primary'
+    
+    css_style = f""" 
     <style>
-        body {
-            font-family: Arial, sans-serif;
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
             margin: 20px;
-            background-color: #f9f9f9;
-        }
-        h1 {
-            color: #333;
-            border-bottom: 2px solid #0066cc;
-            padding-bottom: 10px;
-        }
-        h2 {
-            color: #0066cc;
-            margin-top: 30px;
-        }
-        table {
+            background-color: #f8f9fa;
+            color: {text_color};
+            line-height: 1.6;
+        }}
+        h1 {{
+            color: {primary_dark};
+            border-bottom: 3px solid {primary_color};
+            padding-bottom: 12px;
+            font-size: 2em;
+            margin-bottom: 20px;
+        }}
+        h2 {{
+            color: {primary_dark};
+            margin-top: 25px;
+            font-size: 1.35em;
+            border-left: 5px solid {primary_color};
+            padding-left: 12px;
+            margin-bottom: 15px;
+        }}
+        table {{
             border-collapse: collapse;
             width: 100%;
             margin: 20px 0;
             background-color: white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        table th, table td {
-            border: 1px solid #ddd;
-            padding: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            border-radius: 6px;
+            overflow: hidden;
+        }}
+        table th, table td {{
+            border: 1px solid #ecf0f1;
+            padding: 12px 15px;
             text-align: left;
-        }
-        table th {
-            background-color: #0066cc;
+        }}
+        table th {{
+            background-color: {primary_color};
             color: white;
-        }
-        table tr:hover {
-            background-color: #f0f0f0;
-        }
-        table tr.section-header {
-            background-color: #0066cc;
-            color: white;
-            font-weight: bold;
-        }
-        table tr.section-header td {
-            background-color: #0066cc;
-            color: white;
-            font-weight: bold;
-        }
-        table td.section-header {
-            background-color: #0066cc;
-            color: white;
-            font-weight: bold;
-        }
-        p {
-            line-height: 1.6;
-            color: #333;
-        }
-        .report-table {
-            border: 1px solid #ddd;
-        }
-        .report-footer {
-            text-align: right;
-            font-size: 0.75em;
-            color: #666;
-            margin-top: 20px;
-            border-top: 1px dashed #ccc;
-            padding-top: 10px;
-        }
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }}
+        table tr:hover {{
+            background-color: #f8f9fa;
+        }}
+        table tr:nth-child(even) {{
+            background-color: #fcfcfc;
+        }}
+        p {{
+            margin: 12px 0;
+            color: {text_color};
+        }}
+        .metric-text {{
+            font-size: 1.02em;
+            margin: 10px 0;
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+        }}
+        .metric-label {{
+            font-weight: 600;
+            color: {primary_dark};
+            min-width: 160px;
+        }}
+        .metric-value {{
+            color: {primary_color};
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+            background-color: #ecf0f1;
+            padding: 4px 8px;
+            border-radius: 4px;
+            letter-spacing: 0.3px;
+        }}
+        .interpretation {{
+            background: linear-gradient(135deg, #ecf0f1 0%, #f8f9fa 100%);
+            border-left: 4px solid {primary_color};
+            padding: 14px 15px;
+            margin: 16px 0;
+            border-radius: 5px;
+            line-height: 1.7;
+            color: {text_color};
+        }}
+        .interpretation::before {{
+            content: "ℹ️ ";
+            margin-right: 8px;
+        }}
+        .warning {{
+            background: linear-gradient(135deg, #fef5e7 0%, #f9f6f0 100%);
+            border-left: 4px solid {COLORS['warning']};
+            padding: 14px 15px;
+            margin: 16px 0;
+            border-radius: 5px;
+            color: #7d6608;
+            line-height: 1.7;
+        }}
+        .report-table {{
+            border: 1px solid #ecf0f1;
+        }}
+        .report-footer {{
+            text-align: center;
+            font-size: 0.85em;
+            color: #7f8c8d;
+            margin-top: 40px;
+            border-top: 1px solid #ecf0f1;
+            padding-top: 20px;
+        }}
+        .report-footer a {{
+            color: {primary_color};
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }}
+        .report-footer a:hover {{
+            color: {primary_dark};
+            text-decoration: underline;
+        }}
     </style>
     """
     
@@ -789,20 +841,33 @@ def generate_report(title, elements):
             html += f"<h2>{_html.escape(str(header))}</h2>"
         
         if element_type == 'text':
-            html += f"<p>{_html.escape(str(data))}</p>"
+            text_str = str(data)
+            if ':' in text_str and len(text_str) < 150:
+                parts = text_str.split(':', 1)
+                label = _html.escape(parts[0].strip())
+                value = _html.escape(parts[1].strip())
+                html += f"<p class='metric-text'><span class='metric-label'>{label}:</span> <span class='metric-value'>{value}</span></p>"
+            else:
+                html += f"<p>{_html.escape(text_str)}</p>"
+        
+        elif element_type == 'interpretation':
+            html += f"<div class='interpretation'>{_html.escape(str(data))}</div>"
+        
+        elif element_type == 'warning':
+            html += f"<div class='warning'>{_html.escape(str(data))}</div>"
         
         elif element_type == 'table':
             is_stats_table = ('Statistic' in data.columns and 'Value' in data.columns 
                               and data.index.name is None)
             html_table = data.to_html(index=not is_stats_table, classes='report-table', escape=True)
-            # Add section-header class to section headers
+            # Add section-header styling
             html_table = html_table.replace(
                 '<td>RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)</td>',
-                '<td class="section-header">RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)</td>'
+                f'<td style="background-color: {primary_color}; color: white; font-weight: bold;">RISK METRICS (Assumes: Rows=Exposure Status, Cols=Outcome Status)</td>'
             )
             html_table = html_table.replace(
                 '<td>DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)</td>',
-                '<td class="section-header">DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)</td>'
+                f'<td style="background-color: {primary_color}; color: white; font-weight: bold;">DIAGNOSTIC METRICS (Assumes: Rows=Test Result, Cols=Disease Status)</td>'
             )
             html += html_table
         
@@ -845,7 +910,7 @@ def generate_report(title, elements):
                 html += f'<img src="data:image/png;base64,{b64}" style="max-width:100%; margin: 20px 0;" />'
     
     html += """<div class='report-footer'>
-    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank" style="text-decoration:none; color:inherit;">NTWKKM n donate</a>. All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
+    &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank">NTWKKM n donate</a> | Powered by GitHub, Gemini, Streamlit
     </div>"""
     
     html += "</body>\n</html>"
