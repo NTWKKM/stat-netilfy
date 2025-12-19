@@ -1,4 +1,4 @@
-import streamlit as st
+# No imports needed - this module provides pure data functions
 
 def get_color_palette():
     """
