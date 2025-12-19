@@ -75,7 +75,7 @@ def run_binary_logit(y, X, method='default'):
             fl = FirthLogisticRegression(fit_intercept=False) 
             fl.fit(X_const, y)
             
-            # แปลงผลลัพท์ให้ตรงกับ Format เดิม (Series/DataFrame)
+            # แปลงผลลัพธ์ให้ตรงกับ Format เดิม (Series/DataFrame)
             coef = np.asarray(fl.coef_).reshape(-1)
             if coef.shape[0] != len(X_const.columns):
                 return None, None, None, "Firth output shape mismatch (coef_ vs design matrix)."
