@@ -136,7 +136,7 @@ def get_label(col_name, var_meta):
 
     safe_name = html.escape(str(display_name))
     
-    # 3. ถ้ามี Label ให้แสดงบรรทัดล่าง, ถ้าไม่มีให้แสดงแค่ชื่อตัวแปรคสูง
+    # 3. ถ้ามี Label ให้แสดงบรรทัดล่าง, ถ้าไม่มีให้แสดงแค่ชื่อตัวแปร
     if secondary_label:
         safe_label = html.escape(str(secondary_label))
         return f"<b>{safe_name}</b><br><span style='color:#666; font-size:0.9em'>{safe_label}</span>"
@@ -208,7 +208,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     results_db = {} 
     sorted_cols = sorted(df.columns)
 
-    # 🇒️ NEW: DETECT DATA QUALITY FOR AUTO-METHOD SELECTION
+    # 🔍 NEW: DETECT DATA QUALITY FOR AUTO-METHOD SELECTION
     has_perfect_separation = False
     small_sample = len(df) < 50
     rare_outcome = (y == 1).sum() < 20
