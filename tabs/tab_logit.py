@@ -35,7 +35,7 @@ def check_perfect_separation(df, target_col):
     return risky_vars
 
 # 🟢 NEW: Helper function to select dataset
-def _get_dataset_for_analysis():
+def _get_dataset_for_analysis(df: pd.DataFrame):
     """
     Helper function to select between original and matched datasets.
     Returns tuple: (selected_df, data_source_label)
@@ -51,18 +51,18 @@ def _get_dataset_for_analysis():
                 ["📊 Original Data", "✅ Matched Data (from PSM)"],
                 index=1,  # Default to matched data if available
                 horizontal=True,
-                key="logit_data_source"
+                key=f"data_source_{id(st.session_state)}"
             )
         
         if "✅" in data_source:
             selected_df = st.session_state.df_matched.copy()
             label = f"✅ Matched Data ({len(selected_df)} rows)"
         else:
-            selected_df = None  # Will be set to passed df
-            label = "📊 Original Data"
+            selected_df = df
+            label = f"📊 Original Data ({len(df)} rows)"
     else:
-        selected_df = None
-        label = "📊 Original Data"
+        selected_df = df
+        label = f"📊 Original Data ({len(df)} rows)"
     
     return selected_df, label
 
