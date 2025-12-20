@@ -8,7 +8,7 @@ from logger import get_logger
 logger = get_logger(__name__)
 
 # 🟢 NEW: Helper function to select between original and matched datasets
-def _get_dataset_for_table1(df: pd.DataFrame):
+def _get_dataset_for_table1(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     """
     Helper: เลือกระหว่าง original vs matched dataset สำหรับ Table 1
     คืนค่า: (selected_df, label_str)
@@ -415,6 +415,7 @@ def render(df, var_meta):
                         key="dl_matched_xlsx_view"
                     )
                 except ImportError:
+                    logger.debug("openpyxl not available for Excel export")
                     st.info("💡 Excel export requires openpyxl package")
             
             # Statistics by Treatment Group
