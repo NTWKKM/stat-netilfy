@@ -18,7 +18,7 @@ def _get_dataset_for_analysis(df: pd.DataFrame):
         col1, _ = st.columns([2, 1])
         with col1:
             data_source = st.radio(
-                "📄 เลือกชุดข้อมูล:",
+                "📄 Select Dataset:",
                 ["📊 Original Data", "✅ Matched Data (from PSM)"],
                 index=1,  # ถ้ามี matched แล้ว default เป็น matched
                 horizontal=True,
