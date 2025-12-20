@@ -55,7 +55,7 @@ def render(df):
     
     # 🟢 NEW: Display matched data status
     if st.session_state.get("is_matched", False):
-        st.info("✅ มี Matched dataset จาก PSM แล้ว สามารถเลือกใช้ด้านล่างได้")
+        st.info("✅ **Matched Dataset Available** - You can select it below for analysis")
     
     # 🟢 NEW: Select dataset (original or matched)
     corr_df, corr_label = _get_dataset_for_correlation(df)
