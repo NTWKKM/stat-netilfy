@@ -22,8 +22,8 @@ def _get_dataset_for_table1(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
         col1, _ = st.columns([2, 1])
         with col1:
             data_source = st.radio(
-                "📄 เลือกชุดข้อมูล:",
-                ["📊 Original Data", "✅ Matched Data (จาก PSM)"],
+                "📄 Select Dataset:",
+                ["📊 Original Data", "✅ Matched Data (from PSM)"],
                 index=0,  # default Original สำหรับ Table 1
                 horizontal=True,
                 key="table1_data_source",
