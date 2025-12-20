@@ -56,7 +56,7 @@ def render(df, _var_meta):
     
     # 🟢 NEW: Display matched data status and selector
     if st.session_state.get("is_matched", False):
-        st.info("✅ มี Matched dataset จาก PSM แล้ว สามารถเลือกใช้ด้านล่างได้")
+        st.info("✅ **Matched Dataset Available** - You can select it below for analysis")
     
     # 🟢 NEW: Select dataset (original or matched)
     surv_df, surv_label = _get_dataset_for_survival(df)
