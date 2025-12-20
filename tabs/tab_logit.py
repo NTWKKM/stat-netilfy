@@ -44,7 +44,7 @@ def _get_dataset_for_analysis(df: pd.DataFrame):
     has_matched = st.session_state.get('is_matched', False) and st.session_state.get('df_matched') is not None
     
     if has_matched:
-        col1, col2 = st.columns([2, 1])
+        col1, _ = st.columns([2, 1])
         with col1:
             data_source = st.radio(
                 "📄 Select Dataset:",
