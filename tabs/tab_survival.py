@@ -23,8 +23,8 @@ def _get_dataset_for_survival(df: pd.DataFrame):
         col1, _ = st.columns([2, 1])
         with col1:
             data_source = st.radio(
-                "📄 เลือกชุดข้อมูล:",
-                ["📊 Original Data", "✅ Matched Data (จาก PSM)"],
+                "📄 Select Dataset:",
+                ["📊 Original Data", "✅ Matched Data (from PSM)"],
                 index=1,  # default Matched สำหรับ survival analysis
                 horizontal=True,
                 key="survival_data_source",
