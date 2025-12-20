@@ -446,7 +446,7 @@ if st.session_state.df is not None:
         st.info(f"""
         ✅ **Matched Dataset Active**
         - Original data: {len(df)} rows
-        - Matched data: {len(st.session_state.df_matched)} rows (from {len(df) - len(st.session_state.df_matched)} excluded)
+        - Matched data: {len(st.session_state.df_matched)} rows ({len(df) - len(st.session_state.df_matched)} rows excluded)
         - Treatment: {st.session_state.matched_treatment_col}
         - Use dropdown in each tab to select **"✅ Matched Data"** for analysis
         """)
