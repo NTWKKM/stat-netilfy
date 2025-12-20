@@ -19,8 +19,8 @@ def _get_dataset_for_correlation(df: pd.DataFrame):
         col1, _ = st.columns([2, 1])
         with col1:
             data_source = st.radio(
-                "📄 เลือกชุดข้อมูล:",
-                ["📊 Original Data", "✅ Matched Data (จาก PSM)"],
+                "📄 Select Dataset:",
+                ["📊 Original Data", "✅ Matched Data (from PSM)"],
                 index=1,  # default Matched สำหรับ correlation analysis
                 horizontal=True,
                 key="correlation_data_source",
