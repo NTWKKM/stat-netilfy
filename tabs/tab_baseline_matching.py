@@ -420,6 +420,7 @@ def render(df, var_meta):
                                 )
                             
                             with m_col4:
+                                # 🟢 FIX: Correct column name suffixes (no leading space)
                                 smd_merge_qual = smd_pre.merge(smd_post, on='Variable', suffixes=('_pre', '_post'))
                                 avg_smd_before = smd_merge_qual['SMD_pre'].mean()
                                 avg_smd_after = smd_merge_qual['SMD_post'].mean()
@@ -461,18 +462,19 @@ def render(df, var_meta):
                                 st.caption("Green (diamond) = matched, Red (circle) = unmatched. Target: All on left (SMD < 0.1)")
                             
                             with bal_tab2:
-                                smd_merge_display = smd_pre.merge(smd_post, on='Variable', suffixes=(' Before', ' After'))
+                                # 🟢 FIX: Correct column name suffixes (no leading space)
+                                smd_merge_display = smd_pre.merge(smd_post, on='Variable', suffixes=('_before', '_after'))
                                 smd_merge_display['Improvement %'] = (
-                                    ((smd_merge_display[' Before'] - smd_merge_display[' After']) / smd_merge_display[' Before'] * 100)
+                                    ((smd_merge_display['SMD_before'] - smd_merge_display['SMD_after']) / smd_merge_display['SMD_before'] * 100)
                                     .round(1)
                                 )
                                 
                                 st.dataframe(
                                     smd_merge_display.style.format({
-                                        ' Before': '{:.4f}',
-                                        ' After': '{:.4f}',
+                                        'SMD_before': '{:.4f}',
+                                        'SMD_after': '{:.4f}',
                                         'Improvement %': '{:.1f}%'
-                                    }).background_gradient(subset=[' After'], cmap='RdYlGn_r', vmin=0, vmax=0.2),
+                                    }).background_gradient(subset=['SMD_after'], cmap='RdYlGn_r', vmin=0, vmax=0.2),
                                     use_container_width=True
                                 )
                                 st.caption("✅ Good balance: SMD < 0.1 after matching")
