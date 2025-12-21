@@ -1,25 +1,23 @@
 [theme]
-base = "light"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F0F2F6"
-textColor = "#262730"
-font = "sans serif"
+base = "light" # กำหนดธีมพื้นฐานของแอป (light = สว่าง, dark = มืด)
+backgroundColor = "#FFFFFF" # กำหนดสีพื้นหลังหลักของหน้าแอป (สีขาว)
+secondaryBackgroundColor = "#F0F2F6" # กำหนดสีพื้นหลังส่วนรอง เช่น แถบ Sidebar หรือพื้นหลังของ Widget ต่างๆ
+textColor = "#262730" # กำหนดสีของตัวอักษรหลักภายในแอป
+font = "sans serif" # กำหนดแบบอักษรที่ใช้แสดงผล (sans serif จะดูสะอาดตาและเป็นทางการ)
+# primaryColor = "#007BFF" # กำหนดสีหลักที่ใช้กับปุ่ม (Button), แถบไฮไลต์ และองค์ประกอบที่ต้องการความโดดเด่น
 
 [server]
-# ✅ 1. เพิ่มขนาดการอัปโหลดไฟล์ (ตามที่คุณต้องการ)
-maxUploadSize = 100
-
-# ✅ 2. ตั้งค่า Port ให้ตรงกับ Docker/Hugging Face (ช่วยให้ระบบเชื่อมต่อง่ายขึ้น)
-port = 8501
-
-# ✅ 3. ปิดการส่งสถิติการใช้งานกลับไปยัง Streamlit (ช่วยให้แอปโหลดเร็วขึ้นนิดหน่อย)
-gatherUsageStats = false
+maxUploadSize = 200 # กำหนดขนาดไฟล์สูงสุดที่อนุญาตให้อัปโหลดเข้าสู่แอป (หน่วยเป็น MB)
+maxMessageSize = 500 # กำหนดขนาดข้อความ (Data Packet) สูงสุดที่รับส่งกันได้ เพื่อให้รองรับการแสดงผลข้อมูลขนาดใหญ่
+enableCORS = false # ปิดการตรวจสอบที่มาของทรัพยากร (CORS) เพื่อให้แอปทำงานได้ปกติเมื่อถูกฝัง (Embed) ในระบบอื่น
+enableXsrfProtection = true # เปิดการป้องกันการโจมตีแบบ Cross-site Request Forgery เพื่อความปลอดภัยของข้อมูลผู้ใช้
+runOnSave = false # ปิดการสั่งรันแอปใหม่โดยอัตโนมัติเมื่อไฟล์โค้ดมีการเปลี่ยนแปลง (ช่วยประหยัดการใช้ CPU บน Server)
 
 [browser]
-# ✅ 4. ปิดเมนู "Settings" และ "Developer options" ไม่ให้ User ทั่วไปเห็น
-gatherUsageStats = false
-toolbarMode = "minimal"
+gatherUsageStats = false # ปิดการรวบรวมและส่งสถิติการใช้งานแอปกลับไปยัง Streamlit เพื่อความเป็นส่วนตัวสูงสุด
+toolbarMode = "minimal" # ปรับโหมดแถบเครื่องมือมุมขวาบนให้เหลือเท่าที่จำเป็น (minimal) เพื่อให้ดูเป็นแอปเฉพาะทาง
+serverAddress = "localhost" # กำหนดชื่อที่อยู่ของเซิร์ฟเวอร์ในระดับเบราว์เซอร์ให้เป็น localhost เพื่อความเสถียร
 
 [client]
-# ✅ 5. ปิดปุ่ม "Manage app" ของ Streamlit ที่มักจะโผล่มามุมล่างขวา
-showErrorDetails = false
+showErrorDetails = false # ปิดการแสดงรายละเอียดของ Error และบรรทัดโค้ดที่ผิดพลาดต่อผู้ใช้ทั่วไป (เพื่อความปลอดภัย)
+showSidebarNavigation = true # บังคับให้แสดงเมนูการนำทาง (Navigation) ใน Sidebar เสมอ แม้จะเป็นรุ่นใหม่ก็ตาม
