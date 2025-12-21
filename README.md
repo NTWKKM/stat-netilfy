@@ -11,3 +11,5 @@ pinned: false
 https://ntwkkm-medstat.hf.space
 
 https://medstat.netlify.app/
+
+https://medstat.streamlit.app/
