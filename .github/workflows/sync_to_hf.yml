@@ -2,7 +2,8 @@ name: Sync to Hugging Face
 on:
   push:
     branches: [main]
-  force_push_allowance: true
+  # อนุญาตให้กดรัน Manual ได้ด้วยเพื่อความสะดวก
+  workflow_dispatch:
 
 jobs:
   sync:
@@ -12,7 +13,9 @@ jobs:
         with:
           fetch-depth: 0
           lfs: true
+
       - name: Push to HF
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: git push --force https://ntwkkm:$HF_TOKEN@huggingface.co/spaces/ntwkkm/medstat main
+        run: |
+          git push --force https://ntwkkm:$HF_TOKEN@huggingface.co/spaces/ntwkkm/medstat main
