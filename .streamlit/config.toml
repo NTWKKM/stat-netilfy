@@ -7,7 +7,7 @@ font = "sans serif"
 
 [server]
 # ✅ 1. เพิ่มขนาดการอัปโหลดไฟล์ (ตามที่คุณต้องการ)
-maxUploadSize = 500 
+maxUploadSize = 100
 
 # ✅ 2. ตั้งค่า Port ให้ตรงกับ Docker/Hugging Face (ช่วยให้ระบบเชื่อมต่อง่ายขึ้น)
 port = 7860
