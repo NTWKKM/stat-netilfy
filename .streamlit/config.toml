@@ -4,3 +4,23 @@ backgroundColor = "#FFFFFF"
 secondaryBackgroundColor = "#F0F2F6"
 textColor = "#262730"
 font = "sans serif"
+
+[server]
+# ✅ 1. เพิ่มขนาดการอัปโหลดไฟล์ (ตามที่คุณต้องการ)
+maxUploadSize = 500 
+
+# ✅ 2. ตั้งค่า Port ให้ตรงกับ Docker/Hugging Face (ช่วยให้ระบบเชื่อมต่อง่ายขึ้น)
+port = 7860
+address = "0.0.0.0"
+
+# ✅ 3. ปิดการส่งสถิติการใช้งานกลับไปยัง Streamlit (ช่วยให้แอปโหลดเร็วขึ้นนิดหน่อย)
+gatherUsageStats = false
+
+[browser]
+# ✅ 4. ปิดเมนู "Settings" และ "Developer options" ไม่ให้ User ทั่วไปเห็น
+gatherUsageStats = false
+toolbarMode = "minimal"
+
+[client]
+# ✅ 5. ปิดปุ่ม "Manage app" ของ Streamlit ที่มักจะโผล่มามุมล่างขวา
+showErrorDetails = false
