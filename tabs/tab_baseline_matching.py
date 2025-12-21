@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import table_one  # Import from root
 import psm_lib  # Import from root
+import plotly.express as px
 from logger import get_logger
 
 logger = get_logger(__name__)
@@ -416,7 +417,7 @@ def render(df, var_meta):
                                 st.metric(
                                     label="Good Balance",
                                     value=f"{good_balance_count}/{len(smd_post)}",
-                                    delta=f"(SMD < 0.1)" if good_balance_count == len(smd_post) else f"⚠️ {len(smd_post) - good_balance_count} vars"
+                                    delta="(SMD < 0.1)" if good_balance_count == len(smd_post) else f"⚠️ {len(smd_post) - good_balance_count} vars"
                                 )
                             
                             with m_col4:
@@ -488,7 +489,7 @@ def render(df, var_meta):
                                         (df_ps[final_treat_col] == 1).sum(),
                                         (df_matched[final_treat_col] == 1).sum()
                                     ],
-                                    f'Control (0)': [
+                                    'Control (0)': [
                                         (df_ps[final_treat_col] == 0).sum(),
                                         (df_matched[final_treat_col] == 0).sum()
                                     ]
@@ -531,7 +532,7 @@ def render(df, var_meta):
                                 st.info("✅ Full matched data available in **Subtab 3 (Matched Data View)**")
                             
                 except Exception as e:
-                    st.error(f"❌ Error: {str(e)}")
+                    st.error(f"❌ Error: {e!s}")
                     logger.exception("PSM analysis failed")
 
     # ==========================================
@@ -540,7 +541,7 @@ def render(df, var_meta):
     with sub_tab3:
         st.markdown("### ✅ Matched Data View & Export")
         
-        if st.session_state.is_matched and st.session_state.df_matched is not None:
+        if st.session_state.get("is_matched", False) and st.session_state.get("df_matched") is not None:
             df_m = st.session_state.df_matched
             
             st.success(f"""
@@ -642,7 +643,6 @@ def render(df, var_meta):
                         st.dataframe(summary_stats, use_container_width=True)
                     
                     with summary_tab2:
-                        import plotly.express as px
                         fig = px.box(df_m, x=treat_col_m, y=selected_col, title=f"{selected_col} by {treat_col_m}")
                         st.plotly_chart(fig, use_container_width=True)
             
@@ -751,7 +751,11 @@ def render(df, var_meta):
         """)
 
 
-def _calculate_categorical_smd(df, treatment_col, cat_cols):
+def _calculate_categorical_smd(
+    df: pd.DataFrame,
+    treatment_col: str,
+    cat_cols: list
+) -> pd.DataFrame:
     """
     🟢 NEW: Calculate SMD for categorical variables
     Formula: SMD = sqrt(sum((p_treated[i] - p_control[i])^2))
@@ -775,8 +779,8 @@ def _calculate_categorical_smd(df, treatment_col, cat_cols):
             
             smd = np.sqrt(smd_cat)
             smd_data.append({'Variable': col, 'SMD': smd})
-        except Exception as e:
-            logger.warning(f"Error calculating categorical SMD for {col}: {e}")
+        except (KeyError, TypeError, ZeroDivisionError) as e:
+            logger.warning("Error calculating categorical SMD for %s: %s", col, e)
             continue
     
     return pd.DataFrame(smd_data)
