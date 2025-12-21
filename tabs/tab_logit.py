@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from logic import process_data_and_generate_html # Import จาก root
+from logic import process_data_and_generate_html # Import from root
 from logger import get_logger
 logger = get_logger(__name__)
 
@@ -51,7 +51,7 @@ def _get_dataset_for_analysis(df: pd.DataFrame):
                 ["📊 Original Data", "✅ Matched Data (from PSM)"],
                 index=1,  # Default to matched data if available
                 horizontal=True,
-                key=f"data_source_{id(st.session_state)}"
+                key=f"data_source_logit_{id(st.session_state)}"
             )
         
         if "✅" in data_source:
@@ -108,8 +108,8 @@ def render(df, var_meta):
     * **Features (X) Inclusion:** All available features are **automatically included** by default; users can **manually exclude** any unwanted variables.
 """)
         
-        # 🟢 NEW: Dataset selection
-        selected_df, data_label = _get_dataset_for_analysis()
+        # 🟢 NEW: Dataset selection - FIXED: Pass df argument
+        selected_df, data_label = _get_dataset_for_analysis(df)
         if selected_df is None:
             selected_df = df
         
@@ -175,20 +175,20 @@ def render(df, var_meta):
                         # 🟢 NEW: Warn if using Standard method on risky data
                         if risky_vars_final and algo == 'bfgs':
                             st.warning(
-                                f"""\u26a0️ **WARNING: Perfect Separation Detected!**
+                                f"""⚠️ **WARNING: Perfect Separation Detected!**
 
 **Variables with zero-cell contingency tables:** {', '.join(risky_vars_final)}
 
 **Selected Method:** Standard (MLE)
 
 **Problems this may cause:**
-- \u274c Model may not converge
-- \u274c Infinite coefficients (∞)
-- \u274c Missing p-values and standard errors
-- \u274c Invalid confidence intervals
-- \u274c Unreliable results
+- ❌ Model may not converge
+- ❌ Infinite coefficients (∞)
+- ❌ Missing p-values and standard errors
+- ❌ Invalid confidence intervals
+- ❌ Unreliable results
 
-**\u2705 Recommended Solution:** Use **Firth's (Penalized)** method instead!
+**✅ Recommended Solution:** Use **Firth's (Penalized)** method instead!
 - Handles perfect separation automatically
 - Produces reliable confidence intervals
 - Better for small samples and rare events
@@ -208,7 +208,7 @@ def render(df, var_meta):
                         
                         # 🟢 NEW: Log method used and data source
                         data_source_label = "✅ Matched" if selected_df is not None and st.session_state.get('is_matched') else "Original"
-                        logger.info("\u2705 Logit analysis completed | method=%s | risky_vars=%d | n=%d | data_source=%s", algo, len(risky_vars_final), len(final_df), data_source_label)
+                        logger.info("✅ Logit analysis completed | method=%s | risky_vars=%d | n=%d | data_source=%s", algo, len(risky_vars_final), len(final_df), data_source_label)
                         
                     except Exception as e:
                         st.error(f"Failed: {e}")
@@ -277,7 +277,7 @@ def render(df, var_meta):
             
             ---
             
-            ### Common Mistakes \u274c
+            ### Common Mistakes ❌
             
             - **Unadjusted OR** without adjustment → Use aOR ✅
             - **Perfect separation** (category = outcome) → Exclude or use Firth
@@ -307,11 +307,11 @@ def render(df, var_meta):
         **Why is it a Problem?**
         
         Standard logistic regression (MLE):
-        - \u274c Cannot estimate coefficients reliably
-        - \u274c Returns infinite or missing values
-        - \u274c Model doesn't converge
-        - \u274c P-values are undefined
-        - \u274c Results are invalid
+        - ❌ Cannot estimate coefficients reliably
+        - ❌ Returns infinite or missing values
+        - ❌ Model doesn't converge
+        - ❌ P-values are undefined
+        - ❌ Results are invalid
         
         **How to Detect:**
         - 🔍 App shows warning: "⚠️ Risk of Perfect Separation: var_name"
@@ -339,11 +339,11 @@ def render(df, var_meta):
         - ⚠️ Requires manual exclusion
         
         **Option 4: Standard (MLE)** 🔴 (NOT RECOMMENDED)
-        - \u274c May not converge
-        - \u274c Infinite coefficients
-        - \u274c Missing p-values
-        - \u274c Invalid results
-        - \u274c **DO NOT USE with perfect separation!**
+        - ❌ May not converge
+        - ❌ Infinite coefficients
+        - ❌ Missing p-values
+        - ❌ Invalid results
+        - ❌ **DO NOT USE with perfect separation!**
         
         **Best Practice Summary:**
         1. Load your data
