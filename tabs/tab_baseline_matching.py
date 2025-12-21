@@ -469,12 +469,13 @@ def render(df, var_meta):
                                     .round(1)
                                 )
                                 
+                                # 🟢 FIX: Use simpler styling without colormap to avoid 'ColormapRegistry' error
                                 st.dataframe(
                                     smd_merge_display.style.format({
                                         'SMD_before': '{:.4f}',
                                         'SMD_after': '{:.4f}',
                                         'Improvement %': '{:.1f}%'
-                                    }).background_gradient(subset=['SMD_after'], cmap='RdYlGn_r', vmin=0, vmax=0.2),
+                                    }).highlight_min(subset=['SMD_after'], color='lightgreen'),
                                     use_container_width=True
                                 )
                                 st.caption("✅ Good balance: SMD < 0.1 after matching")
@@ -631,7 +632,10 @@ def render(df, var_meta):
                 if numeric_cols:
                     selected_col = st.selectbox("Select numeric variable to compare:", numeric_cols, key='matched_numeric_select')
                     
-                    summary_tab1, summary_tab2 = st.tabs(["📊 Descriptive Stats", "📉 Visualization"])
+                    summary_tab1, summary_tab2 = st.tabs([
+                        "📊 Descriptive Stats",
+                        "📉 Visualization"
+                    ])
                     
                     with summary_tab1:
                         summary_stats = df_m.groupby(treat_col_m)[selected_col].describe()
