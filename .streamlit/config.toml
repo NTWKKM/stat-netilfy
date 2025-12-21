@@ -10,8 +10,7 @@ font = "sans serif"
 maxUploadSize = 100
 
 # ✅ 2. ตั้งค่า Port ให้ตรงกับ Docker/Hugging Face (ช่วยให้ระบบเชื่อมต่อง่ายขึ้น)
-port = 7860
-address = "0.0.0.0"
+port = 8501
 
 # ✅ 3. ปิดการส่งสถิติการใช้งานกลับไปยัง Streamlit (ช่วยให้แอปโหลดเร็วขึ้นนิดหน่อย)
 gatherUsageStats = false
