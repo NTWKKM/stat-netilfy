@@ -8,4 +8,6 @@ app_port: 7860
 pinned: false
 ---
 
+https://ntwkkm-medstat.hf.space
+
 https://medstat.netlify.app/
