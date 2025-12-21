@@ -223,7 +223,11 @@ def render(df, var_meta):
             )
             
             # Smart covariate defaults based on preset
-            cov_candidates = [c for c in all_cols if c not in [treat_col, outcome_col if outcome_col != "⊘ None / Skip" else ""]]
+            # Use membership test instead of string comparison
+            excluded_cols = [treat_col]
+            if outcome_col in all_cols:
+                excluded_cols.append(outcome_col)
+            cov_candidates = [c for c in all_cols if c not in excluded_cols]
             
             if preset_choice == "👥 Demographics":
                 default_covs = [c for c in cov_candidates if any(x in c.lower() for x in ['age', 'sex', 'bmi'])]
