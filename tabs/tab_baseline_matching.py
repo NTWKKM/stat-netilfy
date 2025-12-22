@@ -24,13 +24,13 @@ def _get_dataset_for_table1(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
         with col1:
             data_source = st.radio(
                 "📄 Select Dataset:",
-                ["📊 Original Data", "✅ Matched Data (from PSM)"],
+                options := ["📊 Original Data", "✅ Matched Data (from PSM)"],
                 index=0,  # default Original for Table 1
                 horizontal=True,
                 key="table1_data_source",
             )
 
-        if "✅" in data_source:
+        if data_source == options[1]:  # Matched Data
             selected_df = st.session_state.df_matched.copy()
             label = f"✅ Matched Data ({len(selected_df)} rows)"
         else:
@@ -358,6 +358,7 @@ def render(df, var_meta):
                                        pd.api.types.is_object_dtype(df_analysis[c])]
                             if cat_covs:
                                 df_analysis = pd.get_dummies(df_analysis, columns=cat_covs, drop_first=True)
+                            # Build final covariate list: numeric covs unchanged + new dummy cols from categorical encoding
                             new_cols = [c for c in df_analysis.columns if c not in df.columns and c != final_treat_col]
                             final_cov_cols = [c for c in cov_cols if c not in cat_covs] + new_cols
                         else:
