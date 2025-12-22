@@ -8,8 +8,8 @@ app_port: 7860
 pinned: false
 ---
 
-https://ntwkkm-medstat.hf.space
+[Hugging Face Space](https://ntwkkm-medstat.hf.space)
 
-https://medstat.netlify.app/
+[Netlify Deployment](https://medstat.netlify.app/)
 
-https://medstat.streamlit.app/
+[Streamlit Cloud](https://medstat.streamlit.app/)
