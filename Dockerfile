@@ -5,6 +5,7 @@ WORKDIR /app
 
 # ติดตั้ง Git และเครื่องมือสำหรับ Build
 RUN apt-get update && apt-get install -y \
+    --no-install-recommends \
     build-essential \
     curl \
     git \
