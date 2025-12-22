@@ -1,4 +1,4 @@
-streamlit>=1.30,<2.0
+streamlit>=1.35,<2.0
 pandas>=2.0,<3.0
 numpy>=1.24,<3.0
 scipy>=1.10,<2.0
@@ -7,6 +7,6 @@ openpyxl
 matplotlib
 lifelines==0.30.0
 formulaic
-scikit-learn==1.2.2
+scikit-learn>=1.5.0
 firthlogist>=0.3.0
 plotly>=5.0,<6.0
