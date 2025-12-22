@@ -347,7 +347,10 @@ def render(df, var_meta):
                             target_val = minor_val
                             final_treat_col = f"{treat_col}_encoded"
                             df_analysis[final_treat_col] = np.where(df_analysis[treat_col] == target_val, 1, 0)
-                        
+
+                        # Initialize cat_covs early to avoid fragile locals() check
+                        cat_covs = []
+
                         # Handle categorical covariates
                         if cov_cols:
                             cat_covs = [c for c in cov_cols if pd.api.types.is_string_dtype(df_analysis[c]) or 
@@ -375,9 +378,9 @@ def render(df, var_meta):
                             smd_pre = psm_lib.calculate_smd(df_ps, final_treat_col, final_cov_cols)
                             smd_post = psm_lib.calculate_smd(df_matched, final_treat_col, final_cov_cols)
                             
-                            # 🟢 NEW: Add categorical SMD
-                            smd_pre_cat = _calculate_categorical_smd(df_ps, final_treat_col, cat_covs if 'cat_covs' in locals() else [])
-                            smd_post_cat = _calculate_categorical_smd(df_matched, final_treat_col, cat_covs if 'cat_covs' in locals() else [])
+                           # 🟢 NEW: Add categorical SMD (cat_covs is guaranteed to exist now)
+                            smd_pre_cat = _calculate_categorical_smd(df_ps, final_treat_col, cat_covs)
+                            smd_post_cat = _calculate_categorical_smd(df_matched, final_treat_col, cat_covs)
                             
                             smd_pre = pd.concat([smd_pre, smd_pre_cat], ignore_index=True)
                             smd_post = pd.concat([smd_post, smd_post_cat], ignore_index=True)
@@ -573,22 +576,24 @@ def render(df, var_meta):
             with st.expander("🔍 Filter & Preview", expanded=True):
                 total_rows = len(df_m)
 
+                # Unified slider logic
+                min_rows = min(10, total_rows)
+                max_rows = total_rows
+                default_rows = min(50, max_rows)
+                step = 1 if max_rows < 20 else 10
+                
+                n_display = st.slider(
+                    "Rows to display:",
+                    min_value=min_rows,
+                    max_value=max_rows,
+                    value=default_rows,
+                    step=step,
+                    disabled=(total_rows <= 10),
+                    key="matched_data_rows_slider"
+                )
+                
                 if total_rows <= 10:
-                    n_display = total_rows
                     st.caption(f"Showing all {total_rows} rows")
-                else:
-                    min_rows = 10
-                    max_rows = total_rows
-                    default_rows = min(50, max_rows)
-                    step = 10 if max_rows >= 20 else 1
-
-                    n_display = st.slider(
-                        "Rows to display:",
-                        min_value=min_rows,
-                        max_value=max_rows,
-                        value=default_rows,
-                        step=step,
-                    )
 
                 st.dataframe(df_m.head(n_display), use_container_width=True, height=400)
 
