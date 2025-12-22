@@ -473,9 +473,12 @@ def render(df, var_meta):
                             with bal_tab2:
                                 # 🟢 FIX: Correct column name suffixes (no leading space)
                                 smd_merge_display = smd_pre.merge(smd_post, on='Variable', suffixes=('_before', '_after'))
+                                # Guard against division by zero
                                 smd_merge_display['Improvement %'] = (
-                                    ((smd_merge_display['SMD_before'] - smd_merge_display['SMD_after']) / smd_merge_display['SMD_before'] * 100)
+                                    ((smd_merge_display['SMD_before'] - smd_merge_display['SMD_after']) / 
+                                    smd_merge_display['SMD_before'].replace(0, np.nan) * 100)
                                     .round(1)
+                                    .fillna(0)
                                 )
                                 
                                 # 🟢 FIX: Use simpler styling without colormap to avoid 'ColormapRegistry' error
