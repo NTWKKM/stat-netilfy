@@ -401,7 +401,8 @@ def render(df, var_meta):
                             # ==========================================
                             st.subheader("Step 3️⃣: Match Quality Summary")
                             
-                            match_rate = (df_matched[final_treat_col].sum() / df_ps[final_treat_col].sum()) * 100
+                            treated_before = df_ps[final_treat_col].sum()
+                            match_rate = (df_matched[final_treat_col].sum() / treated_before * 100) if treated_before > 0 else 0
                             good_balance_count = (smd_post['SMD'] < 0.1).sum()
                             
                             m_col1, m_col2, m_col3, m_col4 = st.columns(4)
