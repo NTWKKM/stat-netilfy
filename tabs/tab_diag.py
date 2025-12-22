@@ -3,6 +3,41 @@ import pandas as pd
 import diag_test # ✅ ใช้ diag_test ตัวเดียว
 from typing import List, Tuple
 
+# 🟢 NEW: Helper function to select between original and matched datasets
+def _get_dataset_for_analysis(df: pd.DataFrame):
+    """
+    Helper: เลือกระหว่าง original vs matched dataset
+    คืนค่า: (selected_df, label_str)
+    """
+    has_matched = (
+        st.session_state.get("is_matched", False)
+        and st.session_state.get("df_matched") is not None
+    )
+
+    if has_matched:
+        col1, _ = st.columns([2, 1])
+        with col1:
+            data_source = st.radio(
+                "📄 Select Dataset:",
+                ["📊 Original Data", "✅ Matched Data (from PSM)"],
+                index=1,  # ถ้ามี matched แล้ว default เป็น matched
+                horizontal=True,
+                key="diag_data_source",
+            )
+
+        if "✅" in data_source:
+            selected_df = st.session_state.df_matched.copy()
+            label = f"✅ Matched Data ({len(selected_df)} rows)"
+        else:
+            selected_df = df
+            label = f"📊 Original Data ({len(df)} rows)"
+    else:
+        selected_df = df
+        label = f"📊 Original Data ({len(df)} rows)"
+
+    return selected_df, label
+
+
 def render(df, _var_meta=None):  # var_meta reserved for future use
     """
     Render Streamlit UI panels for diagnostic tests and statistics.
@@ -21,6 +56,15 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         _var_meta (Any): Metadata about variables (unused for visible output selection unless integrated by UI); present for potential future use.
     """
     st.subheader("🧪 Diagnostic Tests (ROC)")
+
+    # 🟢 NEW: Display matched data status if available
+    if st.session_state.get("is_matched", False):
+        st.info("✅ **Matched Dataset Available** - You can select it below for analysis")
+
+    # 🟢 NEW: Select dataset (original or matched)
+    selected_df, data_label = _get_dataset_for_analysis(df)
+    st.write(f"**Using:** {data_label}")
+    st.write(f"**Rows:** {len(selected_df)} | **Columns:** {len(selected_df.columns)}")
     
     # 🟢 IMPORTANT: Now 5 subtabs (added Reference & Interpretation)
     sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5 = st.tabs([
@@ -31,7 +75,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         "ℹ️ Reference & Interpretation"
     ])
     
-    all_cols = df.columns.tolist()
+    all_cols = selected_df.columns.tolist()
     if not all_cols:
         st.error("Dataset has no columns to analyze.")
         return
@@ -67,7 +111,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
 
         # Positive Label
         pos_label = None
-        unique_vals = df[truth].dropna().unique()
+        unique_vals = selected_df[truth].dropna().unique()
         if len(unique_vals) == 2:
             sorted_vals = sorted([str(x) for x in unique_vals])
             default_pos_idx = 0
@@ -82,8 +126,8 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         
         if run_col.button("📉 Analyze ROC", key='btn_roc_diag'):
             if pos_label and len(unique_vals) == 2:
-                # Call analyze_roc from diag_test
-                res, err, fig, coords_df = diag_test.analyze_roc(df, truth, score, 'delong' if 'DeLong' in method else 'hanley', pos_label_user=pos_label)
+                # Call analyze_roc from diag_test (using selected_df)
+                res, err, fig, coords_df = diag_test.analyze_roc(selected_df, truth, score, 'delong' if 'DeLong' in method else 'hanley', pos_label_user=pos_label)
                 if err: st.error(err)
                 else:
                     rep = [
@@ -150,12 +194,12 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         )
         
         # Positive Label Selectors
-        def get_pos_label_settings(df: pd.DataFrame, col_name: str) -> Tuple[List[str], int]:
+        def get_pos_label_settings(df_input: pd.DataFrame, col_name: str) -> Tuple[List[str], int]:
             """
             Return sorted non-null unique string values from a DataFrame column and a sensible default selection index.
             
             Parameters:
-                df (pd.DataFrame): DataFrame containing the column.
+                df_input (pd.DataFrame): DataFrame containing the column.
                 col_name (str): Name of the column to extract values from.
             
             Returns:
@@ -163,7 +207,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
             """
             # 🟢 NOTE: Need to handle the case where the column might be empty after dropna
             # Convert to string and drop NA values before getting unique values
-            unique_vals = [str(x) for x in df[col_name].dropna().unique()]
+            unique_vals = [str(x) for x in df_input[col_name].dropna().unique()]
             unique_vals.sort()
     
             default_idx = 0
@@ -177,7 +221,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
             return unique_vals, default_idx
 
         c4, c5, c6 = st.columns(3)
-        v1_uv, v1_default_idx = get_pos_label_settings(df, v1)
+        v1_uv, v1_default_idx = get_pos_label_settings(selected_df, v1)
         if not v1_uv:
             c4.warning(f"No non-null values in {v1}.")
             v1_pos_label = None
@@ -189,7 +233,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                 key='chi_v1_pos_diag',
             )
 
-        v2_uv, v2_default_idx = get_pos_label_settings(df, v2)
+        v2_uv, v2_default_idx = get_pos_label_settings(selected_df, v2)
         if not v2_uv:
             c5.warning(f"No non-null values in {v2}.")
             v2_pos_label = None
@@ -220,14 +264,14 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
             # CodeRabbit เตือนว่า selectbox คืนค่าเป็น String (เช่น "1") 
             # แต่ในตารางอาจเป็น Int (เช่น 1) ทำให้เทียบกันไม่ติด
             # เราจึงต้องสร้างตารางจำลอง (df_calc) และแปลงข้อมูลเป็น String ก่อนส่งไปคำนวณ
-            df_calc = df.copy()
+            df_calc = selected_df.copy()
             df_calc[v1] = df_calc[v1].astype("string")
             df_calc[v2] = df_calc[v2].astype("string")
             # --------------------------------
 
             # ⚠️ อย่าลืมเปลี่ยน parameter ตัวแรกจาก df เป็น df_calc ด้วยนะครับ
             tab, stats, msg, risk_df = diag_test.calculate_chi2(
-                df_calc, v1, v2,  # <--- เปลี่ยนตรงนี้เป็น df_calc
+                df_calc, v1, v2,  # <--- ใช้ df_calc ที่สร้างมาจาก selected_df
                 method=method_choice,
                 v1_pos=v1_pos_label,
                 v2_pos=v2_pos_label
@@ -324,7 +368,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
             st.session_state.html_output_kappa = None
         
         if k_run.button("🤝 Calculate Kappa", key='btn_kappa_run'):
-            res_df, err, conf_mat = diag_test.calculate_kappa(df, kv1, kv2)
+            res_df, err, conf_mat = diag_test.calculate_kappa(selected_df, kv1, kv2)
             if err:
                 st.error(err)
             else:
@@ -356,7 +400,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         if 'html_output_desc' not in st.session_state: st.session_state.html_output_desc = None
         
         if run_col.button("Show Stats", key='btn_desc_diag'):
-            res = diag_test.calculate_descriptive(df, dv)
+            res = diag_test.calculate_descriptive(selected_df, dv)
             if res is not None:
                 html = diag_test.generate_report(f"Descriptive: {dv}", [{'type':'table', 'data':res}])
                 st.session_state.html_output_desc = html
