@@ -770,8 +770,16 @@ def _calculate_categorical_smd(
     cat_cols: list
 ) -> pd.DataFrame:
     """
-    🟢 NEW: Calculate SMD for categorical variables
-    Formula: SMD = sqrt(sum((p_treated[i] - p_control[i])^2))
+    Calculate SMD for categorical variables using variance-weighted formula.
+    
+    Formula: For each categorical level:
+        SMD_level = (p_treated - p_control) / sqrt(p_pooled * (1 - p_pooled))
+        where p_pooled = (n_treated * p_treated + n_control * p_control) / (n_treated + n_control)
+    
+    Aggregate: SMD = sqrt(sum(SMD_level^2)) for all levels (root-sum-square)
+    
+    This approach is standard in PSM literature and handles both binary and 
+    multi-level categorical variables consistently.
     """
     if not cat_cols:
         return pd.DataFrame(columns=['Variable', 'SMD'])
@@ -780,18 +788,42 @@ def _calculate_categorical_smd(
     treated = df[df[treatment_col] == 1]
     control = df[df[treatment_col] == 0]
     
+    n_treated = len(treated)
+    n_control = len(control)
+    
+    # Handle edge case: if one group is empty
+    if n_treated == 0 or n_control == 0:
+        logger.warning("One treatment group is empty. Cannot calculate categorical SMD.")
+        return pd.DataFrame(columns=['Variable', 'SMD'])
+    
     for col in cat_cols:
         try:
             categories = df[col].dropna().unique()
-            smd_cat = 0
+            smd_squared_sum = 0
             
             for cat in categories:
-                p_treated = (treated[col] == cat).sum() / len(treated) if len(treated) > 0 else 0
-                p_control = (control[col] == cat).sum() / len(control) if len(control) > 0 else 0
-                smd_cat += (p_treated - p_control) ** 2
+                # Calculate proportions for each group
+                p_treated = (treated[col] == cat).sum() / n_treated
+                p_control = (control[col] == cat).sum() / n_control
+                
+                # Calculate pooled proportion (weighted average)
+                p_pooled = (n_treated * p_treated + n_control * p_control) / (n_treated + n_control)
+                
+                # Calculate variance with regularization to avoid division by zero
+                # Add small epsilon (1e-8) to handle edge cases
+                variance = p_pooled * (1 - p_pooled) + 1e-8
+                
+                # Calculate SMD for this level
+                smd_level = (p_treated - p_control) / np.sqrt(variance)
+                
+                # Accumulate squared SMDs (for root-sum-square aggregation)
+                smd_squared_sum += smd_level ** 2
             
-            smd = np.sqrt(smd_cat)
+            # Aggregate SMD across all levels using root-sum-square
+            # This is the standard approach for multi-level categorical variables
+            smd = np.sqrt(smd_squared_sum)
             smd_data.append({'Variable': col, 'SMD': smd})
+            
         except (KeyError, TypeError, ZeroDivisionError) as e:
             logger.warning("Error calculating categorical SMD for %s: %s", col, e)
             continue
