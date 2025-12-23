@@ -7,8 +7,15 @@ from typing import List, Tuple
 # 🟢 NEW: Helper function to select between original and matched datasets
 def _get_dataset_for_correlation(df: pd.DataFrame):
     """
-    Helper: Select between original vs matched dataset for Table 1
-    Returns: (selected_df, label_str)
+    Choose and return the dataset to use for correlation analysis (original or matched).
+    
+    If a matched dataset is present in Streamlit's session_state, presents a radio control allowing the user to select either the original DataFrame or the matched DataFrame; otherwise selects the original DataFrame. The returned label describes which dataset was chosen and includes the row count.
+    
+    Parameters:
+        df (pd.DataFrame): The original input DataFrame.
+    
+    Returns:
+        tuple: (selected_df, label_str) where `selected_df` is the DataFrame chosen for analysis and `label_str` is a short human-readable label (e.g., "✅ Matched Data (123 rows)" or "📊 Original Data (100 rows)").
     """
     has_matched = (
         st.session_state.get("is_matched", False)

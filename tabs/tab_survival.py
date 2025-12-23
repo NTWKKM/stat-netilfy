@@ -11,8 +11,13 @@ logger = logging.getLogger(__name__)
 # 🟢 NEW: Helper function to select between original and matched datasets
 def _get_dataset_for_survival(df: pd.DataFrame):
     """
-    Helper: เลือกระหว่าง original vs matched dataset สำหรับ survival analysis
-    คืนค่า: (selected_df, label_str)
+    Selects which dataset to use for survival analysis and returns the chosen DataFrame with a descriptive label.
+    
+    Parameters:
+        df (pd.DataFrame): The original dataset to use if no matched dataset is chosen or available.
+    
+    Returns:
+        tuple: (selected_df, label) where `selected_df` is either the original `df` or the matched dataset from session state, and `label` is a short descriptive string indicating the source and row count (e.g., "✅ Matched Data (123 rows)" or "📊 Original Data (123 rows)").
     """
     has_matched = (
         st.session_state.get("is_matched", False)
@@ -45,7 +50,11 @@ def _get_dataset_for_survival(df: pd.DataFrame):
 
 def render(df, _var_meta):
     """
-    Render an interactive Streamlit UI for survival analysis including Kaplan-Meier, Nelson-Aalen, landmark analysis, and Cox regression workflows.
+    Render the Streamlit UI for conducting survival analyses (Kaplan–Meier, Nelson–Aalen, landmark analysis, and Cox regression) on a selected dataset.
+    
+    Parameters:
+        df (pd.DataFrame): Input dataset from which time-to-event, event indicator, and covariates are selected. May be swapped with a matched dataset if present in Streamlit session state.
+        _var_meta (Any): Optional variable metadata (unused by the UI), provided for compatibility with the surrounding app.
     """
     st.subheader("⏳ Survival Analysis")
     st.info("""

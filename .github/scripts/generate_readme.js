@@ -16,7 +16,10 @@ const END_MARKER = '[--- REPOSITORY-TREE-END ---]';   // <--- แก้ไข
 const octokit = new Octokit();
 
 /**
- * ดึงโครงสร้างไฟล์แบบ Recursive จาก GitHub Tree API
+ * Retrieve the repository file tree from GitHub and return a filtered, sorted list of tree items.
+ *
+ * @returns {Array<Object>} An array of Git tree objects (files and folders) from the repository's main branch, filtered to exclude certain files/folders and sorted by path.
+ * @throws {Error} If the GitHub API requests fail.
  */
 async function getRepoTree() {
     try {
@@ -64,7 +67,10 @@ async function getRepoTree() {
 
 
 /**
- * สร้างส่วน Markdown (Tree Structure)
+ * Build a Markdown block that shows the repository file tree for inclusion in a README.
+ *
+ * @param {Array<{path: string, type: string}>} items - Flat list of repository entries; each entry includes `path` and `type` ('blob' for files, 'tree' for folders').
+ * @returns {string} Markdown containing a human-readable text tree wrapped in a fenced code block.
  */
 function generateMarkdown(items) {
     let markdown = '📂 Repository Contents (File Structure)\n\n';
@@ -99,7 +105,14 @@ function generateMarkdown(items) {
         }
     });
 
-    // 2. ฟังก์ชัน Recursive เพื่อแสดงผล Tree
+    /**
+     * Render a nested tree node into the surrounding `markdown` string as a text-based tree view.
+     *
+     * Traverses the given node (a mapping of entry name → entry object) in sorted order and appends lines with ASCII connectors to the outer-scoped `markdown` variable. Folder entries (type `'tree'`) are rendered with a trailing `/` and recursed into using an updated `prefix`; file entries are rendered as leaf lines.
+     *
+     * @param {{ [name: string]: { type: 'tree' | 'blob', children?: object } }} node - Mapping of entry names to entry objects; folders use `type: 'tree'` and provide a `children` object, files use `type: 'blob'`.
+     * @param {string} [prefix=''] - Current indentation and connector prefix applied to each line (used by recursion).
+     */
     function traverse(node, prefix = '') {
         const keys = Object.keys(node).sort();
         
@@ -131,7 +144,12 @@ function generateMarkdown(items) {
 
 
 /**
- * อ่าน/แทนที่ส่วน Markdown ใน README และเขียนกลับ
+ * Replace the Markdown section in README.md delimited by START_MARKER and END_MARKER with the provided content.
+ *
+ * If the markers are missing or incorrectly ordered, the function logs an error and prepends the provided Markdown
+ * to the existing README content (which may create duplicate sections).
+ *
+ * @param {string} newMarkdown - Markdown content to insert between START_MARKER and END_MARKER.
  */
 async function updateReadme(newMarkdown) {
     const fullReadmePath = path.join(process.cwd(), README_PATH);
@@ -168,7 +186,11 @@ async function updateReadme(newMarkdown) {
     console.log(`${README_PATH} updated successfully by replacement.`);
 }
 
-// ฟังก์ชันหลักในการรัน
+/**
+ * Orchestrates retrieval of the repository tree, generation of the Markdown representation, and update of the README.
+ *
+ * On error, logs the error message and marks the GitHub Action as failed.
+ */
 async function main() {
     try {
         const items = await getRepoTree();

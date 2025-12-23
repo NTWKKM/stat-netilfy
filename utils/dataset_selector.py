@@ -11,16 +11,18 @@ def get_dataset_for_analysis(
     label_prefix: str = "📄 เลือกชุดข้อมูล:"
 ) -> Tuple[pd.DataFrame, str]:
     """
-    Select between original and matched datasets.
+    Choose between the original and matched DataFrame for analysis and return the selected DataFrame with a descriptive label.
+    
+    If a matched dataset exists in Streamlit session state (keys "is_matched" and "df_matched"), the function offers a selection between the original and matched data; otherwise it returns the original DataFrame.
     
     Parameters:
-        df: Original DataFrame
-        session_key: Unique key for the radio button (e.g., 'correlation_data_source')
-        default_to_matched: If True, default to Matched Data when available
-        label_prefix: Label text for the radio button
+        df (pd.DataFrame): The original DataFrame to fall back to if matched data is unavailable or not selected.
+        session_key (str): Unique key used for the Streamlit radio widget to store the user's selection in session state.
+        default_to_matched (bool): If True and matched data exists, the matched dataset is selected by default.
+        label_prefix (str): Label text shown next to the radio widget.
     
     Returns:
-        (selected_df, label_str): Selected DataFrame and descriptive label
+        Tuple[pd.DataFrame, str]: A tuple containing the selected DataFrame and a descriptive label indicating which dataset was chosen and its row count (e.g., "✅ Matched Data (123 rows)" or "📊 Original Data (456 rows)").
     """
     has_matched = (
         st.session_state.get("is_matched", False)
