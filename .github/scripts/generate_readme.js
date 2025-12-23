@@ -2,7 +2,6 @@ const { Octokit } = require("@octokit/action");
 const fs = require('fs');
 const path = require('path');
 const core = require('@actions/core');
-const github = require('@actions/github'); // ต้องรวมไว้ที่ด้านบน
 
 // 1. กำหนดค่าคงที่ (Marker ที่คุณกำหนดเอง)
 const REPO_OWNER = 'ntwkkm';
