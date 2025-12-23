@@ -7,8 +7,8 @@ from typing import List, Tuple
 # 🟢 NEW: Helper function to select between original and matched datasets
 def _get_dataset_for_correlation(df: pd.DataFrame):
     """
-    Helper: เลือกระหว่าง original vs matched dataset สำหรับ correlation analysis
-    คืนค่า: (selected_df, label_str)
+    Helper: Select between original vs matched dataset for Table 1
+    Returns: (selected_df, label_str)
     """
     has_matched = (
         st.session_state.get("is_matched", False)
