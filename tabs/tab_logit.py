@@ -215,7 +215,7 @@ def render(df, var_meta):
                         st.components.v1.html(html, height=600, scrolling=True)
                         
                         # 🟢 NEW: Log method used and data source
-                        data_source_label = "✅ Matched" if selected_df is not None and st.session_state.get('is_matched') else "Original"
+                        data_source_label = "Matched" if "✅" in data_label else "Original"
                         logger.info("✅ Logit analysis completed | method=%s | risky_vars=%d | n=%d | data_source=%s", algo, len(risky_vars_final), len(final_df), data_source_label)
                         
                     except Exception as e:
