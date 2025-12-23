@@ -7,9 +7,10 @@ from typing import Tuple
 def get_dataset_for_analysis(
     df: pd.DataFrame,
     session_key: str,
+    *,
     default_to_matched: bool = True,
     label_prefix: str = "📄 เลือกชุดข้อมูล:"
-) -> Tuple[pd.DataFrame, str]:
+) -> tuple[pd.DataFrame, str]:
     """
     Choose between the original and matched DataFrame for analysis and return the selected DataFrame with a descriptive label.
     
@@ -40,11 +41,12 @@ def get_dataset_for_analysis(
                 key=session_key,
             )
 
-        if "✅" in data_source:
+        MATCHED_OPTION = "✅ Matched Data (จาก PSM)"
+        if data_source == MATCHED_OPTION:
             selected_df = st.session_state.df_matched.copy()
             label = f"✅ Matched Data ({len(selected_df)} rows)"
         else:
-            selected_df = df
+            selected_df = df.copy()
             label = f"📊 Original Data ({len(df)} rows)"
     else:
         selected_df = df
