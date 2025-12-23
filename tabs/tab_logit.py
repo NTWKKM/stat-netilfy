@@ -242,8 +242,7 @@ def render(df, var_meta):
                                 try:
                                     fig_crude = create_forest_plot_from_logit(
                                         or_results,
-                                        title="Forest Plot: Crude Odds Ratios (95% CI)",
-                                        var_meta=var_meta
+                                        title="Forest Plot: Crude Odds Ratios (95% CI)"
                                     )
                                     st.plotly_chart(fig_crude, use_container_width=True)
                                     
@@ -282,9 +281,7 @@ def render(df, var_meta):
                                 try:
                                     fig_adj = create_forest_plot_from_logit(
                                         aor_results,
-                                        title="Forest Plot: Adjusted Odds Ratios (95% CI)",
-                                        var_meta=var_meta,
-                                        is_adjusted=True
+                                        title="Forest Plot: Adjusted Odds Ratios (95% CI)"
                                     )
                                     st.plotly_chart(fig_adj, use_container_width=True)
                                     
