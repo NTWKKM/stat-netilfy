@@ -5,12 +5,7 @@ import survival_lib
 import time
 from pandas.api.types import is_numeric_dtype
 import logging
-import sys
-import os
-
-# 🟢 Fix import path for forest_plot_lib
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from forest_plot_lib import create_forest_plot_from_cox
+from ..forest_plot_lib import create_forest_plot_from_cox  # 🟢 Relative import
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +93,7 @@ def render(df, _var_meta):
     event_idx = next((i for i, c in enumerate(all_cols) if 'event' in c.lower() or 'status' in c.lower() or 'dead' in c.lower()), min(1, len(all_cols)-1))
     
     col_time = c1.selectbox("⏳ Time Variable:", all_cols, index=time_idx, key='surv_time')
-    col_event = c2.selectbox("💫 Event Variable (1=Event):", all_cols, index=event_idx, key='surv_event')
+    col_event = c2.selectbox("💬 Event Variable (1=Event):", all_cols, index=event_idx, key='surv_event')
     
     # Tabs
     tab_curves, tab_landmark, tab_cox, tab_ref = st.tabs(["📈 Survival Curves (KM/NA)", "📋 Landmark Analysis", "📊 Cox Regression", "ℹ️ Reference & Interpretation"])
