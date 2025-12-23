@@ -60,7 +60,16 @@ def render(df, var_meta):
                            generating Table 1 and reports.
     """
     st.subheader("📋 Table 1 & Matching")
-    
+
+    # 🟢 Display matched data status and selector
+        if st.session_state.get("is_matched", False):
+            st.info("✅ **Matched Dataset Available** - You can select it below for analysis")
+        
+        # 🟢 Select dataset (original or matched)
+        t1_df, t1_label = _get_dataset_for_table1(df)
+        st.write(f"**Using:** {t1_label}")
+        st.write(f"**Rows:** {len(t1_df)} | **Columns:** {len(t1_df.columns)}")
+
     # 🟢 NEW: Create four subtabs
     sub_tab1, sub_tab2, sub_tab3, sub_tab4 = st.tabs([
         "📊 Baseline Characteristics (Table 1)",
@@ -68,7 +77,14 @@ def render(df, var_meta):
         "✅ Matched Data View",
         "ℹ️ Reference & Interpretation"
     ])
-    
+
+    all_cols = t1_df.columns.tolist()
+        grp_idx = 0
+        for i, c in enumerate(all_cols):
+            if 'group' in c.lower() or 'treat' in c.lower(): 
+                grp_idx = i
+                break
+                
     # ==========================================
     # SUBTAB 1: BASELINE CHARACTERISTICS (Table 1)
     # ==========================================
@@ -91,22 +107,6 @@ def render(df, var_meta):
         (e.g., 'Treatment' or 'Outcome').
         * **Characteristics:** All other variables (numeric/categorical) to be summarized and compared.
         """)
-        
-        # 🟢 Display matched data status and selector
-        if st.session_state.get("is_matched", False):
-            st.info("✅ **Matched Dataset Available** - You can select it below for analysis")
-        
-        # 🟢 Select dataset (original or matched)
-        t1_df, t1_label = _get_dataset_for_table1(df)
-        st.write(f"**Using:** {t1_label}")
-        st.write(f"**Rows:** {len(t1_df)} | **Columns:** {len(t1_df.columns)}")
-        
-        all_cols = t1_df.columns.tolist()
-        grp_idx = 0
-        for i, c in enumerate(all_cols):
-            if 'group' in c.lower() or 'treat' in c.lower(): 
-                grp_idx = i
-                break
         
         c1, c2 = st.columns([1, 2])
         with c1:
