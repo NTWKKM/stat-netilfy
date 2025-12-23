@@ -3,7 +3,26 @@ import pandas as pd
 import correlation # Import from root
 import diag_test # Import for ICC calculation
 from typing import List, Tuple
-from utils.dataset_selector import get_dataset_for_analysis
+# ------------------------------------------------------------------
+# FIX: Add root directory to sys.path to ensure 'utils' is importable
+# ------------------------------------------------------------------
+current_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.dirname(current_dir)
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+# ------------------------------------------------------------------
+
+import correlation # Import from root
+import diag_test # Import for ICC calculation
+from typing import List, Tuple
+
+# Import utils after path fix
+try:
+    from utils.dataset_selector import get_dataset_for_analysis
+except ModuleNotFoundError:
+    # Fallback if utils is still not found (e.g. strict environment)
+    # This tries to load it assuming it might be in the same path context
+    import dataset_selector as get_dataset_for_analysis
 
 def render(df):
     """
