@@ -1,0 +1,52 @@
+# .github/workflows/update-readme.yml
+
+name: Update README Content
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'README.md'
+  workflow_dispatch:
+
+# *** เพิ่ม Block permissions เข้ามาตรงนี้ ***
+permissions:
+  contents: write  # ขอสิทธิ์ในการเขียนไฟล์ (Commit/Push)
+
+jobs:
+  update-markdown:
+    runs-on: ubuntu-latest
+    steps:
+    
+      # 1. Checkout โค้ด
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }} 
+          
+      # 2. ติดตั้ง Node.js
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 3. ติดตั้ง Dependencies
+      - name: Install Dependencies
+        run: npm install @octokit/action @actions/core @actions/github
+        working-directory: .github/scripts/
+
+      # 4. รันสคริปต์ Node.js เพื่อสร้าง README.md ใหม่
+      - name: Generate New README Content
+        run: node .github/scripts/generate_readme.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+
+      # 5. Commit และ Push Changes
+      - name: Commit and Push Changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Docs: Auto-update Repository Contents in README.md"
+          # *** ระบุไฟล์ที่จะ Commit อย่างชัดเจน ***
+          file_pattern: 'README.md'
+          # ***********************************
