@@ -662,7 +662,8 @@ def generate_forest_plot_html(or_results, aor_results, plot_title="Forest Plots:
         • <b>OR < 1:</b> Decreased odds (Protective factor) 🟢<br>
         • <b>CI crosses 1.0:</b> Not statistically significant ⚠️
         </p>
-        """)</n        
+        """)
+        
         # Prepare data
         vars_crude = list(or_results.keys())
         ors_crude = [or_results[v]['or'] for v in vars_crude]
@@ -812,7 +813,7 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None, method='au
             - html_string (str): The complete HTML report string with embedded forest plots
             - or_results (dict): Crude OR results for forest plot
             - aor_results (dict): Adjusted OR results for forest plot
-    """ # 🟢 MODIFIED: Restored Docstring
+    """
     
     css_style = f"""
     <style>
