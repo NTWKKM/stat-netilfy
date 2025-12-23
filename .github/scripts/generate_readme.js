@@ -167,9 +167,7 @@ async function updateReadme(newMarkdown) {
     if (startIdx === -1 || endIdx === -1 || startIdx >= endIdx) {
         console.error(`ERROR: START_MARKER (${START_MARKER}) or END_MARKER (${END_MARKER}) not found/incorrectly placed in ${README_PATH}.`);
         console.log(`Ensure these markers are present: ${START_MARKER} and ${END_MARKER}`);
-        // ถ้าหาไม่เจอ ให้ทำการ Prepend (ซึ่งเป็นสิ่งที่ทำให้เกิดเนื้อหาซ้ำ)
-        const newContent = newMarkdown + '\n\n' + readmeContent;
-        fs.writeFileSync(fullReadmePath, newContent, 'utf8');
+        core.setFailed(`Missing or incorrectly placed markers in ${README_PATH}. Please add ${START_MARKER} and ${END_MARKER} to your README.`);
         return;
     }
 
