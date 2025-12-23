@@ -12,12 +12,6 @@ logger = logging.getLogger(__name__)
 def _get_dataset_for_survival(df: pd.DataFrame):
     """
     Selects which dataset to use for survival analysis and returns the chosen DataFrame with a descriptive label.
-    
-    Parameters:
-        df (pd.DataFrame): The original dataset to use if no matched dataset is chosen or available.
-    
-    Returns:
-        tuple: (selected_df, label) where `selected_df` is either the original `df` or the matched dataset from session state, and `label` is a short descriptive string indicating the source and row count (e.g., "✅ Matched Data (123 rows)" or "📊 Original Data (123 rows)").
     """
     has_matched = (
         st.session_state.get("is_matched", False)
@@ -50,11 +44,7 @@ def _get_dataset_for_survival(df: pd.DataFrame):
 
 def render(df, _var_meta):
     """
-    Render the Streamlit UI for conducting survival analyses (Kaplan–Meier, Nelson–Aalen, landmark analysis, and Cox regression) on a selected dataset.
-    
-    Parameters:
-        df (pd.DataFrame): Input dataset from which time-to-event, event indicator, and covariates are selected. May be swapped with a matched dataset if present in Streamlit session state.
-        _var_meta (Any): Optional variable metadata (unused by the UI), provided for compatibility with the surrounding app.
+    Render the Streamlit UI for conducting survival analyses.
     """
     st.subheader("⏳ Survival Analysis")
     st.info("""
@@ -64,11 +54,9 @@ def render(df, _var_meta):
 * **🌳 Forest Plots:** Hazard Ratios with 95% CI are included in the downloadable Cox regression HTML report!
 """)
     
-    # 🟢 NEW: Display matched data status and selector
     if st.session_state.get("is_matched", False):
         st.info("✅ **Matched Dataset Available** - You can select it below for analysis")
     
-    # 🟢 NEW: Select dataset (original or matched)
     surv_df, surv_label = _get_dataset_for_survival(df)
     st.write(f"**Using:** {surv_label}")
     st.write(f"**Rows:** {len(surv_df)} | **Columns:** {len(surv_df.columns)}")
@@ -110,7 +98,7 @@ def render(df, _var_meta):
             grp = None if col_group == "None" else col_group
             try:
                 if "Kaplan-Meier" in plot_type:
-                    # Run KM (using surv_df instead of df)
+                    # Run KM
                     fig, stats_df = survival_lib.fit_km_logrank(surv_df, col_time, col_event, grp)
                     
                     st.plotly_chart(fig, use_container_width=True)
@@ -123,7 +111,7 @@ def render(df, _var_meta):
                     st.download_button("📥 Download Report (KM)", report_html, "km_report.html", "text/html")
                     
                 else:
-                    # Run Nelson-Aalen (using surv_df instead of df)
+                    # Run Nelson-Aalen
                     fig, stats_df = survival_lib.fit_nelson_aalen(surv_df, col_time, col_event, grp)
                     
                     st.plotly_chart(fig, use_container_width=True)
@@ -151,14 +139,12 @@ def render(df, _var_meta):
     with tab_landmark:    
         st.caption("Principle: Exclude patients who had an event or were censored before the Landmark Time.")
         
-        # Calculate Max Time (Robust check) - using surv_df instead of df
         max_t = surv_df[col_time].dropna().max() if not surv_df.empty and is_numeric_dtype(surv_df[col_time]) and surv_df[col_time].notna().any() else 1.0
         if max_t <= 0:
             max_t = 1.0 
         
         st.write(f"**Select Landmark Time (Max: {max_t:.2f})**")
         
-        # State Management for Landmark Time
         if 'landmark_val' not in st.session_state:
             st.session_state.landmark_val = float(round(float(max_t) * 0.1))
 
@@ -176,7 +162,6 @@ def render(df, _var_meta):
             
         landmark_t = st.session_state.landmark_val
         
-        # Auto-detect group column for landmark analysis
         group_idx = 0
         available_cols = [c for c in all_cols if c not in [col_time, col_event]]
 
@@ -194,7 +179,6 @@ def render(df, _var_meta):
             if st.button("Run Landmark Analysis", key='btn_lm_sur'):
                 try:
                     with st.spinner(f"Running Landmark Analysis at t={landmark_t:.2f}..."):
-                        # Use surv_df instead of df
                         fig, stats, n_pre, n_post, err = survival_lib.fit_km_landmark(
                             surv_df, col_time, col_event, col_group, landmark_t
                         )
@@ -247,7 +231,6 @@ def render(df, _var_meta):
             else:
                 try:
                     with st.spinner("Fitting Cox Model and Checking Assumptions..."):
-                        # Use surv_df instead of df
                         cph, res, model_data, err = survival_lib.fit_cox_ph(surv_df, col_time, col_event, covariates)
                         
                         if err:
@@ -285,21 +268,22 @@ def render(df, _var_meta):
                             else:
                                 st.info("No assumption plots generated.")
                             
-                            # 🟢 NEW: Show forest plot in web UI
+                            # 🟢 NEW: Show forest plot in web UI (Interactive)
                             st.markdown("---")
                             st.subheader("🌳 Forest Plot: Hazard Ratios")
                             try:
+                                # เรียกใช้ฟังก์ชันที่ปรับปรุงใหม่ใน survival_lib (ซึ่งจะเรียก forest_plot_lib อีกที)
                                 fig_forest = survival_lib.create_forest_plot_cox(res)
                                 st.plotly_chart(fig_forest, use_container_width=True)
                                 
-                                # Summary table
-                                st.markdown("**Summary Table:**")
-                                st.dataframe(res[['HR', '95% CI Lower', '95% CI Upper', 'P-value']].reset_index())
+                                # 🟢 OPTIONAL: ซ่อนตาราง Raw Data ไว้ใน Expander เพราะกราฟมีตารางอยู่แล้ว
+                                with st.expander("📄 View Raw Data Table"):
+                                    st.dataframe(res[['HR', '95% CI Lower', '95% CI Upper', 'P-value']].reset_index())
                                 
                             except Exception as e:
                                 st.warning(f"Could not generate HR forest plot: {e}")
 
-                            # 🟢 NEW: Generate HTML report with forest plot
+                            # Generate HTML report
                             elements = [
                                 {'type':'header','data':'Cox Proportional Hazards'},
                                 {'type':'table','data':res},
@@ -311,7 +295,7 @@ def render(df, _var_meta):
                                 for img_bytes in fig_images:
                                     elements.append({'type':'image','data':img_bytes})
                             
-                            # 🟢 NEW: Add forest plot to HTML report
+                            # Add forest plot to HTML report
                             forest_plot_html = survival_lib.generate_forest_plot_cox_html(res)
                             elements.append({'type':'html','data':forest_plot_html})
                             
