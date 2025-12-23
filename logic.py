@@ -5,6 +5,7 @@ import statsmodels.api as sm
 import warnings
 import html
 import streamlit as st  # ✅ IMPORT STREAMLIT
+import logging
 
 # ✅ FIX #7-8: IMPORT LOGGER (MINIMAL WIRING)
 from logger import get_logger
@@ -24,19 +25,29 @@ try:
     if not hasattr(FirthLogisticRegression, "_validate_data"):
         from sklearn.utils.validation import check_X_y, check_array
         
+        logger.info("🔧 Applying sklearn 1.6+ compatibility patch to FirthLogisticRegression")
+        
         def _validate_data_patch(self, X, y=None, reset=True, validate_separately=False, **check_params):
             """
             Shim to restore _validate_data for firthlogist compatibility with sklearn 1.6+
             """
             if y is None:
                 return check_array(X, **check_params)
-            return check_X_y(X, y, **check_params)
-            
-        setattr(FirthLogisticRegression, "_validate_data", _validate_data_patch)
+            else:
+                return check_X_y(X, y, **check_params)
+        
+        FirthLogisticRegression._validate_data = _validate_data_patch
+        logger.info("✅ Patch applied successfully")
     # ------------------------------------------------------------------
 
     HAS_FIRTH = True
-except ImportError:
+    logger.info("✅ firthlogist imported successfully")
+    
+except ImportError as e:
+    HAS_FIRTH = False
+    logger.warning(f"⚠️  firthlogist not available: {str(e)}")
+except Exception as e:
+    logger.error(f"❌ Error patching firthlogist: {str(e)}")
     HAS_FIRTH = False
 
 warnings.filterwarnings("ignore")
