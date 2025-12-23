@@ -202,7 +202,3 @@ async function main() {
 }
 
 main();
-
-// ต้องมี require statements สำหรับ GitHub Action Runner
-// const core ถูก require ไว้ด้านบนแล้ว
-// const github ถูก require ไว้ด้านบนแล้ว
