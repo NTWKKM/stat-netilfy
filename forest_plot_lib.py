@@ -397,7 +397,7 @@ class ForestPlot:
             template='plotly_white',
             margin=dict(l=10, r=20, t=120, b=40),  # Increased top margin for summary
             plot_bgcolor='white',
-            responsive=True  # 🟢 Mobile responsive
+            autosize=True  # 🔧 Fixed: Use autosize instead of responsive
         )
         
         # Add summary statistics annotation at top
