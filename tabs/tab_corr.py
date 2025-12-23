@@ -3,48 +3,7 @@ import pandas as pd
 import correlation # Import from root
 import diag_test # Import for ICC calculation
 from typing import List, Tuple
-
-# 🟢 NEW: Helper function to select between original and matched datasets
-def _get_dataset_for_correlation(df: pd.DataFrame):
-    """
-    Choose and return the dataset to use for correlation analysis (original or matched).
-    
-    If a matched dataset is present in Streamlit's session_state, presents a radio control allowing the user to select either the original DataFrame or the matched DataFrame; otherwise selects the original DataFrame. The returned label describes which dataset was chosen and includes the row count.
-    
-    Parameters:
-        df (pd.DataFrame): The original input DataFrame.
-    
-    Returns:
-        tuple: (selected_df, label_str) where `selected_df` is the DataFrame chosen for analysis and `label_str` is a short human-readable label (e.g., "✅ Matched Data (123 rows)" or "📊 Original Data (100 rows)").
-    """
-    has_matched = (
-        st.session_state.get("is_matched", False)
-        and st.session_state.get("df_matched") is not None
-    )
-
-    if has_matched:
-        col1, _ = st.columns([2, 1])
-        with col1:
-            data_source = st.radio(
-                "📄 Select Dataset:",
-                ["📊 Original Data", "✅ Matched Data (from PSM)"],
-                index=1,  # default Matched สำหรับ correlation analysis
-                horizontal=True,
-                key="correlation_data_source",
-            )
-
-        if "✅" in data_source:
-            selected_df = st.session_state.df_matched.copy()
-            label = f"✅ Matched Data ({len(selected_df)} rows)"
-        else:
-            selected_df = df
-            label = f"📊 Original Data ({len(df)} rows)"
-    else:
-        selected_df = df
-        label = f"📊 Original Data ({len(df)} rows)"
-
-    return selected_df, label
-
+from utils.dataset_selector import get_dataset_for_analysis
 
 def render(df):
     """
@@ -65,7 +24,7 @@ def render(df):
         st.info("✅ **Matched Dataset Available** - You can select it below for analysis")
     
     # 🟢 NEW: Select dataset (original or matched)
-    corr_df, corr_label = _get_dataset_for_correlation(df)
+    corr_df, corr_label = get_dataset_for_analysis(df, "correlation_data_source")
     st.write(f"**Using:** {corr_label}")
     st.write(f"**Rows:** {len(corr_df)} | **Columns:** {len(corr_df.columns)}")
     
