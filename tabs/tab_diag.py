@@ -2,7 +2,12 @@ import streamlit as st
 import pandas as pd
 import diag_test # ✅ ใช้ diag_test ตัวเดียว
 from typing import List, Tuple
-from forest_plot_lib import create_forest_plot_from_rr  # 🟢 Import RR/OR forest plot
+import sys
+import os
+
+# 🟢 Fix import path for forest_plot_lib
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from forest_plot_lib import create_forest_plot_from_rr
 
 # 🟢 NEW: Helper function to select between original and matched datasets
 def _get_dataset_for_analysis(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
