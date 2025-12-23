@@ -45,8 +45,8 @@ try:
 except ImportError as e:
     HAS_FIRTH = False
     logger.warning(f"⚠️  firthlogist not available: {str(e)}")
-except Exception as e:
-    logger.error(f"❌ Error patching firthlogist: {str(e)}")
+except (AttributeError, TypeError) as e:
+    logger.exception("❌ Error patching firthlogist")
     HAS_FIRTH = False
 
 warnings.filterwarnings("ignore")
