@@ -507,7 +507,7 @@ def create_forest_plot_cox(res_df):
     # Create Plotly figure
     fig = go.Figure()
     
-    # Add HR points and CI error bars
+    # Add HR points
     fig.add_trace(go.Scatter(
         x=hrs,
         y=variables,
@@ -521,26 +521,23 @@ def create_forest_plot_cox(res_df):
         hovertemplate='<b>%{y}</b><br>HR: %{x:.4f}<extra></extra>'
     ))
     
-    # Add error bars (CI)
+    # 🟢 FIX: Use whisker lines (error_x) instead of shaded area
     fig.add_trace(go.Scatter(
-        x=ci_highs,
+        x=hrs,
         y=variables,
-        mode='lines',
-        line=dict(width=0),
+        mode='markers',
+        marker=dict(size=0),  # Invisible markers, only show error bars
+        error_x=dict(
+            type='data',
+            symmetric=False,
+            array=[ci_highs[i] - hrs[i] for i in range(len(hrs))],  # Upper whisker
+            arrayminus=[hrs[i] - ci_lows[i] for i in range(len(hrs))],  # Lower whisker
+            color=COLORS['success'],
+            thickness=2,
+            visible=True
+        ),
         showlegend=False,
         hoverinfo='none'
-    ))
-    
-    fig.add_trace(go.Scatter(
-        x=ci_lows,
-        y=variables,
-        mode='lines',
-        line=dict(width=0),
-        showlegend=False,
-        hoverinfo='none',
-        fill='tonextx',
-        fillcolor=_hex_to_rgba(COLORS['success'].lstrip('#'), 0.2) if COLORS['success'].startswith('#') else 'rgba(50,184,198,0.2)',
-        name='95% CI'
     ))
     
     # Add vertical line at HR = 1 (null effect)
@@ -572,6 +569,7 @@ def generate_forest_plot_cox_html(res_df):
     """
     Generate an HTML forest plot for Cox regression hazard ratios using Plotly.
     Embeds Plotly JS directly in the plot for offline-friendly reports.
+    Uses same CSS theme as logistic regression.
     
     Parameters:
         res_df (pandas.DataFrame): Results DataFrame with columns 'HR', '95% CI Lower', '95% CI Upper', 'P-value'.
@@ -585,7 +583,7 @@ def generate_forest_plot_cox_html(res_df):
     # Create interactive forest plot (same function as web UI)
     fig = create_forest_plot_cox(res_df)
     
-    # 🟢 OFFLINE SUPPORT: Embed Plotly JS directly in the plot
+    # 🟢 OFFLINE SUPPORT: Embed Plotly JS directly in the plot (first plot only)
     # include_plotlyjs=True will embed the complete Plotly library
     plot_html = fig.to_html(include_plotlyjs=True, div_id='cox_forest_plot')
     
@@ -596,43 +594,46 @@ def generate_forest_plot_cox_html(res_df):
     ci_highs = res_df['95% CI Upper'].values
     p_vals = res_df['P-value'].values
     
-    # Create summary table HTML
-    table_html = "<h3>Summary Table: Hazard Ratios</h3>"
-    table_html += "<table style='border-collapse: collapse; width: 100%; margin: 10px 0;'>"
-    table_html += "<tr style='background-color: " + COLORS.get('primary', '#1f8085') + "; color: white;'>"
-    table_html += "<th style='border: 1px solid #ddd; padding: 8px;'>Variable</th>"
-    table_html += "<th style='border: 1px solid #ddd; padding: 8px;'>HR</th>"
-    table_html += "<th style='border: 1px solid #ddd; padding: 8px;'>95% CI Lower</th>"
-    table_html += "<th style='border: 1px solid #ddd; padding: 8px;'>95% CI Upper</th>"
-    table_html += "<th style='border: 1px solid #ddd; padding: 8px;'>P-value</th>"
-    table_html += "</tr>"
+    # Create summary table HTML using logistic regression theme
+    table_html = "<h3 style='color:#555;'>Summary Table: Hazard Ratios</h3>"
+    table_html += "<table style='border-collapse:collapse; width:100%; margin:10px 0;'>"
+    table_html += f"<thead><tr style='background:{COLORS.get('primary_dark', '#1f8085')}; color:white;'>"
+    table_html += "<th style='padding:8px; border:1px solid #ddd;'>Variable</th>"
+    table_html += "<th style='padding:8px; border:1px solid #ddd;'>HR</th>"
+    table_html += "<th style='padding:8px; border:1px solid #ddd;'>95% CI Lower</th>"
+    table_html += "<th style='padding:8px; border:1px solid #ddd;'>95% CI Upper</th>"
+    table_html += "<th style='padding:8px; border:1px solid #ddd;'>P-value</th>"
+    table_html += "</tr></thead><tbody>"
     
     for i, var in enumerate(variables):
         sig = "✅" if p_vals[i] < 0.05 else "⚠️"
-        table_html += f"<tr style='background-color: #f8f9fa;'>"
-        table_html += f"<td style='border: 1px solid #ddd; padding: 8px;'><b>{var}</b></td>"
-        table_html += f"<td style='border: 1px solid #ddd; padding: 8px;'>{hrs[i]:.4f}</td>"
-        table_html += f"<td style='border: 1px solid #ddd; padding: 8px;'>{ci_lows[i]:.4f}</td>"
-        table_html += f"<td style='border: 1px solid #ddd; padding: 8px;'>{ci_highs[i]:.4f}</td>"
-        table_html += f"<td style='border: 1px solid #ddd; padding: 8px;'>{p_vals[i]:.4f} {sig}</td>"
+        p_str = f"{p_vals[i]:.4f}" if p_vals[i] >= 0.001 else "<0.001"
+        table_html += f"<tr style='background:#f8f9fa;'>"
+        table_html += f"<td style='padding:8px; border:1px solid #ddd;'><b>{var}</b></td>"
+        table_html += f"<td style='padding:8px; border:1px solid #ddd;'>{hrs[i]:.4f}</td>"
+        table_html += f"<td style='padding:8px; border:1px solid #ddd;'>{ci_lows[i]:.4f}</td>"
+        table_html += f"<td style='padding:8px; border:1px solid #ddd;'>{ci_highs[i]:.4f}</td>"
+        table_html += f"<td style='padding:8px; border:1px solid #ddd;'><span class='sig-p'>{p_str} {sig}</span></td>"
         table_html += "</tr>"
     
-    table_html += "</table>"
+    table_html += "</tbody></table>"
     
-    # Interpretation guide
-    interp_html = """
-    <h3>💡 Interpretation Guide</h3>
-    <ul>
-        <li><b>HR > 1:</b> Increased hazard (Risk Factor) 🔴</li>
-        <li><b>HR < 1:</b> Decreased hazard (Protective Factor) 🟢</li>
-        <li><b>HR = 1:</b> No effect (null)</li>
-        <li><b>CI crosses 1.0:</b> Not statistically significant ⚠️</li>
-        <li><b>CI doesn't cross 1.0:</b> Statistically significant ✅</li>
-        <li><b>P < 0.05:</b> Statistically significant ✅</li>
-    </ul>
+    # Interpretation guide (matching logistic regression style)
+    interp_html = f"""
+    <div style='margin-top:20px; padding:15px; background:#f8f9fa; border-left:4px solid {COLORS.get('primary', '#2180841')}; border-radius:4px;'>
+        <h4 style='color:{COLORS.get('primary_dark', '#1f8085')}; margin-top:0;'>💡 Interpretation Guide</h4>
+        <ul style='margin:10px 0; padding-left:20px;'>
+            <li><b>HR > 1:</b> Increased hazard (Risk Factor) 🔴</li>
+            <li><b>HR < 1:</b> Decreased hazard (Protective Factor) 🟢</li>
+            <li><b>HR = 1:</b> No effect (null)</li>
+            <li><b>CI crosses 1.0:</b> Not statistically significant ⚠️</li>
+            <li><b>CI doesn't cross 1.0:</b> Statistically significant ✅</li>
+            <li><b>P < 0.05:</b> Statistically significant ✅</li>
+        </ul>
+    </div>
     """
     
-    return f"<div style='margin: 20px 0;'>{plot_html}{table_html}{interp_html}</div>"
+    return f"<div style='margin:20px 0;'>{plot_html}{table_html}{interp_html}</div>"
 
 # --- 4. Landmark Analysis (KM) 🟢 FIX LM CI ---
 def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
@@ -798,12 +799,13 @@ def generate_report_survival(title, elements):
     primary_color = COLORS['primary']
     primary_dark = COLORS['primary_dark']
     text_color = COLORS['text']
+    danger = COLORS['danger']
     
     css_style = f"""<style>
         body{{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
             margin: 20px;
-            background-color: #f8f9fa;
+            background-color: #f4f6f8;
             color: {text_color};
             line-height: 1.6;
         }}
@@ -824,12 +826,17 @@ def generate_report_survival(title, elements):
             color: {primary_dark};
             margin: 15px 0 10px 0;
         }}
+        h4{{
+            color: {primary_dark};
+            margin: 10px 0 8px 0;
+        }}
         table{{
             border-collapse: collapse;
             width: 100%;
             margin: 10px 0;
             background-color: white;
             border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }}
         th, td{{
             border: 1px solid #ddd;
@@ -837,7 +844,7 @@ def generate_report_survival(title, elements):
             text-align: left;
         }}
         th{{
-            background-color: {primary_color};
+            background-color: {primary_dark};
             color: white;
             font-weight: 600;
         }}
@@ -846,6 +853,13 @@ def generate_report_survival(title, elements):
         }}
         tr:nth-child(even){{
             background-color: #fcfcfc;
+        }}
+        .sig-p {{
+            color: {danger};
+            font-weight: bold;
+            background-color: #ffebee;
+            padding: 2px 4px;
+            border-radius: 4px;
         }}
         p{{
             margin: 12px 0;
