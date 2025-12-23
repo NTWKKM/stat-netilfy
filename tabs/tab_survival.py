@@ -5,6 +5,7 @@ import survival_lib
 import time
 from pandas.api.types import is_numeric_dtype
 import logging
+from forest_plot_lib import create_forest_plot_from_cox  # 🟢 Import HR forest plot
 
 logger = logging.getLogger(__name__)
 
@@ -239,6 +240,8 @@ def render(df, _var_meta):
             st.session_state.cox_res = None
         if 'cox_html' not in st.session_state: 
             st.session_state.cox_html = None
+        if 'cox_hr_dict' not in st.session_state:  # 🟢 NEW: Store HR dict for forest plot
+            st.session_state.cox_hr_dict = {}
 
         if st.button("🚀 Run Cox Model & Check Assumptions", key='btn_run_cox'):
             if not covariates:
@@ -297,6 +300,18 @@ def render(df, _var_meta):
                             
                             report_html = survival_lib.generate_report_survival(f"Cox: {col_time}", elements)
                             st.session_state.cox_html = report_html
+                            
+                            # 🟢 NEW: Extract HR dict from results for forest plot
+                            hr_dict = {}
+                            if res is not None and not res.empty:
+                                for idx, row in res.iterrows():
+                                    var_name = str(idx)
+                                    hr_dict[var_name] = {
+                                        'hr': float(row.get('HR', row.get('exp(coef)', np.nan))),
+                                        'ci_low': float(row.get('95% CI Lower', np.nan)),
+                                        'ci_high': float(row.get('95% CI Upper', np.nan))
+                                    }
+                            st.session_state.cox_hr_dict = hr_dict
 
                 except (ValueError, KeyError, RuntimeError) as e:
                     st.error(f"Analysis error: {e}")
@@ -308,6 +323,34 @@ def render(df, _var_meta):
 
         if st.session_state.cox_html:
             st.download_button("📥 Download Full Report (Cox)", st.session_state.cox_html, "cox_report.html", "text/html")
+        
+        # 🟢 NEW: Display Forest Plot for HR
+        if st.session_state.cox_hr_dict:
+            st.markdown("---")
+            st.subheader("🌳 Forest Plot: Hazard Ratios")
+            
+            try:
+                fig_forest = create_forest_plot_from_cox(
+                    st.session_state.cox_hr_dict,
+                    title="Forest Plot: Hazard Ratios (95% CI)"
+                )
+                st.plotly_chart(fig_forest, use_container_width=True)
+                
+                # Summary table
+                st.markdown("**Summary Table:**")
+                hr_table_data = []
+                for var, res_data in st.session_state.cox_hr_dict.items():
+                    hr_table_data.append({
+                        'Variable': var,
+                        'HR': f"{res_data['hr']:.4f}",
+                        'CI Lower': f"{res_data['ci_low']:.4f}",
+                        'CI Upper': f"{res_data['ci_high']:.4f}",
+                    })
+                hr_df = pd.DataFrame(hr_table_data)
+                st.dataframe(hr_df, use_container_width=True, hide_index=True)
+                
+            except Exception as e:
+                st.warning(f"Could not generate HR forest plot: {e}")
 
     # ==========================
     # TAB 4: Reference & Interpretation
@@ -397,6 +440,8 @@ def render(df, _var_meta):
             - Time-varying covariates (use time-dep Cox)
             - Too many variables (overfitting)
             - Ignoring interactions
+            
+            **✨ NEW:** Forest plot visualization of HR with 95% CI!
             """)
             
             st.markdown("### Nelson-Aalen")
@@ -426,7 +471,7 @@ def render(df, _var_meta):
         → **Landmark** (Tab 2) - Exclude immortal time bias
         
         **Question: Multiple predictors affecting survival?**
-        → **Cox Regression** (Tab 3) - Adjusted HR for each variable
+        → **Cox Regression** (Tab 3) - Adjusted HR for each variable with **forest plot visualization** ✨
         
         **Question: Covariates change over time?**
         → **Time-Dependent Cox** (Advanced Survival tab)
