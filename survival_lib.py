@@ -571,7 +571,7 @@ def create_forest_plot_cox(res_df):
 def generate_forest_plot_cox_html(res_df):
     """
     Generate an HTML forest plot for Cox regression hazard ratios using Plotly.
-    Embeds Plotly JS locally (no CDN needed) for offline-friendly reports.
+    Embeds Plotly JS directly in the plot for offline-friendly reports.
     
     Parameters:
         res_df (pandas.DataFrame): Results DataFrame with columns 'HR', '95% CI Lower', '95% CI Upper', 'P-value'.
@@ -585,8 +585,9 @@ def generate_forest_plot_cox_html(res_df):
     # Create interactive forest plot (same function as web UI)
     fig = create_forest_plot_cox(res_df)
     
-    # 🟢 CRITICAL FIX: Include Plotly JS with CDN (will be used by generate_report_survival)
-    plot_html = fig.to_html(include_plotlyjs=False, div_id='cox_forest_plot')
+    # 🟢 OFFLINE SUPPORT: Embed Plotly JS directly in the plot
+    # include_plotlyjs=True will embed the complete Plotly library
+    plot_html = fig.to_html(include_plotlyjs=True, div_id='cox_forest_plot')
     
     # Prepare data for summary table
     variables = res_df.index.tolist()
@@ -770,13 +771,13 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
 
     return fig, pd.DataFrame([stats_data]), n_pre_filter, n_post_filter, None
 
-# --- 5. Report Generation 🟢 FIXED: Embed Plotly JS in Head for All Reports ---
+# --- 5. Report Generation 🟢 OFFLINE SUPPORT: Embed Plotly JS in Report ---
 def generate_report_survival(title, elements):
     """
     Assemble a complete HTML report from a sequence of content elements, embedding tables, figures, and images for offline-friendly consumption.
     Uses unified teal color palette from _common.py.
     
-    Builds an HTML document with the given title and iterates over `elements` to render supported content types. For Plotly figures, Plotly JS is embedded in the <head> once and reused for all plots. Supported element types and expected `data` values:
+    Builds an HTML document with the given title and iterates over `elements` to render supported content types. For Plotly figures, all JS is embedded in each plot for offline viewing. Supported element types and expected `data` values:
     - "header": a string rendered as an H2 section header.
     - "text": a plain string rendered as a paragraph.
     - "preformatted": a string rendered inside a <pre> block.
@@ -791,7 +792,7 @@ def generate_report_survival(title, elements):
             'type' (one of the supported types above) and 'data' (the corresponding content).
     
     Returns:
-        html_doc (str): A self-contained HTML string representing the assembled report with embedded Plotly JS.
+        html_doc (str): A self-contained, offline-friendly HTML string with all resources embedded.
     """
     
     primary_color = COLORS['primary']
@@ -883,8 +884,8 @@ def generate_report_survival(title, elements):
     </style>"""
     
     safe_title = _html.escape(str(title))
-    # 🟢 FIXED: Include Plotly JS from CDN in <head>
-    html_doc = f"""<!DOCTYPE html><html><head><meta charset='utf-8'><script src='https://cdn.plot.ly/plotly-latest.min.js'></script>{css_style}</head><body><h1>{safe_title}</h1>"""
+    # 🟢 OFFLINE SUPPORT: No CDN, each Plotly figure will embed its own JS
+    html_doc = f"""<!DOCTYPE html><html><head><meta charset='utf-8'>{css_style}</head><body><h1>{safe_title}</h1>"""
     
     for el in elements:
         t = el.get('type')
@@ -900,8 +901,8 @@ def generate_report_survival(title, elements):
             html_doc += d.to_html()
         elif t == 'plot':
             if hasattr(d, 'to_html'):
-                # 🟢 FIX: Don't include Plotly JS in plots (already loaded in head)
-                html_doc += d.to_html(full_html=False, include_plotlyjs=False)
+                # 🟢 OFFLINE: include_plotlyjs=True embeds JS in EACH plot
+                html_doc += d.to_html(full_html=False, include_plotlyjs=True)
             elif hasattr(d, 'savefig'):
                 buf = io.BytesIO()
                 d.savefig(buf, format='png', bbox_inches='tight')
@@ -911,7 +912,7 @@ def generate_report_survival(title, elements):
             b64 = base64.b64encode(d).decode('utf-8')
             html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
         elif t == 'html':
-            # 🟢 NEW: Embed raw HTML (used for forest plots)
+            # 🟢 OFFLINE: Raw HTML (forest plot) already has JS embedded via include_plotlyjs=True
             html_doc += str(d)
     
     html_doc += """<div class='report-footer'>
