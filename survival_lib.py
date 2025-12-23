@@ -482,20 +482,20 @@ def check_cph_assumptions(cph, data):
         return f"Assumption check failed: {e}", []
 
 
-# --- 🟢 NEW: Generate Forest Plot HTML for Cox Regression ---
-def generate_forest_plot_cox_html(res_df):
+# --- 🟢 NEW: Create interactive Plotly forest plot for Cox Regression (Web UI) ---
+def create_forest_plot_cox(res_df):
     """
-    Generate an HTML forest plot for Cox regression hazard ratios using Plotly.
-    Embeds Plotly JS locally (no CDN needed) for offline-friendly reports.
+    Create an interactive Plotly forest plot for Cox regression hazard ratios.
+    Used for visualization in Streamlit web UI.
     
     Parameters:
         res_df (pandas.DataFrame): Results DataFrame with columns 'HR', '95% CI Lower', '95% CI Upper', 'P-value'.
     
     Returns:
-        html_str (str): HTML string containing the forest plot as Plotly embed + summary table + interpretation.
+        fig (plotly.graph_objects.Figure): Plotly figure object.
     """
     if res_df is None or res_df.empty:
-        return "<p>No Cox regression results available for forest plot.</p>"
+        raise ValueError("No Cox regression results available for forest plot.")
     
     # Prepare data
     variables = res_df.index.tolist()
@@ -564,9 +564,36 @@ def generate_forest_plot_cox_html(res_df):
         margin=dict(l=200, r=100)
     )
     
-    # 🟢 FIXED: Include Plotly JS only once (first plot in report)
-    # Using include_plotlyjs=False since JS will be included in generate_report_survival()
+    return fig
+
+
+# --- 🟢 NEW: Generate Forest Plot HTML for Cox Regression (HTML Report) ---
+def generate_forest_plot_cox_html(res_df):
+    """
+    Generate an HTML forest plot for Cox regression hazard ratios using Plotly.
+    Embeds Plotly JS locally (no CDN needed) for offline-friendly reports.
+    
+    Parameters:
+        res_df (pandas.DataFrame): Results DataFrame with columns 'HR', '95% CI Lower', '95% CI Upper', 'P-value'.
+    
+    Returns:
+        html_str (str): HTML string containing the forest plot as Plotly embed + summary table + interpretation.
+    """
+    if res_df is None or res_df.empty:
+        return "<p>No Cox regression results available for forest plot.</p>"
+    
+    # Create interactive forest plot (same function as web UI)
+    fig = create_forest_plot_cox(res_df)
+    
+    # Convert figure to HTML (embedded, no JS since it's included in report)
     plot_html = fig.to_html(include_plotlyjs=False, div_id='cox_forest_plot')
+    
+    # Prepare data for summary table
+    variables = res_df.index.tolist()
+    hrs = res_df['HR'].values
+    ci_lows = res_df['95% CI Lower'].values
+    ci_highs = res_df['95% CI Upper'].values
+    p_vals = res_df['P-value'].values
     
     # Create summary table HTML
     table_html = "<h3>Summary Table: Hazard Ratios</h3>"
