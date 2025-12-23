@@ -35,7 +35,7 @@ def check_perfect_separation(df, target_col):
     return risky_vars
 
 # 🟢 NEW: Helper function to select dataset
-def _get_dataset_for_analysis(df: pd.DataFrame):
+def _get_dataset_for_analysis(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     """
     Choose between the original and a propensity-score matched dataset for analysis and return the selected dataset with a descriptive label.
     
@@ -60,7 +60,7 @@ def _get_dataset_for_analysis(df: pd.DataFrame):
                 ["📊 Original Data", "✅ Matched Data (from PSM)"],
                 index=1,  # Default to matched data if available
                 horizontal=True,
-                key=f"data_source_logit_{id(st.session_state)}"
+                key="data_source_logit"
             )
         
         if "✅" in data_source:
