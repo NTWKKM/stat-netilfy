@@ -187,7 +187,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         method (str, optional): Regression method to use; one of 'auto', 'firth', 'bfgs', or 'default'. 'auto' selects Firth's penalized likelihood when available, otherwise BFGS-based logistic regression. 'default' uses statsmodels' standard optimizer.
     
     Returns:
-        str: An HTML fragment containing a table of variables with descriptive statistics, crude odds ratios (and p-values), and adjusted odds ratios where multivariable modelling was performed. If `outcome_name` is not found in `df`, returns an HTML alert div indicating the missing outcome.
+        tuple: (html_table, or_results, aor_results)
+            - html_table (str): An HTML fragment containing a table of variables with descriptive statistics, crude odds ratios (and p-values), and adjusted odds ratios
+            - or_results (dict): Dict mapping variable names to crude OR results {var_name: {or: float, ci_low: float, ci_high: float, p_value: float}}
+            - aor_results (dict): Dict mapping variable names to adjusted OR results {var_name: {aor: float, ci_low: float, ci_high: float, p_value: float}}
     """
     
     # ✅ LOG ANALYSIS START
@@ -202,7 +205,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     if outcome_name not in df.columns:
         msg = f"<div class='alert'>⚠️ Outcome '{outcome_name}' not found.</div>"
         logger.warning("Outcome column not found: %s", outcome_name)  # ✅ LOG WARNING
-        return msg
+        return msg, {}, {}
     
     # NEW: Validate outcome is binary (exactly 2 unique values)
     y_raw = df[outcome_name].dropna()
@@ -217,7 +220,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         </div>
         """
         logger.error("Invalid outcome: %d unique values instead of 2", len(unique_outcomes))  # ✅ LOG ERROR
-        return msg
+        return msg, {}, {}
     
     # NEW: Warn if outcome isn't 0/1
     if not unique_outcomes.issubset({0, 1}):
@@ -282,6 +285,9 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     elif method == 'default':  
         preferred_method = 'default'
 
+    # 🟢 NEW: Initialize OR results dict for crude OR
+    or_results = {}
+    
     # --- CALCULATION LOOP ---
     with logger.track_time("univariate_analysis", log_level="debug"):  # ✅ TRACK TIMING
         for col in sorted_cols:
@@ -433,6 +439,14 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                         ci_low, ci_high = np.exp(conf.loc['x'][0]), np.exp(conf.loc['x'][1])
                     else:
                         ci_low, ci_high = np.nan, np.nan 
+                    
+                    # 🟢 NEW: Store crude OR results for forest plot
+                    or_results[col] = {
+                        'or': or_val,
+                        'ci_low': ci_low,
+                        'ci_high': ci_high,
+                        'p_value': pvals['x']
+                    }
                         
                     res['or'] = f"{or_val:.2f} ({ci_low:.2f}-{ci_high:.2f})"
                     res['p_or'] = pvals['x']
@@ -472,7 +486,14 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                             aor = np.exp(coef)
                             ci_low, ci_high = np.exp(conf.loc[var][0]), np.exp(conf.loc[var][1])
                             ap = pvals[var]
-                            aor_results[var] = {'aor': f"{aor:.2f} ({ci_low:.2f}-{ci_high:.2f})", 'ap': ap}
+                            
+                            # 🟢 NEW: Store aOR results for forest plot
+                            aor_results[var] = {
+                                'aor': aor,
+                                'ci_low': ci_low,
+                                'ci_high': ci_high,
+                                'p_value': ap
+                            }
 
     # --- HTML BUILD ---
     html_rows = []
@@ -542,7 +563,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         if col in aor_results:
             ar = aor_results[col]
             aor_s = ar['aor']
-            ap_val = ar['ap']
+            ap_val = ar['p_value']
             ap_s = fmt_p(ap_val)
             if pd.notna(ap_val) and ap_val < 0.05: ap_s = f"<span class='sig-p'>{ap_s}*</span>"
             
@@ -607,7 +628,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     </div><br>
     """
     
-    return html_table
+    return html_table, or_results, aor_results
 
 def process_data_and_generate_html(df, target_outcome, var_meta=None, method='auto'):
     """
@@ -621,7 +642,10 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None, method='au
         method (str, optional): The logistic regression estimation method ('auto', 'firth', 'bfgs', 'default').
 
     Returns:
-        str: The complete HTML report string.
+        tuple: (html_string, or_results, aor_results)
+            - html_string (str): The complete HTML report string
+            - or_results (dict): Crude OR results for forest plot
+            - aor_results (dict): Adjusted OR results for forest plot
     """ # 🟢 MODIFIED: Restored Docstring
     
     css_style = f"""
@@ -650,9 +674,11 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None, method='au
     </style>
     """
     
+    html_table, or_results, aor_results = analyze_outcome(target_outcome, df, var_meta, method=method)
+    
     html = f"<!DOCTYPE html><html><head>{css_style}</head><body>"
     html += "<h1>Analysis Report</h1>"
-    html += analyze_outcome(target_outcome, df, var_meta, method=method)
+    html += html_table
     
     # ✅ FIX: Use string concatenation instead of f-string with backslash
     footer_html = (
@@ -665,4 +691,4 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None, method='au
     
     html += "</body></html>"
     
-    return html
+    return html, or_results, aor_results
