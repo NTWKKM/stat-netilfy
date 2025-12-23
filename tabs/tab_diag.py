@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import diag_test # ✅ ใช้ diag_test ตัวเดียว
 from typing import List, Tuple
+from forest_plot_lib import create_forest_plot_from_rr  # 🟢 Import RR/OR forest plot
 
 # 🟢 NEW: Helper function to select between original and matched datasets
 def _get_dataset_for_analysis(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
@@ -239,7 +240,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                 key='chi_v2_pos_diag',
             )
         
-        # 🛑 จุดที่เพิ่ม 1: ถ้าเลือกไม่ได้ (เป็น None) ให้หยุดทำงาน อย่าฝืนคำนวณต่อ
+        # 📊 จุดที่เพิ่ม 1: ถ้าเลือกไม่ได้ (เป็น None) ให้หยุดทำงาน อย่าฝืนคำนวณต่อ
         inputs_ok = not (v1_pos_label is None or v2_pos_label is None)
         if not inputs_ok:
             st.warning("Chi-Square disabled: one of the selected columns has no non-null values.")
@@ -251,6 +252,8 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         
         if 'html_output_chi' not in st.session_state: 
             st.session_state.html_output_chi = None
+        if 'chi_rr_dict' not in st.session_state:  # 🟢 NEW: Store RR/OR dict for forest plot
+            st.session_state.chi_rr_dict = {}
 
         if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run_diag', disabled=not inputs_ok):
             
@@ -300,6 +303,21 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                 html = diag_test.generate_report(f"Chi2: {v1} vs {v2}", rep_elements)
                 st.session_state.html_output_chi = html
                 st.components.v1.html(html, height=600, scrolling=True)
+                
+                # 🟢 NEW: Extract RR/OR data from risk_df for forest plot
+                rr_dict = {}
+                if risk_df is not None and not risk_df.empty:
+                    # risk_df should have RR and OR rows
+                    for metric in ['RR', 'OR']:  # Try both RR and OR
+                        if metric in risk_df.index:
+                            row = risk_df.loc[metric]
+                            rr_dict[metric] = {
+                                'rr': float(row.get('Estimate', row.get('Value', 1.0))) if metric == 'RR' else float(row.get('Estimate', row.get('Value', 1.0))),
+                                'or': float(row.get('Estimate', row.get('Value', 1.0))) if metric == 'OR' else None,
+                                'ci_low': float(row.get('95% CI Lower', row.get('CI Lower', 0.5))),
+                                'ci_high': float(row.get('95% CI Upper', row.get('CI Upper', 2.0))),
+                            }
+                st.session_state.chi_rr_dict = rr_dict
             else: 
                 # กรณีนี้ msg คือ Fatal Error ซึ่งจะถูกแสดงด้วย Streamlit error
                 st.error(msg)
@@ -309,6 +327,40 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                 st.download_button("📥 Download Report", st.session_state.html_output_chi, "chi2_diag.html", "text/html", key='dl_chi_diag')
             else: 
                 st.button("📥 Download Report", disabled=True, key='ph_chi_diag')
+        
+        # 🟢 NEW: Display Forest Plot for RR/OR
+        if st.session_state.chi_rr_dict:
+            st.markdown("---")
+            st.subheader("🌳 Forest Plot: Risk/Odds Ratios")
+            
+            # Determine which metric is available (RR or OR)
+            available_metrics = list(st.session_state.chi_rr_dict.keys())
+            if available_metrics:
+                metric = available_metrics[0]  # Use first available
+                
+                try:
+                    fig_forest = create_forest_plot_from_rr(
+                        st.session_state.chi_rr_dict,
+                        title=f"Forest Plot: {metric} (95% CI)",
+                        effect_type=metric
+                    )
+                    st.plotly_chart(fig_forest, use_container_width=True)
+                    
+                    # Summary table
+                    st.markdown("**Summary Table:**")
+                    rr_table_data = []
+                    for metric_name, data in st.session_state.chi_rr_dict.items():
+                        rr_table_data.append({
+                            'Metric': metric_name,
+                            'Estimate': f"{data.get('rr', data.get('or', 1.0)):.4f}",
+                            'CI Lower': f"{data['ci_low']:.4f}",
+                            'CI Upper': f"{data['ci_high']:.4f}",
+                        })
+                    rr_df = pd.DataFrame(rr_table_data)
+                    st.dataframe(rr_df, use_container_width=True, hide_index=True)
+                    
+                except Exception as e:
+                    st.warning(f"Could not generate RR/OR forest plot: {e}")
        
     # --- Agreement (Kappa) ---
     with sub_tab3:
@@ -460,6 +512,8 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
             - **OR > 1**: Increased odds
             - **NNT < 10**: Excellent ✅
             - **NNT > 50**: Marginal ⚠️
+            
+            **✨ NEW:** Forest plot visualization of RR/OR with 95% CI!
             """)
         
         with col2:
@@ -504,11 +558,13 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         → Use **ROC Curve & AUC** (Tab 1)
         
         **Question: Two categorical variables - are they associated?**
-        → Use **Chi-Square** (Tab 2)
+        → Use **Chi-Square** (Tab 2) → **Forest plot for RR/OR** ✨
         
         **Question: Do two raters/methods agree on classification?**
         → Use **Kappa** (Tab 3)
         
         **Question: I just want to understand my data distribution?**
         → Use **Descriptive Statistics** (Tab 4)
+        
+        **💡 TIP:** Use Chi-Square on both Original and **Matched Datasets** to compare risk differences after PSM! 📊
         """)
