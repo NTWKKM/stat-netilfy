@@ -5,7 +5,6 @@ import survival_lib
 import time
 from pandas.api.types import is_numeric_dtype
 import logging
-from forest_plot_lib import create_forest_plot_from_cox  # 🟢 Relative import
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +61,7 @@ def render(df, _var_meta):
 **💡 Guide:**
 * **Survival Analysis** models the relationship between predictors and the **Time-to-Event**.
 * **Hazard Ratio (HR):** >1 Increased Hazard (Risk), <1 Decreased Hazard (Protective).
+* **🌳 Forest Plots:** Hazard Ratios with 95% CI are included in the downloadable Cox regression HTML report!
 """)
     
     # 🟢 NEW: Display matched data status and selector
@@ -93,7 +93,7 @@ def render(df, _var_meta):
     event_idx = next((i for i, c in enumerate(all_cols) if 'event' in c.lower() or 'status' in c.lower() or 'dead' in c.lower()), min(1, len(all_cols)-1))
     
     col_time = c1.selectbox("⏳ Time Variable:", all_cols, index=time_idx, key='surv_time')
-    col_event = c2.selectbox("💬 Event Variable (1=Event):", all_cols, index=event_idx, key='surv_event')
+    col_event = c2.selectbox("🗣️ Event Variable (1=Event):", all_cols, index=event_idx, key='surv_event')
     
     # Tabs
     tab_curves, tab_landmark, tab_cox, tab_ref = st.tabs(["📈 Survival Curves (KM/NA)", "📋 Landmark Analysis", "📊 Cox Regression", "ℹ️ Reference & Interpretation"])
@@ -240,8 +240,6 @@ def render(df, _var_meta):
             st.session_state.cox_res = None
         if 'cox_html' not in st.session_state: 
             st.session_state.cox_html = None
-        if 'cox_hr_dict' not in st.session_state:  # 🟢 NEW: Store HR dict for forest plot
-            st.session_state.cox_hr_dict = {}
 
         if st.button("🚀 Run Cox Model & Check Assumptions", key='btn_run_cox'):
             if not covariates:
@@ -260,7 +258,7 @@ def render(df, _var_meta):
                             txt_report, fig_images = survival_lib.check_cph_assumptions(cph, model_data)
                             
                             st.session_state.cox_res = res
-                            st.success("Analysis Complete!")
+                            st.success("✅ Analysis Complete!")
                             
                             # 🟢 FIXED: Apply formatting ONLY to numeric columns to avoid string error
                             format_dict = {
@@ -298,20 +296,12 @@ def render(df, _var_meta):
                                 for img_bytes in fig_images:
                                     elements.append({'type':'image','data':img_bytes})
                             
+                            # 🟢 NEW: Add forest plots to HTML report
+                            forest_plot_html = survival_lib.generate_forest_plot_cox_html(res)
+                            elements.append({'type':'html','data':forest_plot_html})
+                            
                             report_html = survival_lib.generate_report_survival(f"Cox: {col_time}", elements)
                             st.session_state.cox_html = report_html
-                            
-                            # 🟢 NEW: Extract HR dict from results for forest plot
-                            hr_dict = {}
-                            if res is not None and not res.empty:
-                                for idx, row in res.iterrows():
-                                    var_name = str(idx)
-                                    hr_dict[var_name] = {
-                                        'hr': float(row.get('HR', row.get('exp(coef)', np.nan))),
-                                        'ci_low': float(row.get('95% CI Lower', np.nan)),
-                                        'ci_high': float(row.get('95% CI Upper', np.nan))
-                                    }
-                            st.session_state.cox_hr_dict = hr_dict
 
                 except (ValueError, KeyError, RuntimeError) as e:
                     st.error(f"Analysis error: {e}")
@@ -322,35 +312,7 @@ def render(df, _var_meta):
                     st.session_state.cox_res = None
 
         if st.session_state.cox_html:
-            st.download_button("📥 Download Full Report (Cox)", st.session_state.cox_html, "cox_report.html", "text/html")
-        
-        # 🟢 NEW: Display Forest Plot for HR
-        if st.session_state.cox_hr_dict:
-            st.markdown("---")
-            st.subheader("🌳 Forest Plot: Hazard Ratios")
-            
-            try:
-                fig_forest = create_forest_plot_from_cox(
-                    st.session_state.cox_hr_dict,
-                    title="Forest Plot: Hazard Ratios (95% CI)"
-                )
-                st.plotly_chart(fig_forest, use_container_width=True)
-                
-                # Summary table
-                st.markdown("**Summary Table:**")
-                hr_table_data = []
-                for var, res_data in st.session_state.cox_hr_dict.items():
-                    hr_table_data.append({
-                        'Variable': var,
-                        'HR': f"{res_data['hr']:.4f}",
-                        'CI Lower': f"{res_data['ci_low']:.4f}",
-                        'CI Upper': f"{res_data['ci_high']:.4f}",
-                    })
-                hr_df = pd.DataFrame(hr_table_data)
-                st.dataframe(hr_df, use_container_width=True, hide_index=True)
-                
-            except Exception as e:
-                st.warning(f"Could not generate HR forest plot: {e}")
+            st.download_button("📥 Download Report (with Forest Plots)", st.session_state.cox_html, "cox_report.html", "text/html")
 
     # ==========================
     # TAB 4: Reference & Interpretation
@@ -359,14 +321,14 @@ def render(df, _var_meta):
         st.markdown("##### 📚 Quick Reference: Survival Analysis")
         
         st.info("""
-        **🎰 When to Use What:**
+        **🎲 When to Use What:**
         
         | Method | Purpose | Output |
         |--------|---------|--------|
         | **KM Curves** | Visualize time-to-event by group | Survival %, median, p-value |
         | **Nelson-Aalen** | Cumulative hazard over time | H(t) curve, risk accumulation |
         | **Landmark** | Late/surrogate endpoints | Filtered KM, immortal time removed |
-        | **Cox** | Multiple predictors of survival | HR, CI, p-value per variable |
+        | **Cox** | Multiple predictors of survival | HR, CI, p-value per variable + **forest plot** ✨ |
         """)
         
         col1, col2 = st.columns(2)
@@ -435,13 +397,17 @@ def render(df, _var_meta):
             - Plot should be flat ✅
             - Non-flat → time-dependent effect ⚠️
             
+            **🌳 Forest Plot**
+            - Visual representation of HR with 95% CI
+            - Included in downloadable HTML report
+            - Interactive chart with error bars
+            - Log scale for easy interpretation
+            
             **Common Mistakes:**
             - Not checking PH assumption ❌
             - Time-varying covariates (use time-dep Cox)
             - Too many variables (overfitting)
             - Ignoring interactions
-            
-            **✨ NEW:** Forest plot visualization of HR with 95% CI!
             """)
             
             st.markdown("### Nelson-Aalen")
