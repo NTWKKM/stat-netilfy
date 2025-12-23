@@ -168,6 +168,10 @@ def render(df, var_meta):
         run_col, dl_col = st.columns([1, 1])
         if 'html_output_logit' not in st.session_state:
             st.session_state.html_output_logit = None
+        if 'or_results_logit' not in st.session_state:
+            st.session_state.or_results_logit = {}
+        if 'aor_results_logit' not in st.session_state:
+            st.session_state.aor_results_logit = {}
 
         if run_col.button("🚀 Run Logistic Regression", type="primary"):
             if selected_df[target].nunique() < 2:
@@ -210,35 +214,99 @@ def render(df, var_meta):
                             )
                             logger.warning("User selected Standard method with perfect separation: %s", risky_vars_final)
                         
-                        html = process_data_and_generate_html(final_df, target, var_meta=var_meta, method=algo)
-                        st.session_state.html_output_logit = html 
+                        # 🆕 NEW: Get HTML + OR/aOR results
+                        html, or_results, aor_results = process_data_and_generate_html(final_df, target, var_meta=var_meta, method=algo)
+                        st.session_state.html_output_logit = html
+                        st.session_state.or_results_logit = or_results
+                        st.session_state.aor_results_logit = aor_results
+                        
                         st.components.v1.html(html, height=600, scrolling=True)
                         
-                        # 🆕 Add Forest Plot
-                        st.subheader("📊 Forest Plot: Adjusted Odds Ratios")
+                        # 🆕 NEW: Display Forest Plots
+                        st.subheader("📊 Forest Plots: Odds Ratios")
                         
-                        # 🆕 Get aOR results from session state if available
-                        # Note: This is a workaround - in production you'd extract from html or pass results directly
-                        try:
-                            # For now, show placeholder with instructions
-                            st.info("""
-✨ **Forest Plot Feature**
-
-The forest plot will display adjusted odds ratios with 95% confidence intervals from the multivariate analysis.
-
-**How to add forest plot data:**
-1. The analysis results are stored in the HTML report above
-2. To generate forest plot, we need to extract aOR results from the analysis
-3. Contact development team to enable full integration
-
-**Features coming soon:**
-- ✅ Interactive forest plot visualization
-- ✅ Download as PNG/HTML
-- ✅ Customizable reference lines
-- ✅ Hover for exact values
+                        # Tab for Crude OR and aOR
+                        fp_tab1, fp_tab2 = st.tabs(["Crude OR", "Adjusted OR (aOR)"])
+                        
+                        with fp_tab1:
+                            st.markdown("#### Crude Odds Ratios (Univariable)")
+                            st.markdown("""
+**💡 Interpretation:**
+- Shows the association between each variable and outcome, **without adjusting** for other variables
+- **OR > 1:** Increased odds (Risk factor) 🔴
+- **OR < 1:** Decreased odds (Protective factor) 🟢
+- **CI crosses 1.0:** Not statistically significant ⚠️
                             """)
-                        except Exception as e:
-                            logger.warning(f"Could not generate forest plot: {e}")
+                            
+                            if or_results:
+                                try:
+                                    fig_crude = create_forest_plot_from_logit(
+                                        or_results,
+                                        title="Forest Plot: Crude Odds Ratios (95% CI)",
+                                        var_meta=var_meta
+                                    )
+                                    st.plotly_chart(fig_crude, use_container_width=True)
+                                    
+                                    # Summary table
+                                    st.markdown("**Summary Table:**")
+                                    or_table_data = []
+                                    for var, res in or_results.items():
+                                        or_table_data.append({
+                                            'Variable': var,
+                                            'Crude OR': f"{res['or']:.3f}",
+                                            'CI Lower': f"{res['ci_low']:.3f}",
+                                            'CI Upper': f"{res['ci_high']:.3f}",
+                                            'P-value': f"{res['p_value']:.4f}" if res['p_value'] >= 0.001 else "<0.001"
+                                        })
+                                    or_df = pd.DataFrame(or_table_data)
+                                    st.dataframe(or_df, use_container_width=True, hide_index=True)
+                                    
+                                except Exception as e:
+                                    st.error(f"Could not generate crude OR forest plot: {e}")
+                                    logger.warning(f"Forest plot generation failed for crude OR: {e}")
+                            else:
+                                st.info("📋 No crude OR results available")
+                        
+                        with fp_tab2:
+                            st.markdown("#### Adjusted Odds Ratios (Multivariable)")
+                            st.markdown("""
+**💡 Interpretation:**
+- Shows the association between each variable and outcome, **adjusting for other variables** in the model
+- **aOR > 1:** Increased odds (Risk factor) 🔴
+- **aOR < 1:** Decreased odds (Protective factor) 🟢
+- **CI crosses 1.0:** Not statistically significant ⚠️
+- **aOR is preferred** over crude OR for reporting ✅
+                            """)
+                            
+                            if aor_results:
+                                try:
+                                    fig_adj = create_forest_plot_from_logit(
+                                        aor_results,
+                                        title="Forest Plot: Adjusted Odds Ratios (95% CI)",
+                                        var_meta=var_meta,
+                                        is_adjusted=True
+                                    )
+                                    st.plotly_chart(fig_adj, use_container_width=True)
+                                    
+                                    # Summary table
+                                    st.markdown("**Summary Table:**")
+                                    aor_table_data = []
+                                    for var, res in aor_results.items():
+                                        aor_table_data.append({
+                                            'Variable': var,
+                                            'Adjusted OR': f"{res['aor']:.3f}",
+                                            'CI Lower': f"{res['ci_low']:.3f}",
+                                            'CI Upper': f"{res['ci_high']:.3f}",
+                                            'P-value': f"{res['p_value']:.4f}" if res['p_value'] >= 0.001 else "<0.001"
+                                        })
+                                    aor_df = pd.DataFrame(aor_table_data)
+                                    st.dataframe(aor_df, use_container_width=True, hide_index=True)
+                                    
+                                except Exception as e:
+                                    st.error(f"Could not generate aOR forest plot: {e}")
+                                    logger.warning(f"Forest plot generation failed for aOR: {e}")
+                            else:
+                                st.info("📋 No adjusted OR results available (multivariate screening may have excluded variables)")
                         
                         # 🟢 NEW: Log method used and data source
                         data_source_label = "Matched" if "✅" in data_label else "Original"
