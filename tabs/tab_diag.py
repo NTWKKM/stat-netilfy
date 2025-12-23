@@ -318,6 +318,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                                 'ci_high': float(row.get('95% CI Upper', row.get('CI Upper', 2.0))),
                             }
                 st.session_state.chi_rr_dict = rr_dict
+                st.success("✅ Chi-Square analysis complete! Scroll down to see forest plot.")
             else: 
                 # กรณีนี้ msg คือ Fatal Error ซึ่งจะถูกแสดงด้วย Streamlit error
                 st.error(msg)
@@ -328,39 +329,49 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
             else: 
                 st.button("📥 Download Report", disabled=True, key='ph_chi_diag')
         
-        # 🟢 NEW: Display Forest Plot for RR/OR
-        if st.session_state.chi_rr_dict:
-            st.markdown("---")
-            st.subheader("🌳 Forest Plot: Risk/Odds Ratios")
+        # 🟢 NEW: Display Forest Plot for RR/OR - MOVED OUTSIDE run_col/dl_col block
+        st.markdown("---")
+        st.subheader("🌳 Forest Plot: Risk/Odds Ratios")
+        
+        # ✅ Debug: Show chi_rr_dict status
+        chi_rr_dict = st.session_state.get('chi_rr_dict', {})
+        
+        if chi_rr_dict and len(chi_rr_dict) > 0:
+            st.info(f"📊 Found {len(chi_rr_dict)} metrics: {list(chi_rr_dict.keys())}")
             
             # Determine which metric is available (RR or OR)
-            available_metrics = list(st.session_state.chi_rr_dict.keys())
-            if available_metrics:
-                metric = available_metrics[0]  # Use first available
+            available_metrics = list(chi_rr_dict.keys())
+            metric = available_metrics[0]  # Use first available
+            
+            try:
+                st.write(f"Generating forest plot for: **{metric}**")
+                st.write(f"Data: {chi_rr_dict}")
                 
-                try:
-                    fig_forest = create_forest_plot_from_rr(
-                        st.session_state.chi_rr_dict,
-                        title=f"Forest Plot: {metric} (95% CI)",
-                        effect_type=metric
-                    )
-                    st.plotly_chart(fig_forest, use_container_width=True)
-                    
-                    # Summary table
-                    st.markdown("**Summary Table:**")
-                    rr_table_data = []
-                    for metric_name, data in st.session_state.chi_rr_dict.items():
-                        rr_table_data.append({
-                            'Metric': metric_name,
-                            'Estimate': f"{data.get('rr', data.get('or', 1.0)):.4f}",
-                            'CI Lower': f"{data['ci_low']:.4f}",
-                            'CI Upper': f"{data['ci_high']:.4f}",
-                        })
-                    rr_df = pd.DataFrame(rr_table_data)
-                    st.dataframe(rr_df, use_container_width=True, hide_index=True)
-                    
-                except Exception as e:
-                    st.warning(f"Could not generate RR/OR forest plot: {e}")
+                fig_forest = create_forest_plot_from_rr(
+                    chi_rr_dict,
+                    title=f"Forest Plot: {metric} (95% CI)",
+                    effect_type=metric
+                )
+                st.plotly_chart(fig_forest, use_container_width=True)
+                
+                # Summary table
+                st.markdown("**Summary Table:**")
+                rr_table_data = []
+                for metric_name, data in chi_rr_dict.items():
+                    rr_table_data.append({
+                        'Metric': metric_name,
+                        'Estimate': f"{data.get('rr', data.get('or', 1.0)):.4f}",
+                        'CI Lower': f"{data['ci_low']:.4f}",
+                        'CI Upper': f"{data['ci_high']:.4f}",
+                    })
+                rr_df = pd.DataFrame(rr_table_data)
+                st.dataframe(rr_df, use_container_width=True, hide_index=True)
+                
+            except Exception as e:
+                st.error(f"❌ Could not generate RR/OR forest plot: {e}")
+                st.write(f"Debug - chi_rr_dict: {chi_rr_dict}")
+        else:
+            st.info("📋 Run Chi-Square analysis above to generate forest plot")
        
     # --- Agreement (Kappa) ---
     with sub_tab3:
