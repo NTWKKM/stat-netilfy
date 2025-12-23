@@ -28,7 +28,10 @@ async function getRepoTree() {
             repo: REPO_NAME,
             branch: 'main'
         });
-        const treeSha = branch.commit.commit.tree.sha;
+        const treeSha = branch.commit?.commit?.tree?.sha;
+        if (!treeSha) {
+            throw new Error('Failed to retrieve tree SHA from branch data');
+        }
 
         // B. ดึงโครงสร้าง Tree แบบ Recursive
         const { data: tree } = await octokit.request('GET /repos/{owner}/{repo}/git/trees/{tree_sha}?recursive=1', {
