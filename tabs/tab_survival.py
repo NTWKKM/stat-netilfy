@@ -5,7 +5,7 @@ import survival_lib
 import time
 from pandas.api.types import is_numeric_dtype
 import logging
-from ..forest_plot_lib import create_forest_plot_from_cox  # 🟢 Relative import
+from forest_plot_lib import create_forest_plot_from_cox  # 🟢 Relative import
 
 logger = logging.getLogger(__name__)
 
