@@ -27,13 +27,14 @@ def _get_dataset_for_table1(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     if has_matched:
         col1, _ = st.columns([2, 1])
         with col1:
-            data_source = st.radio(
-                "📄 Select Dataset:",
-                options := ["📊 Original Data", "✅ Matched Data (from PSM)"],
-                index=0,  # default Original for Table 1
-                horizontal=True,
-                key="table1_data_source",
-            )
+        options = ["📊 Original Data", "✅ Matched Data (from PSM)"]
+        data_source = st.radio(
+            "📄 Select Dataset:",
+            options,
+            index=0,  # default Original for Table 1
+            horizontal=True,
+            key="table1_data_source",
+        )
 
         if data_source == options[1]:  # Matched Data
             selected_df = st.session_state.df_matched.copy()
