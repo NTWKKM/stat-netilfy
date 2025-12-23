@@ -147,8 +147,8 @@ function generateMarkdown(items) {
 /**
  * Replace the Markdown section in README.md delimited by START_MARKER and END_MARKER with the provided content.
  *
- * If the markers are missing or incorrectly ordered, the function logs an error and prepends the provided Markdown
- * to the existing README content (which may create duplicate sections).
+ * If the markers are missing or incorrectly ordered, the function logs an error, fails the GitHub Action,
+ * and returns without modifying the README.
  *
  * @param {string} newMarkdown - Markdown content to insert between START_MARKER and END_MARKER.
  */
