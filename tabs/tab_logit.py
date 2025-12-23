@@ -3,21 +3,13 @@ import pandas as pd
 import numpy as np
 from logic import process_data_and_generate_html # Import from root
 from logger import get_logger
+from forest_plot_lib import create_forest_plot  # 🟢 IMPORT NEW LIBRARY
 
 logger = get_logger(__name__)
 
 def check_perfect_separation(df, target_col):
     """
     Identify predictor columns that may cause perfect separation with the specified target.
-    
-    Checks predictors (excluding the target) that have fewer than 10 unique values and flags any whose contingency table with the target contains a zero cell, which may indicate perfect separation in a logistic model. If the target cannot be interpreted as numeric with at least two unique values, an empty list is returned; errors in per-predictor contingency tables are ignored.
-    
-    Parameters:
-        df (pandas.DataFrame): Input dataset containing predictors and the target column.
-        target_col (str): Name of the target column to evaluate against.
-    
-    Returns:
-        list: Names of columns that may cause perfect separation; empty list if none are found or on error.
     """
     risky_vars = []
     try:
@@ -38,19 +30,8 @@ def check_perfect_separation(df, target_col):
 # 🟢 NEW: Helper function to select dataset
 def _get_dataset_for_analysis(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     """
-    Choose between the original and a propensity-score matched dataset for analysis and return the selected dataset with a descriptive label.
-    
-    Renders a dataset selector when a matched dataset is present in Streamlit session state; defaults to the matched dataset if available. If no matched dataset is available or the user selects the original dataset, the provided `df` is returned.
-    
-    Parameters:
-        df (pd.DataFrame): The original dataset to use when matched data is not selected or unavailable.
-    
-    Returns:
-        tuple: (selected_df, label)
-            selected_df (pd.DataFrame): The dataframe chosen for analysis (original or matched).
-            label (str): Human-readable label indicating the data source and its row count (e.g., "✅ Matched Data (123 rows)" or "📊 Original Data (456 rows)").
+    Choose between the original and a propensity-score matched dataset for analysis.
     """
-    # Check if matched data is available
     has_matched = st.session_state.get('is_matched', False) and st.session_state.get('df_matched') is not None
     
     if has_matched:
@@ -79,20 +60,13 @@ def _get_dataset_for_analysis(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
 def render(df, var_meta):
     """
     Render the "4. Logistic Regression Analysis" section in a Streamlit app.
-    
-    Renders UI controls to select a binary outcome, optionally exclude predictors, choose a regression method (Auto, Standard, Firth), and run a logistic regression. Validates the selected outcome has at least two unique values, launches the analysis, displays the resulting HTML report, and stores the generated report in `st.session_state['html_output_logit']`. If predictors with potential perfect separation are detected, they are offered as default exclusions.
-    
-    Parameters:
-        df (pandas.DataFrame): Source dataset containing the outcome and predictor columns.
-        var_meta (dict | Any): Variable metadata passed through to the report generation routine (used to annotate or format outputs).
     """
     st.subheader("📏 Logistic Regression Analysis")
     
-    # 🟢 NEW: Add matched data note if available
     if st.session_state.get('is_matched', False):
         st.info("✅ **Matched Dataset Available** - You can select it below for analysis")
     
-    # Create subtabs (prepared for future: Binary, Multinomial, Ordinal, etc.)
+    # Create subtabs
     sub_tab1, sub_tab2 = st.tabs([
         "📈 Binary Logistic Regression",
         "ℹ️ Reference & Interpretation"
@@ -104,23 +78,15 @@ def render(df, var_meta):
     with sub_tab1:
         st.markdown("### Binary Logistic Regression")
         st.info("""
-    **💡 Guide:** Models the relationship between predictors and the **probability** of a **binary outcome** (e.g., disease/no disease).
+    **💡 Guide:** Models the relationship between predictors and the **probability** of a **binary outcome**.
 
-    * **Odds Ratio (OR/aOR):** The main result, reported with a 95% CI. Measures the change in the odds of the outcome for every one-unit increase in the predictor.
-        * **Adjusted OR (aOR):** This is the output when **multiple features** are used, meaning the effect is **controlled/adjusted** for other variables in the model.
-        * **OR/AOR > 1:** Increased odds (Risk factor).
-        * **OR/AOR < 1:** Decreased odds (Protective factor).
-    * **P-value:** Tests if the predictor's association with the outcome is statistically significant.
-    
-    **Variable Selection:**
-    * **Target (Y):** Must be **Binary** (e.g., Die/Survive, 0/1, Yes/No).
-    * **Features (X):** Can be **Numeric** or **Categorical** (e.g., Age, Gender).
-    * **Features (X) Inclusion:** All available features are **automatically included** by default; users can **manually exclude** any unwanted variables.
-    
-    **🌳 Forest Plots:** Both Crude OR and Adjusted OR forest plots are automatically included in the downloadable HTML report!
+    * **Odds Ratio (OR/aOR):**
+        * **OR > 1:** Increased odds (Risk factor).
+        * **OR < 1:** Decreased odds (Protective factor).
+    * **Forest Plots:** Both Crude OR and Adjusted OR forest plots are automatically generated.
 """)
         
-         # 🟢 NEW: Dataset selection - FIXED: Pass df argument
+        # Dataset selection
         selected_df, data_label = _get_dataset_for_analysis(df)
         st.write(f"**Using:** {data_label}")
         st.write(f"**Rows:** {len(selected_df)} | **Columns:** {len(selected_df.columns)}")
@@ -145,7 +111,7 @@ def render(df, var_meta):
             else:
                 exclude_cols = st.multiselect("Exclude Variables (Optional):", all_cols, key='logit_exclude_opt')
 
-        # 🟢 Method Selection
+        # Method Selection
         method_options = {
             "Auto (Recommended)": "auto",
             "Standard (MLE)": "bfgs",
@@ -156,11 +122,7 @@ def render(df, var_meta):
             list(method_options.keys()),
             index=0,
             horizontal=True,
-            help="""
-        - **Auto:** Automatically selects the most suitable method based on data characteristics and availability.
-        - **Standard:** Usual Logistic Regression.
-        - **Firth:** Reduces bias and handles separation (Recommended for small sample size/rare events).
-        """
+            help="Auto selects best method based on data quality."
         )
         algo = method_options[method_choice]
 
@@ -178,49 +140,68 @@ def render(df, var_meta):
                     try:
                         final_df = selected_df.drop(columns=exclude_cols, errors='ignore')
                         
-                        # 🟢 NEW: Re-check for perfect separation AFTER exclusion
+                        # Re-check separation
                         risky_vars_final = check_perfect_separation(final_df, target)
-                        
-                        # 🟢 NEW: Warn if using Standard method on risky data
                         if risky_vars_final and algo == 'bfgs':
-                            st.warning(
-                                f"""⚠️ **WARNING: Perfect Separation Detected!**
-
-**Variables with zero-cell contingency tables:** {', '.join(risky_vars_final)}
-
-**Selected Method:** Standard (MLE)
-
-**Problems this may cause:**
-- ❌ Model may not converge
-- ❌ Infinite coefficients (∞)
-- ❌ Missing p-values and standard errors
-- ❌ Invalid confidence intervals
-- ❌ Unreliable results
-
-**✅ Recommended Solution:** Use **Firth's (Penalized)** method instead!
-- Handles perfect separation automatically
-- Produces reliable confidence intervals
-- Better for small samples and rare events
-
-**Your Options:**
-1. Cancel and select "Firth's (Penalized)" method
-2. Cancel and exclude these variables manually
-3. Proceed anyway (not recommended)
-""",
-                                icon="⚠️"
-                            )
-                            logger.warning("User selected Standard method with perfect separation: %s", risky_vars_final)
+                            st.warning(f"⚠️ Warning: Perfect separation detected in {risky_vars_final}. Consider using Firth's method.")
+                            logger.warning("User selected Standard method with perfect separation")
                         
-                        # 🆕 NEW: Get HTML + OR/aOR results (forest plots now in HTML)
+                        # Run Analysis
                         html, or_results, aor_results = process_data_and_generate_html(final_df, target, var_meta=var_meta, method=algo)
                         st.session_state.html_output_logit = html
                         
-                        st.components.v1.html(html, height=600, scrolling=True)
-                        st.success("✅ Analysis complete! Download the report to see forest plots.")
+                        # 🟢 SHOW NATIVE FOREST PLOT (Interactive)
+                        if aor_results or or_results:
+                            st.divider()
+                            st.subheader("🌳 Forest Plots (Interactive)")
+                            
+                            fp_tabs = []
+                            fp_titles = []
+                            
+                            if aor_results: fp_titles.append("Adjusted OR (Multivariable)")
+                            if or_results: fp_titles.append("Crude OR (Univariable)")
+                            
+                            if fp_titles:
+                                fp_tabs = st.tabs(fp_titles)
+                                
+                                # Tab 1: Adjusted OR
+                                if aor_results:
+                                    with fp_tabs[0]:
+                                        # Convert dict to df for library
+                                        data_adj = [{'variable': k, **v} for k, v in aor_results.items()]
+                                        df_adj = pd.DataFrame(data_adj)
+                                        fig_adj = create_forest_plot(
+                                            df_adj,
+                                            estimate_col='aor', ci_low_col='ci_low', ci_high_col='ci_high', 
+                                            pval_col='p_value', label_col='variable',
+                                            title="<b>Multivariable Analysis: Adjusted Odds Ratios</b>",
+                                            x_label="Adjusted OR",
+                                            ref_line=1.0
+                                        )
+                                        st.plotly_chart(fig_adj, use_container_width=True)
+                                
+                                # Tab 2: Crude OR (if Adjusted exists, it's index 1, else 0)
+                                if or_results:
+                                    idx = 1 if aor_results else 0
+                                    with fp_tabs[idx]:
+                                        data_crude = [{'variable': k, **v} for k, v in or_results.items()]
+                                        df_crude = pd.DataFrame(data_crude)
+                                        fig_crude = create_forest_plot(
+                                            df_crude,
+                                            estimate_col='or', ci_low_col='ci_low', ci_high_col='ci_high', 
+                                            pval_col='p_value', label_col='variable',
+                                            title="<b>Univariable Analysis: Crude Odds Ratios</b>",
+                                            x_label="Crude OR",
+                                            ref_line=1.0
+                                        )
+                                        st.plotly_chart(fig_crude, use_container_width=True)
                         
-                        # 🟢 NEW: Log method used and data source
-                        data_source_label = "Matched" if "✅" in data_label else "Original"
-                        logger.info("✅ Logit analysis completed | method=%s | risky_vars=%d | n=%d | data_source=%s", algo, len(risky_vars_final), len(final_df), data_source_label)
+                        st.divider()
+                        st.subheader("📋 Detailed Report")
+                        st.components.v1.html(html, height=600, scrolling=True)
+                        st.success("✅ Analysis complete!")
+                        
+                        logger.info("✅ Logit analysis completed")
                         
                     except Exception as e:
                         st.error(f"Failed: {e}")
@@ -228,9 +209,9 @@ def render(df, var_meta):
                         
         with dl_col:
             if st.session_state.html_output_logit:
-                st.download_button("📥 Download Report (with Forest Plots)", st.session_state.html_output_logit, "logit_report.html", "text/html", key='dl_logit')
+                st.download_button("📥 Download Report", st.session_state.html_output_logit, "logit_report.html", "text/html", key='dl_logit')
             else:
-                st.button("📥 Download Report (with Forest Plots)", disabled=True, key='ph_logit')
+                st.button("📥 Download Report", disabled=True, key='ph_logit')
 
     # ==================================================
     # SUB-TAB 2: Reference & Interpretation
