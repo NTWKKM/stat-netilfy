@@ -4,6 +4,48 @@ import correlation # Import from root
 import diag_test # Import for ICC calculation
 from typing import List, Tuple
 
+# 🟢 NEW: Helper function to select between original and matched datasets
+def _get_dataset_for_correlation(df: pd.DataFrame):
+    """
+    Choose and return the dataset to use for correlation analysis (original or matched).
+    
+    If a matched dataset is present in Streamlit's session_state, presents a radio control allowing the user to select either the original DataFrame or the matched DataFrame; otherwise selects the original DataFrame. The returned label describes which dataset was chosen and includes the row count.
+    
+    Parameters:
+        df (pd.DataFrame): The original input DataFrame.
+    
+    Returns:
+        tuple: (selected_df, label_str) where `selected_df` is the DataFrame chosen for analysis and `label_str` is a short human-readable label (e.g., "✅ Matched Data (123 rows)" or "📊 Original Data (100 rows)").
+    """
+    has_matched = (
+        st.session_state.get("is_matched", False)
+        and st.session_state.get("df_matched") is not None
+    )
+
+    if has_matched:
+        col1, _ = st.columns([2, 1])
+        with col1:
+            data_source = st.radio(
+                "📄 Select Dataset:",
+                ["📊 Original Data", "✅ Matched Data (from PSM)"],
+                index=1,  # default Matched สำหรับ correlation analysis
+                horizontal=True,
+                key="correlation_data_source",
+            )
+
+        if "✅" in data_source:
+            selected_df = st.session_state.df_matched.copy()
+            label = f"✅ Matched Data ({len(selected_df)} rows)"
+        else:
+            selected_df = df
+            label = f"📊 Original Data ({len(df)} rows)"
+    else:
+        selected_df = df
+        label = f"📊 Original Data ({len(df)} rows)"
+
+    return selected_df, label
+
+
 def render(df):
     """
     Render the Correlation & ICC section UI in Streamlit.
@@ -18,6 +60,15 @@ def render(df):
     """
     st.subheader("🎯 Correlation & ICC")
     
+    # 🟢 NEW: Display matched data status
+    if st.session_state.get("is_matched", False):
+        st.info("✅ **Matched Dataset Available** - You can select it below for analysis")
+    
+    # 🟢 NEW: Select dataset (original or matched)
+    corr_df, corr_label = _get_dataset_for_correlation(df)
+    st.write(f"**Using:** {corr_label}")
+    st.write(f"**Rows:** {len(corr_df)} | **Columns:** {len(corr_df.columns)}")
+    
     # 🟢 REORGANIZED: 3 subtabs (removed Chi-Square, added ICC)
     sub_tab1, sub_tab2, sub_tab3 = st.tabs([
         "📉 Pearson/Spearman (Continuous Correlation)", 
@@ -25,7 +76,7 @@ def render(df):
         "ℹ️ Reference & Interpretation"
     ])
     
-    all_cols = df.columns.tolist()
+    all_cols = corr_df.columns.tolist()
     if not all_cols:
         st.warning("No columns available for correlation analysis.")
         return
@@ -73,7 +124,8 @@ def render(df):
             else:
                 m_key = 'pearson' if cm == 'Pearson' else 'spearman'
                 # res: dict with keys (Method, Coefficient, P-value, N), err: str, fig: Plotly Figure
-                res, err, fig = correlation.calculate_correlation(df, cv1, cv2, method=m_key)
+                # 🟢 UPDATED: Use corr_df (selected dataset) instead of df
+                res, err, fig = correlation.calculate_correlation(corr_df, cv1, cv2, method=m_key)
         
                 if err: 
                     st.error(err)
@@ -114,8 +166,8 @@ def render(df):
             * **> 0.9:** Excellent reliability
         """)
         
-        # 🟢 Auto-select numeric columns only
-        numeric_cols = df.select_dtypes(include="number").columns.tolist()
+        # 🟢 Auto-select numeric columns only (from corr_df)
+        numeric_cols = corr_df.select_dtypes(include="number").columns.tolist()
         
         # Auto-select columns with 'measurement', 'rater', 'machine', 'score', 'read' in name
         default_icc_cols = [c for c in numeric_cols if any(k in c.lower() for k in ['measure', 'machine', 'rater', 'read', 'icc'])]
@@ -138,7 +190,8 @@ def render(df):
             if len(icc_cols) < 2:
                 st.error("❌ Please select at least 2 numeric columns for ICC calculation.")
                 st.stop()
-            res_df, err, anova_df = diag_test.calculate_icc(df, icc_cols)
+            # 🟢 UPDATED: Use corr_df (selected dataset) instead of df
+            res_df, err, anova_df = diag_test.calculate_icc(corr_df, icc_cols)
             
             if err:
                 st.error(err)
@@ -204,4 +257,6 @@ def render(df):
         
         st.markdown("""---
         **📝 Note:** Chi-Square test (for categorical association) has been moved to **Tab 4: Diagnostic Tests (ROC)**.
+        
+        **✨ NEW:** Can now analyze both Original and Matched datasets!
         """)

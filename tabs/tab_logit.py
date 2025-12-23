@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from logic import process_data_and_generate_html # Import จาก root
+from logic import process_data_and_generate_html # Import from root
 from logger import get_logger
 logger = get_logger(__name__)
 
@@ -34,6 +34,47 @@ def check_perfect_separation(df, target_col):
             except: pass
     return risky_vars
 
+# 🟢 NEW: Helper function to select dataset
+def _get_dataset_for_analysis(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
+    """
+    Choose between the original and a propensity-score matched dataset for analysis and return the selected dataset with a descriptive label.
+    
+    Renders a dataset selector when a matched dataset is present in Streamlit session state; defaults to the matched dataset if available. If no matched dataset is available or the user selects the original dataset, the provided `df` is returned.
+    
+    Parameters:
+        df (pd.DataFrame): The original dataset to use when matched data is not selected or unavailable.
+    
+    Returns:
+        tuple: (selected_df, label)
+            selected_df (pd.DataFrame): The dataframe chosen for analysis (original or matched).
+            label (str): Human-readable label indicating the data source and its row count (e.g., "✅ Matched Data (123 rows)" or "📊 Original Data (456 rows)").
+    """
+    # Check if matched data is available
+    has_matched = st.session_state.get('is_matched', False) and st.session_state.get('df_matched') is not None
+    
+    if has_matched:
+        col1, _ = st.columns([2, 1])
+        with col1:
+            data_source = st.radio(
+                "📄 Select Dataset:",
+                ["📊 Original Data", "✅ Matched Data (from PSM)"],
+                index=1,  # Default to matched data if available
+                horizontal=True,
+                key="data_source_logit"
+            )
+        
+        if "✅" in data_source:
+            selected_df = st.session_state.df_matched.copy()
+            label = f"✅ Matched Data ({len(selected_df)} rows)"
+        else:
+            selected_df = df
+            label = f"📊 Original Data ({len(df)} rows)"
+    else:
+        selected_df = df
+        label = f"📊 Original Data ({len(df)} rows)"
+    
+    return selected_df, label
+
 def render(df, var_meta):
     """
     Render the "4. Logistic Regression Analysis" section in a Streamlit app.
@@ -44,7 +85,11 @@ def render(df, var_meta):
         df (pandas.DataFrame): Source dataset containing the outcome and predictor columns.
         var_meta (dict | Any): Variable metadata passed through to the report generation routine (used to annotate or format outputs).
     """
-    st.subheader("📝 Logistic Regression Analysis")
+    st.subheader("📏 Logistic Regression Analysis")
+    
+    # 🟢 NEW: Add matched data note if available
+    if st.session_state.get('is_matched', False):
+        st.info("✅ **Matched Dataset Available** - You can select it below for analysis")
     
     # Create subtabs (prepared for future: Binary, Multinomial, Ordinal, etc.)
     sub_tab1, sub_tab2 = st.tabs([
@@ -72,7 +117,12 @@ def render(df, var_meta):
     * **Features (X) Inclusion:** All available features are **automatically included** by default; users can **manually exclude** any unwanted variables.
 """)
         
-        all_cols = df.columns.tolist()
+         # 🟢 NEW: Dataset selection - FIXED: Pass df argument
+        selected_df, data_label = _get_dataset_for_analysis(df)
+        st.write(f"**Using:** {data_label}")
+        st.write(f"**Rows:** {len(selected_df)} | **Columns:** {len(selected_df.columns)}")
+        
+        all_cols = selected_df.columns.tolist()
         c1, c2 = st.columns([1, 2])
         
         with c1:
@@ -84,7 +134,7 @@ def render(df, var_meta):
             target = st.selectbox("Select Outcome (Y):", all_cols, index=def_idx, key='logit_target')
             
         with c2:
-            risky_vars = check_perfect_separation(df, target)
+            risky_vars = check_perfect_separation(selected_df, target)
             exclude_cols = []
             if risky_vars:
                 st.warning(f"⚠️ Risk of Perfect Separation: {', '.join(risky_vars)}")
@@ -118,17 +168,17 @@ def render(df, var_meta):
             st.session_state.html_output_logit = None
 
         if run_col.button("🚀 Run Logistic Regression", type="primary"):
-            if df[target].nunique() < 2:
+            if selected_df[target].nunique() < 2:
                 st.error("Error: Outcome must have at least 2 values.")
             else:
                 with st.spinner("Calculating..."):
                     try:
-                        final_df = df.drop(columns=exclude_cols, errors='ignore')
+                        final_df = selected_df.drop(columns=exclude_cols, errors='ignore')
                         
-                        # 🆕 NEW: Re-check for perfect separation AFTER exclusion
+                        # 🟢 NEW: Re-check for perfect separation AFTER exclusion
                         risky_vars_final = check_perfect_separation(final_df, target)
                         
-                        # 🆕 NEW: Warn if using Standard method on risky data
+                        # 🟢 NEW: Warn if using Standard method on risky data
                         if risky_vars_final and algo == 'bfgs':
                             st.warning(
                                 f"""⚠️ **WARNING: Perfect Separation Detected!**
@@ -162,8 +212,9 @@ def render(df, var_meta):
                         st.session_state.html_output_logit = html 
                         st.components.v1.html(html, height=600, scrolling=True)
                         
-                        # 🆕 NEW: Log method used
-                        logger.info("✅ Logit analysis completed | method=%s | risky_vars=%d | n=%d", algo, len(risky_vars_final), len(final_df))
+                        # 🟢 NEW: Log method used and data source
+                        data_source_label = "Matched" if "✅" in data_label else "Original"
+                        logger.info("✅ Logit analysis completed | method=%s | risky_vars=%d | n=%d | data_source=%s", algo, len(risky_vars_final), len(final_df), data_source_label)
                         
                     except Exception as e:
                         st.error(f"Failed: {e}")
@@ -244,7 +295,7 @@ def render(df, var_meta):
         
         st.markdown("---")
         
-        # 🆕 NEW: Perfect Separation & Method Selection Guide
+        # 🟢 NEW: Perfect Separation & Method Selection Guide
         st.markdown("""
         ### ⚠️ Perfect Separation & Method Selection
         
@@ -321,7 +372,7 @@ def render(df, var_meta):
         
         ---
         
-        ### 📦 Future Expansions
+        ### 💾 Future Expansions
         
         Planned additions to this tab:
         - **Multinomial Logistic Regression** (3+ unordered outcomes)
