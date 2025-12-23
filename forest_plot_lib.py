@@ -3,14 +3,16 @@ Forest Plot Visualization Module
 
 For displaying effect sizes (OR, HR, RR) with confidence intervals across multiple variables.
 Supports logistic regression, survival analysis, and epidemiological studies.
+Updated for Publication Quality Standards (Table + Plot layout).
 
-Author: NTWKKM
+Author: NTWKKM (Updated by Gemini)
 License: MIT
 """
 
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots  # Added for table-plot layout
 import streamlit as st
 from logger import get_logger
 from tabs._common import get_color_palette
@@ -29,6 +31,7 @@ class ForestPlot:
         ci_low_col (str): Column name for CI lower bounds
         ci_high_col (str): Column name for CI upper bounds
         label_col (str): Column name for variable labels
+        pval_col (str): Column name for P-values (Optional)
     """
     
     def __init__(
@@ -38,6 +41,7 @@ class ForestPlot:
         ci_low_col: str,
         ci_high_col: str,
         label_col: str,
+        pval_col: str = None,  # Added p-value support
     ):
         """
         Initialize ForestPlot with data and column specifications.
@@ -48,6 +52,7 @@ class ForestPlot:
             ci_low_col: Column with CI lower bounds
             ci_high_col: Column with CI upper bounds
             label_col: Column with variable names/labels
+            pval_col: Column with p-values (optional)
         
         Raises:
             ValueError: If required columns missing or data empty
@@ -57,6 +62,9 @@ class ForestPlot:
             raise ValueError("DataFrame cannot be empty")
         
         required_cols = {estimate_col, ci_low_col, ci_high_col, label_col}
+        if pval_col:
+            required_cols.add(pval_col)
+
         missing = required_cols - set(data.columns)
         if missing:
             raise ValueError(f"Missing required columns: {missing}")
@@ -65,13 +73,14 @@ class ForestPlot:
         if self.data.empty:
             raise ValueError("No valid data after removing NaN values")
         
-        # Reverse for top-down display (largest effect at top)
+        # Reverse for top-down display (largest effect at top usually, but for table consistency strictly follows input order reversed)
         self.data = self.data.iloc[::-1].reset_index(drop=True)
         
         self.estimate_col = estimate_col
         self.ci_low_col = ci_low_col
         self.ci_high_col = ci_high_col
         self.label_col = label_col
+        self.pval_col = pval_col
         
         logger.info(
             f"ForestPlot initialized: {len(self.data)} variables, "
@@ -84,12 +93,12 @@ class ForestPlot:
         x_label: str = "Effect Size (95% CI)",
         ref_line: float = 1.0,
         show_ref_line: bool = True,
-        height: int = 600,
+        height: int = None, # Auto-height if None
         show_values: bool = True,
         color: str = None,
     ) -> go.Figure:
         """
-        Generate interactive Plotly forest plot.
+        Generate interactive Plotly forest plot (Publication Quality).
         
         Parameters:
             title: Plot title
@@ -97,7 +106,7 @@ class ForestPlot:
             ref_line: Position of reference line (e.g., 1.0 for OR/HR)
             show_ref_line: Whether to display reference line
             height: Plot height in pixels
-            show_values: Display point estimates on plot
+            show_values: Display point estimates on plot (Deprecated: values are now in table)
             color: Custom marker color (uses COLORS['primary'] if None)
         
         Returns:
@@ -106,90 +115,145 @@ class ForestPlot:
         if color is None:
             color = COLORS['primary']
         
-        # Extract data
-        labels = self.data[self.label_col].astype(str)
-        estimates = self.data[self.estimate_col]
-        ci_low = self.data[self.ci_low_col]
-        ci_high = self.data[self.ci_high_col]
+        # --- Pre-processing Data for Display ---
+        # 1. Format Estimate (95% CI)
+        self.data['__display_est'] = self.data.apply(
+            lambda x: f"{x[self.estimate_col]:.2f} ({x[self.ci_low_col]:.2f}-{x[self.ci_high_col]:.2f})", axis=1
+        )
+
+        # 2. Format P-value (if available)
+        if self.pval_col:
+            def fmt_p(p):
+                try:
+                    p = float(p)
+                    if p < 0.001: return "<0.001"
+                    return f"{p:.3f}"
+                except: return ""
+            self.data['__display_p'] = self.data[self.pval_col].apply(fmt_p)
+            # Determine color for p-values (Red if < 0.05)
+            p_text_colors = self.data[self.pval_col].apply(
+                lambda p: "red" if (isinstance(p, (int, float)) and p < 0.05) or (isinstance(p, str) and '<' in p) else "black"
+            ).tolist()
+        else:
+            self.data['__display_p'] = ""
+            p_text_colors = ["black"] * len(self.data)
+
+        # --- Create Subplots ---
+        # Layout: [Variable (25%)] [Est(CI) (20%)] [P-val (10%)] [Plot (45%)]
+        fig = make_subplots(
+            rows=1, cols=4,
+            shared_yaxes=True,
+            horizontal_spacing=0.02,
+            column_widths=[0.25, 0.20, 0.10, 0.45],
+            specs=[[{"type": "scatter"}, {"type": "scatter"}, {"type": "scatter"}, {"type": "scatter"}]]
+        )
+
+        y_pos = list(range(len(self.data)))
         
-        # Calculate error bar sizes
-        error_plus = ci_high - estimates
-        error_minus = estimates - ci_low
-        
-        # Create figure
-        fig = go.Figure()
-        
-        # Add main scatter plot with error bars
+        # Column 1: Variable Labels
         fig.add_trace(go.Scatter(
-            y=labels,
-            x=estimates,
+            x=[0] * len(self.data),
+            y=y_pos,
+            text=self.data[self.label_col],
+            mode="text",
+            textposition="middle right",
+            textfont=dict(size=13, color="black"),
+            hoverinfo="none"
+        ), row=1, col=1)
+
+        # Column 2: Estimate (95% CI)
+        fig.add_trace(go.Scatter(
+            x=[0] * len(self.data),
+            y=y_pos,
+            text=self.data['__display_est'],
+            mode="text",
+            textposition="middle center",
+            textfont=dict(size=13, color="black"),
+            hoverinfo="none"
+        ), row=1, col=2)
+
+        # Column 3: P-value
+        fig.add_trace(go.Scatter(
+            x=[0] * len(self.data),
+            y=y_pos,
+            text=self.data['__display_p'],
+            mode="text",
+            textposition="middle center",
+            textfont=dict(size=13, color=p_text_colors),
+            hoverinfo="none"
+        ), row=1, col=3)
+
+        # Column 4: Forest Plot
+        # Reference Line
+        if show_ref_line:
+            fig.add_vline(
+                x=ref_line, line_dash='dash', line_color='gray', line_width=1, 
+                row=1, col=4
+            )
+
+        # Markers & Error Bars
+        fig.add_trace(go.Scatter(
+            x=self.data[self.estimate_col],
+            y=y_pos,
             error_x=dict(
                 type='data',
                 symmetric=False,
-                array=error_plus,
-                arrayminus=error_minus,
+                array=self.data[self.ci_high_col] - self.data[self.estimate_col],
+                arrayminus=self.data[self.estimate_col] - self.data[self.ci_low_col],
                 color=color,
                 thickness=2,
-                width=6,
+                width=4
             ),
             mode='markers',
-            marker=dict(
-                size=10,
-                color=color,
-                line=dict(color='white', width=2),
+            marker=dict(size=9, color=color, symbol='square'),
+            text=self.data[self.label_col],
+            hovertemplate=(
+                "<b>%{text}</b><br>" +
+                "Estimate: %{x:.3f}<br>" +
+                "<extra></extra>"
             ),
-            text=[
-                f"<b>{label}</b><br>"
-                f"Estimate: {est:.3f}<br>"
-                f"95% CI: ({low:.3f} - {high:.3f})"
-                for label, est, low, high in zip(labels, estimates, ci_low, ci_high)
-            ],
-            hovertemplate='%{text}<extra></extra>',
-            name='Effect Size',
-            showlegend=False,
-        ))
-        
-        # Add reference line
-        if show_ref_line:
-            fig.add_vline(
-                x=ref_line,
-                line_dash='dash',
-                line_color=COLORS['danger'],
-                line_width=2,
-                annotation_text=f"No Effect (ref={ref_line})",
-                annotation_position='top right',
-                annotation_font_size=11,
-                annotation_font_color=COLORS['danger'],
-            )
-        
-        # Update layout
+            showlegend=False
+        ), row=1, col=4)
+
+        # --- Update Layout ---
+        # Calculate dynamic height if not provided
+        if height is None:
+            height = max(400, len(self.data) * 35 + 120)
+
         fig.update_layout(
-            title=dict(
-                text=title,
-                font=dict(size=16, color=COLORS['text']),
-                x=0.5,
-                xanchor='center',
-            ),
-            xaxis=dict(
-                title=x_label,
-                zeroline=False,
-                gridcolor='rgba(200, 200, 200, 0.2)',
-            ),
-            yaxis=dict(
-                title='Variable',
-                tickfont=dict(size=11),
-            ),
-            plot_bgcolor='rgba(245, 245, 245, 0.8)',
+            title=dict(text=title, x=0.01, xanchor='left', font=dict(size=18)),
             height=height,
-            hovermode='closest',
-            margin=dict(l=200, r=100, t=80, b=60),
+            showlegend=False,
+            template='plotly_white',
+            margin=dict(l=10, r=20, t=80, b=40),
+            plot_bgcolor='white'
         )
-        
-        logger.info(
-            f"Forest plot generated: {title}, {len(self.data)} variables, "
-            f"ref_line={ref_line}"
+
+        # Hide Axes for Text Columns (1, 2, 3)
+        for c in [1, 2, 3]:
+            fig.update_xaxes(visible=False, showgrid=False, zeroline=False, row=1, col=c)
+            fig.update_yaxes(visible=False, showgrid=False, zeroline=False, row=1, col=c)
+
+        # Set Axis for Plot Column (4)
+        fig.update_yaxes(visible=False, range=[-0.5, len(self.data)-0.5], row=1, col=4)
+        fig.update_xaxes(
+            title_text=x_label, 
+            row=1, col=4,
+            gridcolor='rgba(200, 200, 200, 0.2)'
         )
-        
+
+        # --- Add Headers ---
+        headers = ["Variable", "Estimate (95% CI)", "P-value", f"{x_label} Plot"]
+        for i, h in enumerate(headers, 1):
+            fig.add_annotation(
+                x=0.5 if i != 1 else 1.0,  # Right align 'Variable' header to match text
+                y=1.0, xref=f"x{i} domain", yref="paper",
+                text=f"<b>{h}</b>", showarrow=False,
+                yanchor="bottom",
+                font=dict(size=14, color="black")
+            )
+
+        logger.info(f"Forest plot generated: {title}, {len(self.data)} variables")
         return fig
 
 
@@ -199,54 +263,18 @@ def create_forest_plot(
     ci_low_col: str,
     ci_high_col: str,
     label_col: str,
+    pval_col: str = None, # Added
     title: str = "Forest Plot",
     x_label: str = "Effect Size (95% CI)",
     ref_line: float = 1.0,
-    height: int = 600,
+    height: int = None,
     **kwargs
 ) -> go.Figure:
     """
     Convenience function to create forest plot in one call.
-    
-    Parameters:
-        data: DataFrame with results
-        estimate_col: Column with point estimates
-        ci_low_col: Column with CI lower bounds
-        ci_high_col: Column with CI upper bounds
-        label_col: Column with variable labels
-        title: Plot title
-        x_label: X-axis label
-        ref_line: Reference line position
-        height: Plot height
-        **kwargs: Additional arguments passed to ForestPlot.create()
-    
-    Returns:
-        go.Figure: Plotly figure
-    
-    Example:
-        >>> import pandas as pd
-        >>> from forest_plot_lib import create_forest_plot
-        >>> 
-        >>> results = pd.DataFrame({
-        ...     'variable': ['Age', 'Sex', 'BMI'],
-        ...     'aor': [1.05, 0.92, 1.12],
-        ...     'ci_low': [1.01, 0.75, 1.03],
-        ...     'ci_high': [1.09, 1.14, 1.23]
-        ... })
-        >>> 
-        >>> fig = create_forest_plot(
-        ...     results,
-        ...     estimate_col='aor',
-        ...     ci_low_col='ci_low',
-        ...     ci_high_col='ci_high',
-        ...     label_col='variable',
-        ...     title='Adjusted Odds Ratios',
-        ...     x_label='aOR (95% CI)'
-        ... )
-        >>> st.plotly_chart(fig, use_container_width=True)
     """
     try:
-        fp = ForestPlot(data, estimate_col, ci_low_col, ci_high_col, label_col)
+        fp = ForestPlot(data, estimate_col, ci_low_col, ci_high_col, label_col, pval_col)
         fig = fp.create(
             title=title,
             x_label=x_label,
@@ -257,27 +285,13 @@ def create_forest_plot(
         return fig
     except ValueError as e:
         logger.error(f"Forest plot creation failed: {e}")
-        raise
+        st.error(f"Could not create forest plot: {e}") # Fallback for UI
+        return go.Figure()
 
 
 def create_forest_plot_from_logit(aor_dict: dict, title: str = "Adjusted Odds Ratios") -> go.Figure:
     """
     Convenience function to create forest plot directly from logistic regression aOR results.
-    
-    Parameters:
-        aor_dict: Dictionary with format {variable: {'aor': float, 'ci_low': float, 'ci_high': float}}
-        title: Plot title
-    
-    Returns:
-        go.Figure: Plotly figure
-    
-    Example:
-        >>> aor_results = {
-        ...     'Age': {'aor': 1.05, 'ci_low': 1.01, 'ci_high': 1.09},
-        ...     'Sex': {'aor': 0.92, 'ci_low': 0.75, 'ci_high': 1.14},
-        ... }
-        >>> fig = create_forest_plot_from_logit(aor_results)
-        >>> st.plotly_chart(fig, use_container_width=True)
     """
     # Parse aOR results
     data = []
@@ -286,28 +300,37 @@ def create_forest_plot_from_logit(aor_dict: dict, title: str = "Adjusted Odds Ra
         estimate = result.get('aor', result.get('or'))
         ci_low = result.get('ci_low')
         ci_high = result.get('ci_high')
+        p_val = result.get('p_value', result.get('p')) # Try to extract P-value
         
         if estimate is None or ci_low is None or ci_high is None:
             continue
         
-        data.append({
+        row = {
             'variable': var,
             'aor': float(estimate),
             'ci_low': float(ci_low),
             'ci_high': float(ci_high),
-        })
+        }
+        if p_val is not None:
+            row['p_value'] = float(p_val)
+            
+        data.append(row)
     
     if not data:
         logger.error("No valid aOR values to plot")
         return go.Figure()
     
     df = pd.DataFrame(data)
+    # Check if p_value column exists in df
+    p_col = 'p_value' if 'p_value' in df.columns else None
+    
     return create_forest_plot(
         df,
         estimate_col='aor',
         ci_low_col='ci_low',
         ci_high_col='ci_high',
         label_col='variable',
+        pval_col=p_col,
         title=title,
         x_label='Odds Ratio (95% CI)',
         ref_line=1.0,
@@ -317,13 +340,6 @@ def create_forest_plot_from_logit(aor_dict: dict, title: str = "Adjusted Odds Ra
 def create_forest_plot_from_cox(hr_dict: dict, title: str = "Hazard Ratios (Cox Regression)") -> go.Figure:
     """
     Convenience function for Cox regression hazard ratios.
-    
-    Parameters:
-        hr_dict: Dictionary with format {variable: {'hr': float, 'ci_low': float, 'ci_high': float}}
-        title: Plot title
-    
-    Returns:
-        go.Figure: Plotly figure
     """
     # Parse HR results
     data = []
@@ -332,28 +348,36 @@ def create_forest_plot_from_cox(hr_dict: dict, title: str = "Hazard Ratios (Cox 
         estimate = result.get('hr', result.get('HR'))
         ci_low = result.get('ci_low', result.get('CI Lower'))
         ci_high = result.get('ci_high', result.get('CI Upper'))
-        
+        p_val = result.get('p_value', result.get('p')) # Try to extract P-value
+
         if estimate is None or ci_low is None or ci_high is None:
             continue
         
-        data.append({
+        row = {
             'variable': var,
             'hr': float(estimate),
             'ci_low': float(ci_low),
             'ci_high': float(ci_high),
-        })
+        }
+        if p_val is not None:
+            row['p_value'] = float(p_val)
+
+        data.append(row)
     
     if not data:
         logger.error("No valid HR values to plot")
         return go.Figure()
     
     df = pd.DataFrame(data)
+    p_col = 'p_value' if 'p_value' in df.columns else None
+    
     return create_forest_plot(
         df,
         estimate_col='hr',
         ci_low_col='ci_low',
         ci_high_col='ci_high',
         label_col='variable',
+        pval_col=p_col,
         title=title,
         x_label='Hazard Ratio (95% CI)',
         ref_line=1.0,
@@ -367,14 +391,6 @@ def create_forest_plot_from_rr(
 ) -> go.Figure:
     """
     Convenience function for Risk Ratios or Odds Ratios from Chi-Square analysis.
-    
-    Parameters:
-        rr_or_dict: Dictionary with format {group: {'rr': float, 'ci_low': float, 'ci_high': float}} or similar for OR
-        title: Plot title
-        effect_type: Type of effect ('RR', 'OR')
-    
-    Returns:
-        go.Figure: Plotly figure
     """
     # Parse RR/OR results
     data = []
@@ -384,28 +400,36 @@ def create_forest_plot_from_rr(
         estimate = result.get(metric_key, result.get(effect_type))
         ci_low = result.get('ci_low', result.get('CI Lower'))
         ci_high = result.get('ci_high', result.get('CI Upper'))
+        p_val = result.get('p_value', result.get('p')) # Try to extract P-value
         
         if estimate is None or ci_low is None or ci_high is None:
             continue
         
-        data.append({
+        row = {
             'variable': group_name,
             metric_key: float(estimate),
             'ci_low': float(ci_low),
             'ci_high': float(ci_high),
-        })
+        }
+        if p_val is not None:
+            row['p_value'] = float(p_val)
+            
+        data.append(row)
     
     if not data:
         logger.error(f"No valid {effect_type} values to plot")
         return go.Figure()
     
     df = pd.DataFrame(data)
+    p_col = 'p_value' if 'p_value' in df.columns else None
+
     return create_forest_plot(
         df,
         estimate_col=metric_key,
         ci_low_col='ci_low',
         ci_high_col='ci_high',
         label_col='variable',
+        pval_col=p_col,
         title=title,
         x_label=f'{effect_type} (95% CI)',
         ref_line=1.0,
@@ -418,6 +442,7 @@ def render_forest_plot_in_streamlit(
     ci_low_col: str,
     ci_high_col: str,
     label_col: str,
+    pval_col: str = None, # Added
     title: str = "Forest Plot",
     x_label: str = "Effect Size (95% CI)",
     ref_line: float = 1.0,
@@ -425,30 +450,6 @@ def render_forest_plot_in_streamlit(
 ) -> None:
     """
     Display forest plot in Streamlit with optional download button.
-    
-    Parameters:
-        data: DataFrame with results
-        estimate_col: Column with point estimates
-        ci_low_col: Column with CI lower bounds
-        ci_high_col: Column with CI upper bounds
-        label_col: Column with variable labels
-        title: Plot title
-        x_label: X-axis label
-        ref_line: Reference line position
-        allow_download: Show download button
-    
-    Example:
-        >>> import streamlit as st
-        >>> from forest_plot_lib import render_forest_plot_in_streamlit
-        >>> 
-        >>> render_forest_plot_in_streamlit(
-        ...     results_df,
-        ...     estimate_col='aor',
-        ...     ci_low_col='ci_low',
-        ...     ci_high_col='ci_high',
-        ...     label_col='variable',
-        ...     title='Adjusted Odds Ratios'
-        ... )
     """
     try:
         fig = create_forest_plot(
@@ -457,6 +458,7 @@ def render_forest_plot_in_streamlit(
             ci_low_col=ci_low_col,
             ci_high_col=ci_high_col,
             label_col=label_col,
+            pval_col=pval_col,
             title=title,
             x_label=x_label,
             ref_line=ref_line,
