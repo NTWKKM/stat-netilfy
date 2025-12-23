@@ -662,8 +662,7 @@ def generate_forest_plot_html(or_results, aor_results, plot_title="Forest Plots:
         • <b>OR < 1:</b> Decreased odds (Protective factor) 🟢<br>
         • <b>CI crosses 1.0:</b> Not statistically significant ⚠️
         </p>
-        """)
-        
+        """)</n        
         # Prepare data
         vars_crude = list(or_results.keys())
         ors_crude = [or_results[v]['or'] for v in vars_crude]
@@ -705,6 +704,7 @@ def generate_forest_plot_html(or_results, aor_results, plot_title="Forest Plots:
             font=dict(size=11)
         )
         
+        # ✅ FIX: First plot uses include_plotlyjs='cdn' to load Plotly JS library
         html_parts.append(fig_crude.to_html(full_html=False, include_plotlyjs='cdn'))
         
         # Summary table
@@ -775,7 +775,8 @@ def generate_forest_plot_html(or_results, aor_results, plot_title="Forest Plots:
             font=dict(size=11)
         )
         
-        html_parts.append(fig_adj.to_html(full_html=False, include_plotlyjs='cdn'))
+        # ✅ FIX: Second plot uses include_plotlyjs=False to avoid reloading Plotly JS
+        html_parts.append(fig_adj.to_html(full_html=False, include_plotlyjs=False))
         
         # Summary table
         html_parts.append("<h4 style='margin-top:20px;'>Summary Table: Adjusted OR</h4>")
