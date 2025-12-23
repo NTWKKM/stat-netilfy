@@ -37,8 +37,17 @@ def check_perfect_separation(df, target_col):
 # 🟢 NEW: Helper function to select dataset
 def _get_dataset_for_analysis(df: pd.DataFrame):
     """
-    Helper function to select between original and matched datasets.
-    Returns tuple: (selected_df, data_source_label)
+    Choose between the original and a propensity-score matched dataset for analysis and return the selected dataset with a descriptive label.
+    
+    Renders a dataset selector when a matched dataset is present in Streamlit session state; defaults to the matched dataset if available. If no matched dataset is available or the user selects the original dataset, the provided `df` is returned.
+    
+    Parameters:
+        df (pd.DataFrame): The original dataset to use when matched data is not selected or unavailable.
+    
+    Returns:
+        tuple: (selected_df, label)
+            selected_df (pd.DataFrame): The dataframe chosen for analysis (original or matched).
+            label (str): Human-readable label indicating the data source and its row count (e.g., "✅ Matched Data (123 rows)" or "📊 Original Data (456 rows)").
     """
     # Check if matched data is available
     has_matched = st.session_state.get('is_matched', False) and st.session_state.get('df_matched') is not None

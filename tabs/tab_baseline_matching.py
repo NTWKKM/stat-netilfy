@@ -11,8 +11,13 @@ logger = get_logger(__name__)
 # 🟢 NEW: Helper function to select between original and matched datasets
 def _get_dataset_for_table1(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     """
-    Helper: Select between original vs matched dataset for Table 1
-    Returns: (selected_df, label_str)
+    Choose which dataset to use for Table 1 display and provide a descriptive label.
+    
+    Parameters:
+        df (pd.DataFrame): Original dataset to use when matched data is not selected or unavailable.
+    
+    Returns:
+        tuple[pd.DataFrame, str]: The selected DataFrame and a human-readable label indicating dataset type and row count (for example, "📊 Original Data (N rows)" or "✅ Matched Data (N rows)").
     """
     has_matched = (
         st.session_state.get("is_matched", False)
@@ -45,19 +50,18 @@ def _get_dataset_for_table1(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
 
 def render(df, var_meta):
     """
-    Render the "Table 1 & Matching" Streamlit interface with subtabs for baseline characteristics, 
-    propensity score matching, matched data view, and reference/interpretation.
+    Render the "Table 1 & Matching" interactive Streamlit interface with subtabs for baseline characteristics, propensity score matching, matched data viewing, and reference/interpretation.
     
-    Displays interactive controls to select grouping variables, characteristics, treatment/outcome/covariates, 
-    and advanced matching settings; generates Table 1 HTML, performs propensity score calculation and 1:1 
-    nearest-neighbor matching, shows balance diagnostics (SMD and Love plot), previews/downloads matched data, 
-    and provides explanatory guidance. Handles session state for persisted HTML output and displays user-facing 
-    errors and warnings when inputs are invalid.
+    This function builds a multi-step UI that lets users:
+    - generate a Table 1 summary (original or matched dataset) with OR display options,
+    - configure and run propensity score matching (variable selection, caliper settings),
+    - compute and display balance diagnostics (SMD pre/post, Love plot) and match-quality metrics,
+    - preview and export matched data (CSV/Excel) and a PSM report,
+    - persist matched results in Streamlit session state for use across tabs.
     
     Parameters:
-        df (pandas.DataFrame): The dataset to analyze and display in the UI.
-        var_meta (Mapping): Metadata for variables (e.g., display names, types, formatting) used when 
-                           generating Table 1 and reports.
+        df (pandas.DataFrame): Source dataset used for summaries, propensity score modeling, and matching.
+        var_meta (Mapping): Variable metadata (e.g., display names, types, formatting) used when generating Table 1 and reports.
     """
     st.subheader("📋 Table 1 & Matching")
     
@@ -771,16 +775,18 @@ def _calculate_categorical_smd(
     cat_cols: list
 ) -> pd.DataFrame:
     """
-    Calculate SMD for categorical variables using variance-weighted formula.
+    Compute standardized mean differences (SMD) for categorical covariates between treated and control groups.
     
-    Formula: For each categorical level:
-        SMD_level = (p_treated - p_control) / sqrt(p_pooled * (1 - p_pooled))
-        where p_pooled = (n_treated * p_treated + n_control * p_control) / (n_treated + n_control)
+    Calculates a single SMD per categorical variable by computing level-specific differences in group proportions, standardizing each by the pooled variance, and aggregating level SMDs using the root-sum-square method. This supports binary and multi-level categorical variables and yields a single balance metric per variable.
     
-    Aggregate: SMD = sqrt(sum(SMD_level^2)) for all levels (root-sum-square)
+    Parameters:
+        df (pd.DataFrame): Data containing treatment and categorical covariates.
+        treatment_col (str): Name of the binary treatment column (expected values 1 for treated, 0 for control).
+        cat_cols (list): List of column names for categorical covariates to evaluate.
     
-    This approach is standard in PSM literature and handles both binary and 
-    multi-level categorical variables consistently.
+    Returns:
+        pd.DataFrame: DataFrame with columns ['Variable', 'SMD'] giving the SMD for each categorical variable.
+                      Returns an empty DataFrame with those columns if `cat_cols` is empty or if either treatment group has no observations.
     """
     if not cat_cols:
         return pd.DataFrame(columns=['Variable', 'SMD'])

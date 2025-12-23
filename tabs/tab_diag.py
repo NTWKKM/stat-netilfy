@@ -6,8 +6,12 @@ from typing import List, Tuple
 # 🟢 NEW: Helper function to select between original and matched datasets
 def _get_dataset_for_analysis(df: pd.DataFrame):
     """
-    Helper: เลือกระหว่าง original vs matched dataset
-    คืนค่า: (selected_df, label_str)
+    Choose which dataset to use for downstream analysis and return it with a human-readable label.
+    
+    If a matched dataset is present in session state, a radio control is shown (defaulting to the matched dataset) to let the user pick between the original and matched data; otherwise the original dataset is used.
+    
+    Returns:
+        tuple: (selected_df, label) where `selected_df` is the DataFrame chosen for analysis and `label` is a string like "✅ Matched Data (N rows)" or "📊 Original Data (N rows)".
     """
     has_matched = (
         st.session_state.get("is_matched", False)
@@ -40,20 +44,13 @@ def _get_dataset_for_analysis(df: pd.DataFrame):
 
 def render(df, _var_meta=None):  # var_meta reserved for future use
     """
-    Render Streamlit UI panels for diagnostic tests and statistics.
+    Render the Streamlit UI for interactive diagnostic analyses and report generation.
     
-    Displays five interactive tabs for diagnostic analyses:
-    - ROC Curve & AUC
-    - Chi-Square & Risk (2x2) with RR/OR/NNT - THE CHI-SQUARE HOME
-    - Agreement (Cohen's Kappa)
-    - Descriptive statistics
-    - Reference & Interpretation
-    
-    Each tab provides controls for selecting columns from `df`, running the analysis, viewing results as embedded HTML, and downloading an HTML report. Generated report HTML is stored in Streamlit session state under keys: `html_output_roc`, `html_output_chi`, `html_output_kappa`, and `html_output_desc`.
+    Provides five tabs for common diagnostic workflows: ROC Curve & AUC, Chi-Square & Risk Analysis (2x2), Agreement (Cohen's Kappa), Descriptive statistics, and Reference & Interpretation. Each tab lets the user select columns from the provided DataFrame, run the corresponding analysis, view results as embedded HTML, and download an HTML report. Generated report HTML is stored in Streamlit session_state under the keys: `html_output_roc`, `html_output_chi`, `html_output_kappa`, and `html_output_desc`.
     
     Parameters:
-        df (pandas.DataFrame): Input dataset containing the variables to analyze; column names are used for UI selections.
-        _var_meta (Any): Metadata about variables (unused for visible output selection unless integrated by UI); present for potential future use.
+        df (pandas.DataFrame): Dataset used for UI selections and analyses; column names are presented to the user as selectable variables.
+        _var_meta (Any): Reserved for future metadata-driven UI features (currently unused).
     """
     st.subheader("🧪 Diagnostic Tests (ROC)")
 
@@ -196,14 +193,14 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         # Positive Label Selectors
         def get_pos_label_settings(df_input: pd.DataFrame, col_name: str) -> Tuple[List[str], int]:
             """
-            Return sorted non-null unique string values from a DataFrame column and a sensible default selection index.
+            Return the sorted non-null unique values of a DataFrame column as strings and a sensible default selection index.
             
             Parameters:
                 df_input (pd.DataFrame): DataFrame containing the column.
                 col_name (str): Name of the column to extract values from.
             
             Returns:
-                tuple(list[str], int): A tuple where the first element is a sorted list of the column's unique non-null values as strings, and the second element is the default index to select (index of '1' if present, otherwise index of '0' if present, otherwise 0).
+                tuple(list[str], int): A tuple where the first element is a sorted list of the column's unique non-null values converted to strings, and the second element is the default index to select — the index of `'1'` if present, otherwise the index of `'0'` if present, otherwise `0`.
             """
             # 🟢 NOTE: Need to handle the case where the column might be empty after dropna
             # Convert to string and drop NA values before getting unique values
