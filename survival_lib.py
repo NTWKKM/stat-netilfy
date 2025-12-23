@@ -585,7 +585,7 @@ def generate_forest_plot_cox_html(res_df):
     # Create interactive forest plot (same function as web UI)
     fig = create_forest_plot_cox(res_df)
     
-    # Convert figure to HTML (embedded, no JS since it's included in report)
+    # 🟢 CRITICAL FIX: Include Plotly JS with CDN (will be used by generate_report_survival)
     plot_html = fig.to_html(include_plotlyjs=False, div_id='cox_forest_plot')
     
     # Prepare data for summary table
@@ -770,21 +770,20 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
 
     return fig, pd.DataFrame([stats_data]), n_pre_filter, n_post_filter, None
 
-# --- 5. Report Generation 🟢 FIXED: Embed Plotly JS locally (no CDN) ---
+# --- 5. Report Generation 🟢 FIXED: Embed Plotly JS in Head for All Reports ---
 def generate_report_survival(title, elements):
     """
     Assemble a complete HTML report from a sequence of content elements, embedding tables, figures, and images for offline-friendly consumption.
     Uses unified teal color palette from _common.py.
-    Embeds Plotly JS locally (no CDN) for complete offline support.
     
-    Builds an HTML document with the given title and iterates over `elements` to render supported content types. For Plotly figures, the Plotly JS library is embedded only once with the first Plotly plot and omitted for subsequent Plotly plots so later plots reuse the already-loaded script. Supported element types and expected `data` values:
+    Builds an HTML document with the given title and iterates over `elements` to render supported content types. For Plotly figures, Plotly JS is embedded in the <head> once and reused for all plots. Supported element types and expected `data` values:
     - "header": a string rendered as an H2 section header.
     - "text": a plain string rendered as a paragraph.
     - "preformatted": a string rendered inside a <pre> block.
     - "table": a pandas DataFrame (or DataFrame-like) rendered via DataFrame.to_html().
     - "plot": a Plotly Figure-like object (with to_html) or a Matplotlib Figure-like object (with savefig).
     - "image": raw image bytes (PNG) which will be embedded as a base64 data URL.
-    - "html": raw HTML string to embed directly.
+    - "html": raw HTML string to embed directly (used for forest plots).
     
     Parameters:
         title: The report title; will be HTML-escaped.
@@ -792,10 +791,9 @@ def generate_report_survival(title, elements):
             'type' (one of the supported types above) and 'data' (the corresponding content).
     
     Returns:
-        html_doc (str): A self-contained HTML string representing the assembled report.
+        html_doc (str): A self-contained HTML string representing the assembled report with embedded Plotly JS.
     """
     
-    # 🟢 FIX: Use 'text' instead of 'text_primary' (key exists in color palette)
     primary_color = COLORS['primary']
     primary_dark = COLORS['primary_dark']
     text_color = COLORS['text']
@@ -885,11 +883,8 @@ def generate_report_survival(title, elements):
     </style>"""
     
     safe_title = _html.escape(str(title))
-    # 🟢 FIXED: Don't include Plotly JS in head - will include with first plot
-    html_doc = f"<!DOCTYPE html><html><head><meta charset='utf-8'>{css_style}</head><body><h1>{safe_title}</h1>"
-    
-    # 🟢 FIXED: Track if Plotly JS already included
-    plotly_js_included = False
+    # 🟢 FIXED: Include Plotly JS from CDN in <head>
+    html_doc = f"""<!DOCTYPE html><html><head><meta charset='utf-8'><script src='https://cdn.plot.ly/plotly-latest.min.js'></script>{css_style}</head><body><h1>{safe_title}</h1>"""
     
     for el in elements:
         t = el.get('type')
@@ -905,14 +900,8 @@ def generate_report_survival(title, elements):
             html_doc += d.to_html()
         elif t == 'plot':
             if hasattr(d, 'to_html'):
-                # 🟢 SOLUTION: Include Plotly JS with first plot only (embed locally, no CDN)
-                if not plotly_js_included:
-                    # First plot: include='require' embeds Plotly JS locally in HTML
-                    html_doc += d.to_html(full_html=False, include_plotlyjs='require')
-                    plotly_js_included = True
-                else:
-                    # Subsequent plots: don't include JS (already loaded from first plot)
-                    html_doc += d.to_html(full_html=False, include_plotlyjs=False)
+                # 🟢 FIX: Don't include Plotly JS in plots (already loaded in head)
+                html_doc += d.to_html(full_html=False, include_plotlyjs=False)
             elif hasattr(d, 'savefig'):
                 buf = io.BytesIO()
                 d.savefig(buf, format='png', bbox_inches='tight')
@@ -922,7 +911,7 @@ def generate_report_survival(title, elements):
             b64 = base64.b64encode(d).decode('utf-8')
             html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
         elif t == 'html':
-            # 🟢 NEW: Embed raw HTML (used for forest plot)
+            # 🟢 NEW: Embed raw HTML (used for forest plots)
             html_doc += str(d)
     
     html_doc += """<div class='report-footer'>
