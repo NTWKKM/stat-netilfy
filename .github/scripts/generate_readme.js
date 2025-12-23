@@ -77,7 +77,6 @@ function generateMarkdown(items) {
     markdown += '```text\n'; // เริ่ม Code Block สำหรับ Tree Structure
 
     const rootItems = {}; // ใช้สำหรับสร้างโครงสร้าง Tree
-    const processedFolders = new Set();
 
     // 1. จัดโครงสร้างเป็น Object/Tree
     items.forEach(item => {
