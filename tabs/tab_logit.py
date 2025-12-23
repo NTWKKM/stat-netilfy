@@ -117,10 +117,8 @@ def render(df, var_meta):
     * **Features (X) Inclusion:** All available features are **automatically included** by default; users can **manually exclude** any unwanted variables.
 """)
         
-        # 🟢 NEW: Dataset selection - FIXED: Pass df argument
-        selected_df, data_label = _get_dataset_for_analysis(df)
          # 🟢 NEW: Dataset selection - FIXED: Pass df argument
-         selected_df, data_label = _get_dataset_for_analysis(df)
+        selected_df, data_label = _get_dataset_for_analysis(df)
         st.write(f"**Using:** {data_label}")
         st.write(f"**Rows:** {len(selected_df)} | **Columns:** {len(selected_df.columns)}")
         
