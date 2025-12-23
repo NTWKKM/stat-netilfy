@@ -5,7 +5,6 @@ import statsmodels.api as sm
 import warnings
 import html
 import streamlit as st  # ✅ IMPORT STREAMLIT
-import logging
 
 # ✅ FIX #7-8: IMPORT LOGGER (MINIMAL WIRING)
 from logger import get_logger
