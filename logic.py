@@ -17,6 +17,24 @@ COLORS = get_color_palette()
 # ✅ TRY IMPORT FIRTHLOGIST
 try:
     from firthlogist import FirthLogisticRegression
+    
+    # ------------------------------------------------------------------
+    # FIX: Monkeypatch for sklearn >= 1.6 where _validate_data is removed
+    # ------------------------------------------------------------------
+    if not hasattr(FirthLogisticRegression, "_validate_data"):
+        from sklearn.utils.validation import check_X_y, check_array
+        
+        def _validate_data_patch(self, X, y=None, reset=True, validate_separately=False, **check_params):
+            """
+            Shim to restore _validate_data for firthlogist compatibility with sklearn 1.6+
+            """
+            if y is None:
+                return check_array(X, **check_params)
+            return check_X_y(X, y, **check_params)
+            
+        setattr(FirthLogisticRegression, "_validate_data", _validate_data_patch)
+    # ------------------------------------------------------------------
+
     HAS_FIRTH = True
 except ImportError:
     HAS_FIRTH = False
