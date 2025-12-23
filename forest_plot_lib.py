@@ -76,18 +76,40 @@ class ForestPlot:
             f"estimate range [{self.data[estimate_col].min():.3f}, {self.data[estimate_col].max():.3f}]"
         )
     
+    def _add_significance_stars(self, p):
+        """
+        Convert p-value to significance stars (* ** ***).
+        """
+        if pd.isna(p) or not isinstance(p, (int, float)):
+            return ""
+        if p < 0.001:
+            return "***"
+        if p < 0.01:
+            return "**"
+        if p < 0.05:
+            return "*"
+        return ""
+    
     def create(
         self,
         title: str = "Forest Plot",
         x_label: str = "Effect Size (95% CI)",
         ref_line: float = 1.0,
         show_ref_line: bool = True,
+        show_sig_stars: bool = True,
         height: int = None,
-        show_values: bool = True,
         color: str = None,
     ) -> go.Figure:
         """
         Generate interactive Plotly forest plot (Publication Quality).
+        
+        Features:
+        - Dynamic column layout (adapts to presence of P-value)
+        - Diamond markers with white border
+        - Auto-detected log scale
+        - Clear reference line with annotation
+        - Complete hover information
+        - Significance stars for p-values
         """
         if color is None:
             color = COLORS['primary']
@@ -114,28 +136,53 @@ class ForestPlot:
         else:
             self.data['__display_p'] = ""
             p_text_colors = ["black"] * len(self.data)
+        
+        # 3. Add significance stars to labels (if enabled)
+        if show_sig_stars and self.pval_col:
+            self.data['__sig_stars'] = self.data[self.pval_col].apply(self._add_significance_stars)
+            self.data['__display_label'] = (
+                self.data[self.label_col].astype(str) + " " + self.data['__sig_stars']
+            ).str.rstrip()
+        else:
+            self.data['__display_label'] = self.data[self.label_col]
 
-        # --- Create Subplots ---
-        # Layout: [Variable (25%)] [Est(CI) (20%)] [P-val (10%)] [Plot (45%)]
+        # --- Dynamic Column Layout ---
+        # Determine if we have P-value column
+        has_pval = self.pval_col is not None and not self.data[self.pval_col].isna().all()
+        
+        # Build column widths dynamically
+        column_widths = [0.25, 0.20]  # Variable, Estimate
+        num_cols = 2
+        
+        if has_pval:
+            column_widths.extend([0.10, 0.45])  # P-value, Plot
+            num_cols = 4
+        else:
+            column_widths.append(0.55)  # Plot gets more space
+            num_cols = 3
+        
+        # Create subplots with dynamic specs
+        specs = [[{"type": "scatter"} for _ in range(num_cols)]]
         fig = make_subplots(
-            rows=1, cols=4,
+            rows=1, cols=num_cols,
             shared_yaxes=True,
             horizontal_spacing=0.02,
-            column_widths=[0.25, 0.20, 0.10, 0.45],
-            specs=[[{"type": "scatter"}, {"type": "scatter"}, {"type": "scatter"}, {"type": "scatter"}]]
+            column_widths=column_widths,
+            specs=specs
         )
 
         y_pos = list(range(len(self.data)))
         
-        # Column 1: Variable Labels
+        # Column 1: Variable Labels (with significance stars)
         fig.add_trace(go.Scatter(
             x=[0] * len(self.data),
             y=y_pos,
-            text=self.data[self.label_col],
+            text=self.data['__display_label'],
             mode="text",
             textposition="middle right",
             textfont=dict(size=13, color="black"),
-            hoverinfo="none"
+            hoverinfo="none",
+            showlegend=False
         ), row=1, col=1)
 
         # Column 2: Estimate (95% CI)
@@ -146,29 +193,65 @@ class ForestPlot:
             mode="text",
             textposition="middle center",
             textfont=dict(size=13, color="black"),
-            hoverinfo="none"
+            hoverinfo="none",
+            showlegend=False
         ), row=1, col=2)
 
-        # Column 3: P-value
-        fig.add_trace(go.Scatter(
-            x=[0] * len(self.data),
-            y=y_pos,
-            text=self.data['__display_p'],
-            mode="text",
-            textposition="middle center",
-            textfont=dict(size=13, color=p_text_colors),
-            hoverinfo="none"
-        ), row=1, col=3)
+        # Column 3: P-value (if present)
+        if has_pval:
+            fig.add_trace(go.Scatter(
+                x=[0] * len(self.data),
+                y=y_pos,
+                text=self.data['__display_p'],
+                mode="text",
+                textposition="middle center",
+                textfont=dict(size=13, color=p_text_colors),
+                hoverinfo="none",
+                showlegend=False
+            ), row=1, col=3)
+            plot_col = 4
+        else:
+            plot_col = 3
 
-        # Column 4: Forest Plot
+        # Column N: Forest Plot
+        # 🟢 Auto-detect log scale
+        est_min = self.data[self.estimate_col].min()
+        est_max = self.data[self.estimate_col].max()
+        use_log_scale = est_min > 0 and (est_max / est_min > 5)
+        
         # Reference Line
         if show_ref_line:
             fig.add_vline(
-                x=ref_line, line_dash='dash', line_color='gray', line_width=1, 
-                row=1, col=4
+                x=ref_line,
+                line_dash='dash',
+                line_color='rgba(192, 21, 47, 0.6)',  # 🟢 Red for visibility
+                line_width=2,  # 🟢 Thicker
+                annotation_text=f'No Effect ({ref_line})',
+                annotation_position='top',
+                row=1, col=plot_col
             )
 
-        # Markers & Error Bars
+        # 🟢 Complete hover info
+        # Build hover template with conditional P-value
+        hover_parts = [
+            "<b>%{text}</b><br>",
+            f"<b>{self.estimate_col}:</b> %{{x:.3f}}<br>",
+            f"<b>95% CI:</b> %{{customdata[0]:.3f}} - %{{customdata[1]:.3f}}<br>"
+        ]
+        if has_pval:
+            hover_parts.append("<b>P-value:</b> %{customdata[2]}<br>")
+        hover_parts.append("<extra></extra>")
+        hovertemplate = "".join(hover_parts)
+        
+        # Prepare customdata for hover
+        customdata_list = []
+        for idx in self.data.index:
+            ci_low = self.data.loc[idx, self.ci_low_col]
+            ci_high = self.data.loc[idx, self.ci_high_col]
+            p_val = self.data.loc[idx, self.pval_col] if has_pval else ""
+            customdata_list.append([ci_low, ci_high, p_val])
+        
+        # Markers & Error Bars with 🟢 Diamond + White border
         fig.add_trace(go.Scatter(
             x=self.data[self.estimate_col],
             y=y_pos,
@@ -182,15 +265,17 @@ class ForestPlot:
                 width=4
             ),
             mode='markers',
-            marker=dict(size=9, color=color, symbol='square'),
-            text=self.data[self.label_col],
-            hovertemplate=(
-                "<b>%{text}</b><br>" +
-                "Estimate: %{x:.3f}<br>" +
-                "<extra></extra>"
+            marker=dict(
+                size=10,  # 🟢 Slightly larger
+                color=color,
+                symbol='diamond',  # 🟢 Diamond shape
+                line=dict(width=1.5, color='white')  # 🟢 White border for pop
             ),
+            text=self.data['__display_label'],
+            customdata=customdata_list,
+            hovertemplate=hovertemplate,
             showlegend=False
-        ), row=1, col=4)
+        ), row=1, col=plot_col)
 
         # --- Update Layout ---
         if height is None:
@@ -202,41 +287,47 @@ class ForestPlot:
             showlegend=False,
             template='plotly_white',
             margin=dict(l=10, r=20, t=80, b=40),
-            plot_bgcolor='white'
+            plot_bgcolor='white',
+            responsive=True  # 🟢 Mobile responsive
         )
 
-        # Hide Axes for Text Columns (1, 2, 3)
-        for c in [1, 2, 3]:
+        # Hide Axes for Text Columns
+        for c in range(1, plot_col):
             fig.update_xaxes(visible=False, showgrid=False, zeroline=False, row=1, col=c)
             fig.update_yaxes(visible=False, showgrid=False, zeroline=False, row=1, col=c)
 
-        # Set Axis for Plot Column (4)
-        fig.update_yaxes(visible=False, range=[-0.5, len(self.data)-0.5], row=1, col=4)
+        # Set Axis for Plot Column
+        fig.update_yaxes(visible=False, range=[-0.5, len(self.data)-0.5], row=1, col=plot_col)
         fig.update_xaxes(
-            title_text=x_label, 
-            row=1, col=4,
+            title_text=x_label,
+            type='log' if use_log_scale else 'linear',  # 🟢 Auto log scale
+            row=1, col=plot_col,
             gridcolor='rgba(200, 200, 200, 0.2)'
         )
 
-        # --- Add Headers (FIXED: xref handling) ---
-        headers = ["Variable", "Estimate (95% CI)", "P-value", f"{x_label} Plot"]
+        # --- Add Headers ---
+        headers = ["Variable", "Estimate (95% CI)"]
+        if has_pval:
+            headers.extend(["P-value", f"{x_label} Plot"])
+        else:
+            headers.append(f"{x_label} Plot")
+        
         for i, h in enumerate(headers, 1):
-            # 🟢 FIX: Handle 'x1' vs 'x' domain naming
-            # Plotly naming: x, x2, x3, x4 (No x1)
+            # 🟢 FIX: Handle x domain naming (x, x2, x3, x4)
             xref_val = "x domain" if i == 1 else f"x{i} domain"
             
             fig.add_annotation(
                 x=0.5 if i != 1 else 1.0,  # Right align 'Variable' header
-                y=1.0, 
-                xref=xref_val,  # 🟢 FIXED HERE
+                y=1.0,
+                xref=xref_val,
                 yref="paper",
-                text=f"<b>{h}</b>", 
+                text=f"<b>{h}</b>",
                 showarrow=False,
                 yanchor="bottom",
                 font=dict(size=14, color="black")
             )
 
-        logger.info(f"Forest plot generated: {title}, {len(self.data)} variables")
+        logger.info(f"Forest plot generated: {title}, {len(self.data)} variables, log_scale={use_log_scale}")
         return fig
 
 
