@@ -4,7 +4,7 @@ import diag_test # ✅ ใช้ diag_test ตัวเดียว
 from typing import List, Tuple
 
 # 🟢 NEW: Helper function to select between original and matched datasets
-def _get_dataset_for_analysis(df: pd.DataFrame):
+def _get_dataset_for_analysis(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     """
     Choose which dataset to use for downstream analysis and return it with a human-readable label.
     
@@ -17,7 +17,6 @@ def _get_dataset_for_analysis(df: pd.DataFrame):
         st.session_state.get("is_matched", False)
         and st.session_state.get("df_matched") is not None
     )
-
     if has_matched:
         col1, _ = st.columns([2, 1])
         with col1:
@@ -28,7 +27,6 @@ def _get_dataset_for_analysis(df: pd.DataFrame):
                 horizontal=True,
                 key="diag_data_source",
             )
-
         if "✅" in data_source:
             selected_df = st.session_state.df_matched.copy()
             label = f"✅ Matched Data ({len(selected_df)} rows)"
@@ -38,7 +36,6 @@ def _get_dataset_for_analysis(df: pd.DataFrame):
     else:
         selected_df = df
         label = f"📊 Original Data ({len(df)} rows)"
-
     return selected_df, label
 
 
