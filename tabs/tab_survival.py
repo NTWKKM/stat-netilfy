@@ -5,7 +5,12 @@ import survival_lib
 import time
 from pandas.api.types import is_numeric_dtype
 import logging
-from forest_plot_lib import create_forest_plot_from_cox  # 🟢 Import HR forest plot
+import sys
+import os
+
+# 🟢 Fix import path for forest_plot_lib
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from forest_plot_lib import create_forest_plot_from_cox
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +101,7 @@ def render(df, _var_meta):
     col_event = c2.selectbox("💫 Event Variable (1=Event):", all_cols, index=event_idx, key='surv_event')
     
     # Tabs
-    tab_curves, tab_landmark, tab_cox, tab_ref = st.tabs(["📈 Survival Curves (KM/NA)", "📑 Landmark Analysis", "📊 Cox Regression", "ℹ️ Reference & Interpretation"])
+    tab_curves, tab_landmark, tab_cox, tab_ref = st.tabs(["📈 Survival Curves (KM/NA)", "📋 Landmark Analysis", "📊 Cox Regression", "ℹ️ Reference & Interpretation"])
     
     # ==========================
     # TAB 1: Curves (KM & Nelson-Aalen)
