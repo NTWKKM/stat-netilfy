@@ -10,6 +10,7 @@ import io, base64
 import html as _html
 import logging
 from tabs._common import get_color_palette
+from forest_plot_lib import create_forest_plot  # 🟢 IMPORT NEW LIBRARY
 
 # Get unified color palette
 COLORS = get_color_palette()
@@ -42,7 +43,7 @@ def _standardize_numeric_cols(data, cols) -> None:
             else:
                 data[col] = (data[col] - data[col].mean()) / std
 
-# 🟢 NEW HELPER: Convert Hex to RGBA string for Plotly fillcolor
+# 🟢 HELPER: Convert Hex to RGBA string for Plotly fillcolor
 def _hex_to_rgba(hex_color, alpha) -> str:
     """Convert hex color to RGBA string. Expects 6-digit hex format (e.g., '#RRGGBB')."""
     hex_color = hex_color.lstrip('#')
@@ -168,21 +169,6 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
     """
     Fit Nelson-Aalen cumulative hazard curves optionally stratified by a grouping column and return a Plotly figure plus group-level statistics.
     Uses unified teal color palette from _common.py.
-    
-    Drops rows with missing duration or event values. If a group column is provided, rows with missing group values are dropped and curves are plotted per group; otherwise a single overall curve is plotted. When the fitter provides a confidence interval with at least two columns, a shaded 95% CI is added for each group.
-    
-    Parameters:
-        df (pandas.DataFrame): Input dataset containing duration, event, and optional group columns.
-        duration_col (str): Name of the column with follow-up time or duration.
-        event_col (str): Name of the column with event indicator (1 for event, 0 for censored).
-        group_col (str or None): Name of the column to stratify by, or None to compute an overall curve.
-    
-    Returns:
-        fig (plotly.graph_objs.Figure): Plotly figure showing cumulative hazard curves and shaded 95% CIs when available.
-        stats_df (pandas.DataFrame): DataFrame with one row per plotted group containing columns `Group`, `N`, and `Events`.
-    
-    Raises:
-        ValueError: If no valid rows remain after dropping missing duration/event values, or if a specified group column is not present in `df`.
     """
     data = df.dropna(subset=[duration_col, event_col])
     if len(data) == 0:
@@ -262,7 +248,7 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
 # --- 3. Cox Proportional Hazards (Robust with Progressive L2 Penalization & Data Validation) ---
 def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     """
-    Fit a Cox Proportional Hazards model after validating and preprocessing covariates.         
+    Fit a Cox Proportional Hazards model after validating and preprocessing covariates.          
     
     Validates input columns and rows, performs automatic one-hot encoding for categorical covariates (drop_first=True), checks numeric covariates for infinite or extreme values, zero variance, potential perfect separation, and high multicollinearity, standardizes numeric covariates (skipping binary 0/1), and attempts a progressive fitting strategy (standard CoxPH then increasing L2 penalization) until a successful fit is obtained or all attempts fail.
     
@@ -482,11 +468,11 @@ def check_cph_assumptions(cph, data):
         return f"Assumption check failed: {e}", []
 
 
-# --- 🟢 NEW: Create interactive Plotly forest plot for Cox Regression (Web UI) ---
+# --- 🟢 UPDATED: Create interactive Plotly forest plot for Cox Regression (Using shared lib) ---
 def create_forest_plot_cox(res_df):
     """
     Create an interactive Plotly forest plot for Cox regression hazard ratios.
-    Used for visualization in Streamlit web UI.
+    Uses the shared `forest_plot_lib` to ensure identical styling with logistic regression.
     
     Parameters:
         res_df (pandas.DataFrame): Results DataFrame with columns 'HR', '95% CI Lower', '95% CI Upper', 'P-value'.
@@ -497,85 +483,37 @@ def create_forest_plot_cox(res_df):
     if res_df is None or res_df.empty:
         raise ValueError("No Cox regression results available for forest plot.")
     
-    # Prepare data
-    variables = res_df.index.tolist()
-    hrs = res_df['HR'].values
-    ci_lows = res_df['95% CI Lower'].values
-    ci_highs = res_df['95% CI Upper'].values
-    p_vals = res_df['P-value'].values
+    # Prepare data for the shared library
+    df_plot = res_df.copy()
+    df_plot['variable'] = df_plot.index
     
-    # Create Plotly figure
-    fig = go.Figure()
-    
-    # Add HR points
-    fig.add_trace(go.Scatter(
-        x=hrs,
-        y=variables,
-        mode='markers',
-        marker=dict(
-            size=10,
-            color=COLORS['success'],  # Use success color from palette
-            line=dict(width=2, color='rgba(255,255,255,0.8)')
-        ),
-        name='Hazard Ratio',
-        hovertemplate='<b>%{y}</b><br>HR: %{x:.4f}<extra></extra>'
-    ))
-    
-    # 🟢 FIX: Use whisker lines (error_x) instead of shaded area
-    fig.add_trace(go.Scatter(
-        x=hrs,
-        y=variables,
-        mode='markers',
-        marker=dict(size=0),  # Invisible markers, only show error bars
-        error_x=dict(
-            type='data',
-            symmetric=False,
-            array=[ci_highs[i] - hrs[i] for i in range(len(hrs))],  # Upper whisker
-            arrayminus=[hrs[i] - ci_lows[i] for i in range(len(hrs))],  # Lower whisker
-            color=COLORS['success'],
-            thickness=2,
-            visible=True
-        ),
-        showlegend=False,
-        hoverinfo='none'
-    ))
-    
-    # Add vertical line at HR = 1 (null effect)
-    fig.add_vline(
-        x=1,
-        line_dash='dash',
-        line_color='rgba(192, 21, 47, 0.5)',
-        annotation_text="HR = 1 (No Effect)",
-        annotation_position="top"
-    )
-    
-    # Update layout
-    fig.update_layout(
-        title='🌳 Forest Plot: Cox Regression Hazard Ratios (95% CI)',
-        xaxis_title='Hazard Ratio (log scale)',
-        yaxis_title='Variable',
-        xaxis_type='log',
-        template='plotly_white',
-        height=max(400, len(variables) * 40),
-        hovermode='y unified',
-        margin=dict(l=200, r=100)
+    # Call shared library to generate publication-quality plot (Table + Graph)
+    fig = create_forest_plot(
+        data=df_plot,
+        estimate_col='HR',
+        ci_low_col='95% CI Lower',
+        ci_high_col='95% CI Upper',
+        pval_col='P-value',
+        label_col='variable',
+        title="<b>Multivariable Cox Regression: Forest Plot (HR & 95% CI)</b>",
+        x_label="Hazard Ratio (HR)",
+        ref_line=1.0
     )
     
     return fig
 
 
-# --- 🟢 NEW: Generate Forest Plot HTML for Cox Regression (HTML Report) ---
+# --- 🟢 UPDATED: Generate Forest Plot HTML for Cox Regression (HTML Report) ---
 def generate_forest_plot_cox_html(res_df):
     """
     Generate an HTML forest plot for Cox regression hazard ratios using Plotly.
     Embeds Plotly JS directly in the plot for offline-friendly reports.
-    Uses same CSS theme as logistic regression.
     
     Parameters:
         res_df (pandas.DataFrame): Results DataFrame with columns 'HR', '95% CI Lower', '95% CI Upper', 'P-value'.
     
     Returns:
-        html_str (str): HTML string containing the forest plot as Plotly embed + summary table + interpretation.
+        html_str (str): HTML string containing the forest plot as Plotly embed + interpretation.
     """
     if res_df is None or res_df.empty:
         return "<p>No Cox regression results available for forest plot.</p>"
@@ -583,40 +521,9 @@ def generate_forest_plot_cox_html(res_df):
     # Create interactive forest plot (same function as web UI)
     fig = create_forest_plot_cox(res_df)
     
-    # 🟢 OFFLINE SUPPORT: Embed Plotly JS directly in the plot (first plot only)
-    # include_plotlyjs=True will embed the complete Plotly library
+    # 🟢 OFFLINE SUPPORT: Embed Plotly JS directly in the plot
+    # The figure now contains the Data Table inside it (via subplots), so no need for separate HTML table.
     plot_html = fig.to_html(include_plotlyjs=True, div_id='cox_forest_plot')
-    
-    # Prepare data for summary table
-    variables = res_df.index.tolist()
-    hrs = res_df['HR'].values
-    ci_lows = res_df['95% CI Lower'].values
-    ci_highs = res_df['95% CI Upper'].values
-    p_vals = res_df['P-value'].values
-    
-    # Create summary table HTML using logistic regression theme
-    table_html = "<h3 style='color:#555;'>Summary Table: Hazard Ratios</h3>"
-    table_html += "<table style='border-collapse:collapse; width:100%; margin:10px 0;'>"
-    table_html += f"<thead><tr style='background:{COLORS.get('primary_dark', '#1f8085')}; color:white;'>"
-    table_html += "<th style='padding:8px; border:1px solid #ddd;'>Variable</th>"
-    table_html += "<th style='padding:8px; border:1px solid #ddd;'>HR</th>"
-    table_html += "<th style='padding:8px; border:1px solid #ddd;'>95% CI Lower</th>"
-    table_html += "<th style='padding:8px; border:1px solid #ddd;'>95% CI Upper</th>"
-    table_html += "<th style='padding:8px; border:1px solid #ddd;'>P-value</th>"
-    table_html += "</tr></thead><tbody>"
-    
-    for i, var in enumerate(variables):
-        sig = "✅" if p_vals[i] < 0.05 else "⚠️"
-        p_str = f"{p_vals[i]:.4f}" if p_vals[i] >= 0.001 else "<0.001"
-        table_html += f"<tr style='background:#f8f9fa;'>"
-        table_html += f"<td style='padding:8px; border:1px solid #ddd;'><b>{var}</b></td>"
-        table_html += f"<td style='padding:8px; border:1px solid #ddd;'>{hrs[i]:.4f}</td>"
-        table_html += f"<td style='padding:8px; border:1px solid #ddd;'>{ci_lows[i]:.4f}</td>"
-        table_html += f"<td style='padding:8px; border:1px solid #ddd;'>{ci_highs[i]:.4f}</td>"
-        table_html += f"<td style='padding:8px; border:1px solid #ddd;'><span class='sig-p'>{p_str} {sig}</span></td>"
-        table_html += "</tr>"
-    
-    table_html += "</tbody></table>"
     
     # Interpretation guide (matching logistic regression style)
     interp_html = f"""
@@ -633,7 +540,7 @@ def generate_forest_plot_cox_html(res_df):
     </div>
     """
     
-    return f"<div style='margin:20px 0;'>{plot_html}{table_html}{interp_html}</div>"
+    return f"<div style='margin:20px 0;'>{plot_html}{interp_html}</div>"
 
 # --- 4. Landmark Analysis (KM) 🟢 FIX LM CI ---
 def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
