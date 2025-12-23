@@ -261,7 +261,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 logger.debug("Skipping separation check for %s: %s", col, e)
                 continue
     
-    # 🇒️ NEW: AUTO-SELECT METHOD BASED ON DATA QUALITY
+    # ༅⃒️ NEW: AUTO-SELECT METHOD BASED ON DATA QUALITY
     preferred_method = 'bfgs'  # Default fallback
     
     if method == 'auto':
@@ -562,7 +562,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         aor_s, ap_s = "-", "-"
         if col in aor_results:
             ar = aor_results[col]
-            aor_s = ar['aor']
+            aor_s = f"{ar['aor']:.2f} ({ar['ci_low']:.2f}-{ar['ci_high']:.2f})"
             ap_val = ar['p_value']
             ap_s = fmt_p(ap_val)
             if pd.notna(ap_val) and ap_val < 0.05: ap_s = f"<span class='sig-p'>{ap_s}*</span>"
@@ -630,10 +630,175 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     
     return html_table, or_results, aor_results
 
+def generate_forest_plot_html(or_results, aor_results, plot_title="Forest Plots: Odds Ratios"):
+    """
+    Generate standalone HTML for forest plots using Plotly (embeddable in report).
+    
+    Parameters:
+        or_results (dict): Crude OR results {var: {or, ci_low, ci_high, p_value}}
+        aor_results (dict): Adjusted OR results {var: {aor, ci_low, ci_high, p_value}}
+        plot_title (str): Title for the forest plot section
+    
+    Returns:
+        str: HTML string containing embedded Plotly forest plots
+    """
+    try:
+        import plotly.graph_objects as go
+        from plotly.subplots import make_subplots
+    except ImportError:
+        return "<p style='color: red;'>Plotly not installed. Forest plots unavailable.</p>"
+    
+    html_parts = []
+    html_parts.append(f"<h2 style='margin-top:30px; color:{COLORS['primary']};'>{plot_title}</h2>")
+    
+    # Crude OR Plot
+    if or_results:
+        html_parts.append("<h3 style='color:#555;'>Crude Odds Ratios (Univariable)</h3>")
+        html_parts.append("""
+        <p style='font-size:0.9em; color:#666; margin-bottom:15px;'>
+        <b>💡 Interpretation:</b><br>
+        • Shows the association between each variable and outcome, <b>without adjusting</b> for other variables<br>
+        • <b>OR > 1:</b> Increased odds (Risk factor) 🔴<br>
+        • <b>OR < 1:</b> Decreased odds (Protective factor) 🟢<br>
+        • <b>CI crosses 1.0:</b> Not statistically significant ⚠️
+        </p>
+        """)
+        
+        # Prepare data
+        vars_crude = list(or_results.keys())
+        ors_crude = [or_results[v]['or'] for v in vars_crude]
+        ci_low_crude = [or_results[v]['ci_low'] for v in vars_crude]
+        ci_high_crude = [or_results[v]['ci_high'] for v in vars_crude]
+        
+        # Create figure
+        fig_crude = go.Figure()
+        
+        # Add scatter points for OR
+        fig_crude.add_trace(go.Scatter(
+            x=ors_crude,
+            y=vars_crude,
+            mode='markers',
+            marker=dict(size=10, color=COLORS['primary'], line=dict(width=1, color='white')),
+            error_x=dict(
+                type='data',
+                symmetric=False,
+                array=[ci_high_crude[i] - ors_crude[i] for i in range(len(ors_crude))],
+                arrayminus=[ors_crude[i] - ci_low_crude[i] for i in range(len(ors_crude))],
+                color=COLORS['primary'],
+                thickness=2
+            ),
+            name='Crude OR',
+            hovertemplate='<b>%{y}</b><br>OR: %{x:.3f}<extra></extra>'
+        ))
+        
+        # Add vertical line at OR=1
+        fig_crude.add_vline(x=1, line_dash="dash", line_color="red", opacity=0.5)
+        
+        fig_crude.update_layout(
+            title="Forest Plot: Crude Odds Ratios (95% CI)",
+            xaxis_title="Odds Ratio (log scale)",
+            yaxis_title="Variables",
+            xaxis_type="log",
+            height=max(400, len(vars_crude) * 30),
+            template="plotly_white",
+            hovermode='closest',
+            font=dict(size=11)
+        )
+        
+        html_parts.append(fig_crude.to_html(full_html=False, include_plotlyjs='cdn'))
+        
+        # Summary table
+        html_parts.append("<h4 style='margin-top:20px;'>Summary Table: Crude OR</h4>")
+        html_parts.append("<table style='width:100%; border-collapse:collapse; margin-bottom:30px;'>")
+        html_parts.append("<thead><tr style='background:#e3f2fd;'><th style='padding:8px; border:1px solid #ddd;'>Variable</th><th style='padding:8px; border:1px solid #ddd;'>Crude OR</th><th style='padding:8px; border:1px solid #ddd;'>CI Lower</th><th style='padding:8px; border:1px solid #ddd;'>CI Upper</th><th style='padding:8px; border:1px solid #ddd;'>P-value</th></tr></thead><tbody>")
+        
+        for var in vars_crude:
+            res = or_results[var]
+            p_val = res['p_value']
+            p_str = f"{p_val:.4f}" if p_val >= 0.001 else "<0.001"
+            html_parts.append(f"<tr><td style='padding:8px; border:1px solid #ddd;'>{var}</td><td style='padding:8px; border:1px solid #ddd;'>{res['or']:.3f}</td><td style='padding:8px; border:1px solid #ddd;'>{res['ci_low']:.3f}</td><td style='padding:8px; border:1px solid #ddd;'>{res['ci_high']:.3f}</td><td style='padding:8px; border:1px solid #ddd;'>{p_str}</td></tr>")
+        
+        html_parts.append("</tbody></table>")
+    
+    # Adjusted OR Plot
+    if aor_results:
+        html_parts.append("<h3 style='color:#555; margin-top:40px;'>Adjusted Odds Ratios (Multivariable)</h3>")
+        html_parts.append("""
+        <p style='font-size:0.9em; color:#666; margin-bottom:15px;'>
+        <b>💡 Interpretation:</b><br>
+        • Shows the association between each variable and outcome, <b>adjusting for other variables</b> in the model<br>
+        • <b>aOR > 1:</b> Increased odds (Risk factor) 🔴<br>
+        • <b>aOR < 1:</b> Decreased odds (Protective factor) 🟢<br>
+        • <b>CI crosses 1.0:</b> Not statistically significant ⚠️<br>
+        • <b>aOR is preferred</b> over crude OR for reporting ✅
+        </p>
+        """)
+        
+        # Prepare data
+        vars_adj = list(aor_results.keys())
+        aors_adj = [aor_results[v]['aor'] for v in vars_adj]
+        ci_low_adj = [aor_results[v]['ci_low'] for v in vars_adj]
+        ci_high_adj = [aor_results[v]['ci_high'] for v in vars_adj]
+        
+        # Create figure
+        fig_adj = go.Figure()
+        
+        # Add scatter points for aOR
+        fig_adj.add_trace(go.Scatter(
+            x=aors_adj,
+            y=vars_adj,
+            mode='markers',
+            marker=dict(size=10, color=COLORS['success'], line=dict(width=1, color='white')),
+            error_x=dict(
+                type='data',
+                symmetric=False,
+                array=[ci_high_adj[i] - aors_adj[i] for i in range(len(aors_adj))],
+                arrayminus=[aors_adj[i] - ci_low_adj[i] for i in range(len(aors_adj))],
+                color=COLORS['success'],
+                thickness=2
+            ),
+            name='Adjusted OR',
+            hovertemplate='<b>%{y}</b><br>aOR: %{x:.3f}<extra></extra>'
+        ))
+        
+        # Add vertical line at OR=1
+        fig_adj.add_vline(x=1, line_dash="dash", line_color="red", opacity=0.5)
+        
+        fig_adj.update_layout(
+            title="Forest Plot: Adjusted Odds Ratios (95% CI)",
+            xaxis_title="Odds Ratio (log scale)",
+            yaxis_title="Variables",
+            xaxis_type="log",
+            height=max(400, len(vars_adj) * 30),
+            template="plotly_white",
+            hovermode='closest',
+            font=dict(size=11)
+        )
+        
+        html_parts.append(fig_adj.to_html(full_html=False, include_plotlyjs='cdn'))
+        
+        # Summary table
+        html_parts.append("<h4 style='margin-top:20px;'>Summary Table: Adjusted OR</h4>")
+        html_parts.append("<table style='width:100%; border-collapse:collapse; margin-bottom:30px;'>")
+        html_parts.append("<thead><tr style='background:#e8f5e9;'><th style='padding:8px; border:1px solid #ddd;'>Variable</th><th style='padding:8px; border:1px solid #ddd;'>Adjusted OR</th><th style='padding:8px; border:1px solid #ddd;'>CI Lower</th><th style='padding:8px; border:1px solid #ddd;'>CI Upper</th><th style='padding:8px; border:1px solid #ddd;'>P-value</th></tr></thead><tbody>")
+        
+        for var in vars_adj:
+            res = aor_results[var]
+            p_val = res['p_value']
+            p_str = f"{p_val:.4f}" if p_val >= 0.001 else "<0.001"
+            html_parts.append(f"<tr><td style='padding:8px; border:1px solid #ddd;'>{var}</td><td style='padding:8px; border:1px solid #ddd;'>{res['aor']:.3f}</td><td style='padding:8px; border:1px solid #ddd;'>{res['ci_low']:.3f}</td><td style='padding:8px; border:1px solid #ddd;'>{res['ci_high']:.3f}</td><td style='padding:8px; border:1px solid #ddd;'>{p_str}</td></tr>")
+        
+        html_parts.append("</tbody></table>")
+    
+    if not or_results and not aor_results:
+        html_parts.append("<p style='color:#999; font-style:italic;'>📋 No OR/aOR results available for forest plots.</p>")
+    
+    return "".join(html_parts)
+
 def process_data_and_generate_html(df, target_outcome, var_meta=None, method='auto'):
     """
     Primary entry point to run univariate/multivariate logistic regression analysis 
-    on a DataFrame and generate a complete HTML report.
+    on a DataFrame and generate a complete HTML report with forest plots.
 
     Parameters:
         df (pandas.DataFrame): The input data.
@@ -643,7 +808,7 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None, method='au
 
     Returns:
         tuple: (html_string, or_results, aor_results)
-            - html_string (str): The complete HTML report string
+            - html_string (str): The complete HTML report string with embedded forest plots
             - or_results (dict): Crude OR results for forest plot
             - aor_results (dict): Adjusted OR results for forest plot
     """ # 🟢 MODIFIED: Restored Docstring
@@ -677,8 +842,12 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None, method='au
     html_table, or_results, aor_results = analyze_outcome(target_outcome, df, var_meta, method=method)
     
     html = f"<!DOCTYPE html><html><head>{css_style}</head><body>"
-    html += "<h1>Analysis Report</h1>"
+    html += "<h1>Logistic Regression Analysis Report</h1>"
     html += html_table
+    
+    # 🌳 NEW: Add forest plots to HTML report
+    forest_plot_html = generate_forest_plot_html(or_results, aor_results)
+    html += forest_plot_html
     
     # ✅ FIX: Use string concatenation instead of f-string with backslash
     footer_html = (
