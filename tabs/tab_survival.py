@@ -284,7 +284,22 @@ def render(df, _var_meta):
                                     st.image(img_bytes, caption="Assumption Check Plot", use_container_width=True)
                             else:
                                 st.info("No assumption plots generated.")
+                            
+                            # 🟢 NEW: Show forest plot in web UI
+                            st.markdown("---")
+                            st.subheader("🌳 Forest Plot: Hazard Ratios")
+                            try:
+                                fig_forest = survival_lib.create_forest_plot_cox(res)
+                                st.plotly_chart(fig_forest, use_container_width=True)
+                                
+                                # Summary table
+                                st.markdown("**Summary Table:**")
+                                st.dataframe(res[['HR', '95% CI Lower', '95% CI Upper', 'P-value']].reset_index())
+                                
+                            except Exception as e:
+                                st.warning(f"Could not generate HR forest plot: {e}")
 
+                            # 🟢 NEW: Generate HTML report with forest plot
                             elements = [
                                 {'type':'header','data':'Cox Proportional Hazards'},
                                 {'type':'table','data':res},
@@ -296,7 +311,7 @@ def render(df, _var_meta):
                                 for img_bytes in fig_images:
                                     elements.append({'type':'image','data':img_bytes})
                             
-                            # 🟢 NEW: Add forest plots to HTML report
+                            # 🟢 NEW: Add forest plot to HTML report
                             forest_plot_html = survival_lib.generate_forest_plot_cox_html(res)
                             elements.append({'type':'html','data':forest_plot_html})
                             
@@ -399,7 +414,7 @@ def render(df, _var_meta):
             
             **🌳 Forest Plot**
             - Visual representation of HR with 95% CI
-            - Included in downloadable HTML report
+            - Shown in Web UI + HTML report
             - Interactive chart with error bars
             - Log scale for easy interpretation
             
@@ -408,19 +423,6 @@ def render(df, _var_meta):
             - Time-varying covariates (use time-dep Cox)
             - Too many variables (overfitting)
             - Ignoring interactions
-            """)
-            
-            st.markdown("### Nelson-Aalen")
-            st.markdown("""
-            **When to Use:**
-            - Cumulative hazard visualization
-            - Risk accumulation over time
-            - Non-parametric alternative to KM
-            
-            **Interpretation:**
-            - Steeper curve = higher hazard
-            - Flat at end = no new events
-            - Useful for diagnosis checking
             """)
         
         st.markdown("---")
@@ -437,7 +439,7 @@ def render(df, _var_meta):
         → **Landmark** (Tab 2) - Exclude immortal time bias
         
         **Question: Multiple predictors affecting survival?**
-        → **Cox Regression** (Tab 3) - Adjusted HR for each variable with **forest plot visualization** ✨
+        → **Cox Regression** (Tab 3) - Adjusted HR for each variable with **forest plot visualization** ✨ (shown in UI + HTML report)
         
         **Question: Covariates change over time?**
         → **Time-Dependent Cox** (Advanced Survival tab)
