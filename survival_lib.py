@@ -486,12 +486,13 @@ def check_cph_assumptions(cph, data):
 def generate_forest_plot_cox_html(res_df):
     """
     Generate an HTML forest plot for Cox regression hazard ratios using Plotly.
+    Embeds Plotly JS locally (no CDN needed) for offline-friendly reports.
     
     Parameters:
         res_df (pandas.DataFrame): Results DataFrame with columns 'HR', '95% CI Lower', '95% CI Upper', 'P-value'.
     
     Returns:
-        html_str (str): HTML string containing the forest plot as Plotly embed + summary table.
+        html_str (str): HTML string containing the forest plot as Plotly embed + summary table + interpretation.
     """
     if res_df is None or res_df.empty:
         return "<p>No Cox regression results available for forest plot.</p>"
@@ -513,7 +514,7 @@ def generate_forest_plot_cox_html(res_df):
         mode='markers',
         marker=dict(
             size=10,
-            color=COLORS['success'],  # Use primary color from palette
+            color=COLORS['success'],  # Use success color from palette
             line=dict(width=2, color='rgba(255,255,255,0.8)')
         ),
         name='Hazard Ratio',
@@ -563,8 +564,9 @@ def generate_forest_plot_cox_html(res_df):
         margin=dict(l=200, r=100)
     )
     
-    # Convert figure to HTML (embedded)
-    plot_html = fig.to_html(include_plotlyjs='cdn', div_id='cox_forest_plot')
+    # 🟢 FIXED: Include Plotly JS only once (first plot in report)
+    # Using include_plotlyjs=False since JS will be included in generate_report_survival()
+    plot_html = fig.to_html(include_plotlyjs=False, div_id='cox_forest_plot')
     
     # Create summary table HTML
     table_html = "<h3>Summary Table: Hazard Ratios</h3>"
@@ -741,11 +743,12 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
 
     return fig, pd.DataFrame([stats_data]), n_pre_filter, n_post_filter, None
 
-# --- 5. Report Generation 🟢 FIX: Include Plotly JS in HTML & Unified Colors ---
+# --- 5. Report Generation 🟢 FIXED: Embed Plotly JS locally (no CDN) ---
 def generate_report_survival(title, elements):
     """
     Assemble a complete HTML report from a sequence of content elements, embedding tables, figures, and images for offline-friendly consumption.
     Uses unified teal color palette from _common.py.
+    Embeds Plotly JS locally (no CDN) for complete offline support.
     
     Builds an HTML document with the given title and iterates over `elements` to render supported content types. For Plotly figures, the Plotly JS library is embedded only once with the first Plotly plot and omitted for subsequent Plotly plots so later plots reuse the already-loaded script. Supported element types and expected `data` values:
     - "header": a string rendered as an H2 section header.
@@ -855,10 +858,10 @@ def generate_report_survival(title, elements):
     </style>"""
     
     safe_title = _html.escape(str(title))
-    # 🟢 NEW: Don't include Plotly JS in head - will include with first plot
+    # 🟢 FIXED: Don't include Plotly JS in head - will include with first plot
     html_doc = f"<!DOCTYPE html><html><head><meta charset='utf-8'>{css_style}</head><body><h1>{safe_title}</h1>"
     
-    # 🟢 NEW: Track if Plotly JS already included
+    # 🟢 FIXED: Track if Plotly JS already included
     plotly_js_included = False
     
     for el in elements:
@@ -875,10 +878,10 @@ def generate_report_survival(title, elements):
             html_doc += d.to_html()
         elif t == 'plot':
             if hasattr(d, 'to_html'):
-                # 🟢 SOLUTION: Include Plotly JS with first plot only
+                # 🟢 SOLUTION: Include Plotly JS with first plot only (embed locally, no CDN)
                 if not plotly_js_included:
-                    # First plot: include 'cdn' to embed Plotly JS in HTML
-                    html_doc += d.to_html(full_html=False, include_plotlyjs='cdn')
+                    # First plot: include='require' embeds Plotly JS locally in HTML
+                    html_doc += d.to_html(full_html=False, include_plotlyjs='require')
                     plotly_js_included = True
                 else:
                     # Subsequent plots: don't include JS (already loaded from first plot)
