@@ -40,10 +40,10 @@ def _get_dataset_for_table1(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
             selected_df = st.session_state.df_matched.copy()
             label = f"✅ Matched Data ({len(selected_df)} rows)"
         else:
-            selected_df = df
+            selected_df = df.copy()
             label = f"📊 Original Data ({len(df)} rows)"
     else:
-        selected_df = df
+        selected_df = df.copy()
         label = f"📊 Original Data ({len(df)} rows)"
 
     return selected_df, label
