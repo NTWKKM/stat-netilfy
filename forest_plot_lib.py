@@ -12,7 +12,7 @@ License: MIT
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots  # Added for table-plot layout
+from plotly.subplots import make_subplots
 import streamlit as st
 from logger import get_logger
 from tabs._common import get_color_palette
@@ -41,21 +41,10 @@ class ForestPlot:
         ci_low_col: str,
         ci_high_col: str,
         label_col: str,
-        pval_col: str = None,  # Added p-value support
+        pval_col: str = None,
     ):
         """
         Initialize ForestPlot with data and column specifications.
-        
-        Parameters:
-            data: DataFrame with results
-            estimate_col: Column with point estimates
-            ci_low_col: Column with CI lower bounds
-            ci_high_col: Column with CI upper bounds
-            label_col: Column with variable names/labels
-            pval_col: Column with p-values (optional)
-        
-        Raises:
-            ValueError: If required columns missing or data empty
         """
         # Validation
         if data.empty:
@@ -73,7 +62,7 @@ class ForestPlot:
         if self.data.empty:
             raise ValueError("No valid data after removing NaN values")
         
-        # Reverse for top-down display (largest effect at top usually, but for table consistency strictly follows input order reversed)
+        # Reverse for top-down display
         self.data = self.data.iloc[::-1].reset_index(drop=True)
         
         self.estimate_col = estimate_col
@@ -93,24 +82,12 @@ class ForestPlot:
         x_label: str = "Effect Size (95% CI)",
         ref_line: float = 1.0,
         show_ref_line: bool = True,
-        height: int = None, # Auto-height if None
+        height: int = None,
         show_values: bool = True,
         color: str = None,
     ) -> go.Figure:
         """
         Generate interactive Plotly forest plot (Publication Quality).
-        
-        Parameters:
-            title: Plot title
-            x_label: X-axis label
-            ref_line: Position of reference line (e.g., 1.0 for OR/HR)
-            show_ref_line: Whether to display reference line
-            height: Plot height in pixels
-            show_values: Display point estimates on plot (Deprecated: values are now in table)
-            color: Custom marker color (uses COLORS['primary'] if None)
-        
-        Returns:
-            go.Figure: Plotly figure object
         """
         if color is None:
             color = COLORS['primary']
@@ -216,7 +193,6 @@ class ForestPlot:
         ), row=1, col=4)
 
         # --- Update Layout ---
-        # Calculate dynamic height if not provided
         if height is None:
             height = max(400, len(self.data) * 35 + 120)
 
@@ -242,13 +218,20 @@ class ForestPlot:
             gridcolor='rgba(200, 200, 200, 0.2)'
         )
 
-        # --- Add Headers ---
+        # --- Add Headers (FIXED: xref handling) ---
         headers = ["Variable", "Estimate (95% CI)", "P-value", f"{x_label} Plot"]
         for i, h in enumerate(headers, 1):
+            # 🟢 FIX: Handle 'x1' vs 'x' domain naming
+            # Plotly naming: x, x2, x3, x4 (No x1)
+            xref_val = "x domain" if i == 1 else f"x{i} domain"
+            
             fig.add_annotation(
-                x=0.5 if i != 1 else 1.0,  # Right align 'Variable' header to match text
-                y=1.0, xref=f"x{i} domain", yref="paper",
-                text=f"<b>{h}</b>", showarrow=False,
+                x=0.5 if i != 1 else 1.0,  # Right align 'Variable' header
+                y=1.0, 
+                xref=xref_val,  # 🟢 FIXED HERE
+                yref="paper",
+                text=f"<b>{h}</b>", 
+                showarrow=False,
                 yanchor="bottom",
                 font=dict(size=14, color="black")
             )
@@ -263,7 +246,7 @@ def create_forest_plot(
     ci_low_col: str,
     ci_high_col: str,
     label_col: str,
-    pval_col: str = None, # Added
+    pval_col: str = None, 
     title: str = "Forest Plot",
     x_label: str = "Effect Size (95% CI)",
     ref_line: float = 1.0,
@@ -285,7 +268,7 @@ def create_forest_plot(
         return fig
     except ValueError as e:
         logger.error(f"Forest plot creation failed: {e}")
-        st.error(f"Could not create forest plot: {e}") # Fallback for UI
+        st.error(f"Could not create forest plot: {e}")
         return go.Figure()
 
 
@@ -293,14 +276,13 @@ def create_forest_plot_from_logit(aor_dict: dict, title: str = "Adjusted Odds Ra
     """
     Convenience function to create forest plot directly from logistic regression aOR results.
     """
-    # Parse aOR results
     data = []
     
     for var, result in aor_dict.items():
         estimate = result.get('aor', result.get('or'))
         ci_low = result.get('ci_low')
         ci_high = result.get('ci_high')
-        p_val = result.get('p_value', result.get('p')) # Try to extract P-value
+        p_val = result.get('p_value', result.get('p'))
         
         if estimate is None or ci_low is None or ci_high is None:
             continue
@@ -321,7 +303,6 @@ def create_forest_plot_from_logit(aor_dict: dict, title: str = "Adjusted Odds Ra
         return go.Figure()
     
     df = pd.DataFrame(data)
-    # Check if p_value column exists in df
     p_col = 'p_value' if 'p_value' in df.columns else None
     
     return create_forest_plot(
@@ -341,14 +322,13 @@ def create_forest_plot_from_cox(hr_dict: dict, title: str = "Hazard Ratios (Cox 
     """
     Convenience function for Cox regression hazard ratios.
     """
-    # Parse HR results
     data = []
     
     for var, result in hr_dict.items():
         estimate = result.get('hr', result.get('HR'))
         ci_low = result.get('ci_low', result.get('CI Lower'))
         ci_high = result.get('ci_high', result.get('CI Upper'))
-        p_val = result.get('p_value', result.get('p')) # Try to extract P-value
+        p_val = result.get('p_value', result.get('p'))
 
         if estimate is None or ci_low is None or ci_high is None:
             continue
@@ -387,12 +367,11 @@ def create_forest_plot_from_cox(hr_dict: dict, title: str = "Hazard Ratios (Cox 
 def create_forest_plot_from_rr(
     rr_or_dict: dict,
     title: str = "Risk/Odds Ratios",
-    effect_type: str = 'RR'  # 'RR' or 'OR'
+    effect_type: str = 'RR'
 ) -> go.Figure:
     """
     Convenience function for Risk Ratios or Odds Ratios from Chi-Square analysis.
     """
-    # Parse RR/OR results
     data = []
     metric_key = effect_type.lower()
     
@@ -400,7 +379,7 @@ def create_forest_plot_from_rr(
         estimate = result.get(metric_key, result.get(effect_type))
         ci_low = result.get('ci_low', result.get('CI Lower'))
         ci_high = result.get('ci_high', result.get('CI Upper'))
-        p_val = result.get('p_value', result.get('p')) # Try to extract P-value
+        p_val = result.get('p_value', result.get('p'))
         
         if estimate is None or ci_low is None or ci_high is None:
             continue
@@ -442,7 +421,7 @@ def render_forest_plot_in_streamlit(
     ci_low_col: str,
     ci_high_col: str,
     label_col: str,
-    pval_col: str = None, # Added
+    pval_col: str = None,
     title: str = "Forest Plot",
     x_label: str = "Effect Size (95% CI)",
     ref_line: float = 1.0,
@@ -464,15 +443,12 @@ def render_forest_plot_in_streamlit(
             ref_line=ref_line,
         )
         
-        # Display plot
         st.plotly_chart(fig, use_container_width=True)
         
-        # Optional: Download button
         if allow_download:
             col1, col2 = st.columns(2)
             
             with col1:
-                # Download as HTML
                 html_str = fig.to_html(include_plotlyjs='cdn')
                 st.download_button(
                     label='📥 Download (HTML)',
@@ -482,7 +458,6 @@ def render_forest_plot_in_streamlit(
                 )
             
             with col2:
-                # Download data as CSV
                 csv = data.to_csv(index=False)
                 st.download_button(
                     label='📥 Download (CSV)',
