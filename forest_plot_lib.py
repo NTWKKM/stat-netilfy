@@ -90,6 +90,71 @@ class ForestPlot:
             return "*"
         return ""
     
+    def _get_ci_width_colors(self, base_color: str) -> list:
+        """
+        🎨 Generate marker colors based on CI width.
+        CI width = precision indicator
+        - Narrow CI (precise) = darker/more opaque
+        - Wide CI (uncertain) = lighter/more transparent
+        """
+        ci_width = self.data[self.ci_high_col] - self.data[self.ci_low_col]
+        
+        # Normalize CI width to [0, 1]
+        ci_min, ci_max = ci_width.min(), ci_width.max()
+        if ci_max > ci_min:
+            ci_normalized = (ci_width - ci_min) / (ci_max - ci_min)
+        else:
+            ci_normalized = pd.Series([0.5] * len(ci_width))
+        
+        # Parse base color (hex to RGB)
+        hex_color = base_color.lstrip('#')
+        if len(hex_color) == 6:
+            rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        else:
+            rgb = (33, 128, 141)  # Default teal
+        
+        # Generate colors with varying opacity
+        # CI narrow (0) = full opacity (1.0)
+        # CI wide (1) = partial opacity (0.5)
+        marker_colors = [
+            f"rgba({rgb[0]}, {rgb[1]}, {rgb[2]}, {1.0 - 0.5*norm_val:.2f})"
+            for norm_val in ci_normalized
+        ]
+        
+        return marker_colors, ci_normalized.values
+    
+    def get_summary_stats(self, ref_line: float = 1.0):
+        """
+        📊 Return summary statistics for forest plot.
+        
+        Returns:
+            dict: Contains n_variables, median_est, min/max_est, n_significant, pct_significant
+        """
+        # Count significant (p < 0.05)
+        if self.pval_col and self.pval_col in self.data.columns:
+            n_sig = (self.data[self.pval_col] < 0.05).sum()
+            pct_sig = 100 * n_sig / len(self.data) if len(self.data) > 0 else 0
+        else:
+            n_sig = pct_sig = None
+        
+        # Count CI doesn't cross ref_line (graphical significance)
+        ci_sig = (
+            ((self.data[self.ci_low_col] > ref_line) | (self.data[self.ci_high_col] < ref_line))
+            if ref_line > 0
+            else ((self.data[self.ci_low_col] * self.data[self.ci_high_col]) > 0)
+        )
+        n_ci_sig = ci_sig.sum()
+        
+        return {
+            'n_variables': len(self.data),
+            'median_est': self.data[self.estimate_col].median(),
+            'min_est': self.data[self.estimate_col].min(),
+            'max_est': self.data[self.estimate_col].max(),
+            'n_significant': n_sig,
+            'pct_significant': pct_sig,
+            'n_ci_significant': n_ci_sig,  # CI doesn't cross ref_line
+        }
+    
     def create(
         self,
         title: str = "Forest Plot",
@@ -97,6 +162,8 @@ class ForestPlot:
         ref_line: float = 1.0,
         show_ref_line: bool = True,
         show_sig_stars: bool = True,
+        show_ci_width_colors: bool = True,
+        show_sig_divider: bool = True,
         height: int = None,
         color: str = None,
     ) -> go.Figure:
@@ -110,6 +177,9 @@ class ForestPlot:
         - Clear reference line with annotation
         - Complete hover information
         - Significance stars for p-values
+        - 🎨 CI width color coding (narrow=opaque, wide=transparent)
+        - ✂️ Significant/Non-significant split divider
+        - 📊 Summary statistics at top
         """
         if color is None:
             color = COLORS['primary']
@@ -145,6 +215,13 @@ class ForestPlot:
             ).str.rstrip()
         else:
             self.data['__display_label'] = self.data[self.label_col]
+        
+        # 4. 🎨 Get CI width colors
+        if show_ci_width_colors:
+            marker_colors, ci_width_norm = self._get_ci_width_colors(color)
+        else:
+            marker_colors = [color] * len(self.data)
+            ci_width_norm = None
 
         # --- Dynamic Column Layout ---
         # Determine if we have P-value column
@@ -230,6 +307,25 @@ class ForestPlot:
                 annotation_position='top',
                 row=1, col=plot_col
             )
+        
+        # ✂️ Add horizontal divider between Significant and Non-significant
+        if show_sig_divider:
+            ci_sig = (
+                ((self.data[self.ci_low_col] > ref_line) | (self.data[self.ci_high_col] < ref_line))
+                if ref_line > 0
+                else ((self.data[self.ci_low_col] * self.data[self.ci_high_col]) > 0)
+            )
+            
+            if ci_sig.any() and (~ci_sig).any():
+                # Find boundary between significant and non-significant
+                divider_y = ci_sig.idxmin() - 0.5
+                fig.add_hline(
+                    y=divider_y,
+                    line_dash='dot',
+                    line_color='rgba(100, 100, 100, 0.3)',
+                    line_width=1.5,
+                    row=1, col=plot_col
+                )
 
         # 🟢 Complete hover info
         # Build hover template with conditional P-value
@@ -240,6 +336,8 @@ class ForestPlot:
         ]
         if has_pval:
             hover_parts.append("<b>P-value:</b> %{customdata[2]}<br>")
+        if show_ci_width_colors:
+            hover_parts.append("<b>CI Width:</b> %{customdata[3]:.3f}<br>")
         hover_parts.append("<extra></extra>")
         hovertemplate = "".join(hover_parts)
         
@@ -249,9 +347,10 @@ class ForestPlot:
             ci_low = self.data.loc[idx, self.ci_low_col]
             ci_high = self.data.loc[idx, self.ci_high_col]
             p_val = self.data.loc[idx, self.pval_col] if has_pval else ""
-            customdata_list.append([ci_low, ci_high, p_val])
+            ci_width = ci_high - ci_low
+            customdata_list.append([ci_low, ci_high, p_val, ci_width])
         
-        # Markers & Error Bars with 🟢 Diamond + White border
+        # Markers & Error Bars with 🎨 CI width color coding
         fig.add_trace(go.Scatter(
             x=self.data[self.estimate_col],
             y=y_pos,
@@ -260,14 +359,14 @@ class ForestPlot:
                 symmetric=False,
                 array=self.data[self.ci_high_col] - self.data[self.estimate_col],
                 arrayminus=self.data[self.estimate_col] - self.data[self.ci_low_col],
-                color=color,
+                color=color if not show_ci_width_colors else 'rgba(100,100,100,0.5)',  # Neutral if using gradient
                 thickness=2,
                 width=4
             ),
             mode='markers',
             marker=dict(
                 size=10,  # 🟢 Slightly larger
-                color=color,
+                color=marker_colors if show_ci_width_colors else color,  # 🎨 Dynamic colors
                 symbol='diamond',  # 🟢 Diamond shape
                 line=dict(width=1.5, color='white')  # 🟢 White border for pop
             ),
@@ -280,15 +379,39 @@ class ForestPlot:
         # --- Update Layout ---
         if height is None:
             height = max(400, len(self.data) * 35 + 120)
+        
+        # 📊 Get summary statistics
+        summary = self.get_summary_stats(ref_line)
+        summary_text = (
+            f"<b>Summary:</b> N={summary['n_variables']}, "
+            f"Median={summary['median_est']:.2f}, "
+            f"Range=[{summary['min_est']:.2f}, {summary['max_est']:.2f}]"
+        )
+        if summary['pct_significant'] is not None:
+            summary_text += f", Sig={summary['pct_significant']:.0f}%"
 
         fig.update_layout(
             title=dict(text=title, x=0.01, xanchor='left', font=dict(size=18)),
             height=height,
             showlegend=False,
             template='plotly_white',
-            margin=dict(l=10, r=20, t=80, b=40),
+            margin=dict(l=10, r=20, t=120, b=40),  # Increased top margin for summary
             plot_bgcolor='white',
             responsive=True  # 🟢 Mobile responsive
+        )
+        
+        # Add summary statistics annotation at top
+        fig.add_annotation(
+            text=summary_text,
+            xref='paper', yref='paper',
+            x=0.01, y=0.98,
+            xanchor='left', yanchor='top',
+            showarrow=False,
+            font=dict(size=12, color='rgba(100,100,100,0.8)'),
+            bgcolor='rgba(240,240,240,0.8)',
+            bordercolor='rgba(100,100,100,0.3)',
+            borderwidth=1,
+            borderpad=8
         )
 
         # Hide Axes for Text Columns
@@ -327,7 +450,10 @@ class ForestPlot:
                 font=dict(size=14, color="black")
             )
 
-        logger.info(f"Forest plot generated: {title}, {len(self.data)} variables, log_scale={use_log_scale}")
+        logger.info(
+            f"Forest plot generated: {title}, {len(self.data)} variables, "
+            f"log_scale={use_log_scale}, ci_width_colors={show_ci_width_colors}, sig_divider={show_sig_divider}"
+        )
         return fig
 
 
