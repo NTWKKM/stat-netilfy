@@ -119,9 +119,8 @@ def render(df, var_meta):
         
         # 🟢 NEW: Dataset selection - FIXED: Pass df argument
         selected_df, data_label = _get_dataset_for_analysis(df)
-        if selected_df is None:
-            selected_df = df
-        
+         # 🟢 NEW: Dataset selection - FIXED: Pass df argument
+         selected_df, data_label = _get_dataset_for_analysis(df)
         st.write(f"**Using:** {data_label}")
         st.write(f"**Rows:** {len(selected_df)} | **Columns:** {len(selected_df.columns)}")
         
