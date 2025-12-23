@@ -265,7 +265,7 @@ def create_forest_plot_from_logit(aor_dict: dict, title: str = "Adjusted Odds Ra
     Convenience function to create forest plot directly from logistic regression aOR results.
     
     Parameters:
-        aor_dict: Dictionary with format {variable: {'aor': '1.50 (1.20-1.80)', 'ap': 0.001}}
+        aor_dict: Dictionary with format {variable: {'aor': float, 'ci_low': float, 'ci_high': float}}
         title: Plot title
     
     Returns:
@@ -273,37 +273,29 @@ def create_forest_plot_from_logit(aor_dict: dict, title: str = "Adjusted Odds Ra
     
     Example:
         >>> aor_results = {
-        ...     'Age': {'aor': '1.05 (1.01-1.09)', 'ap': 0.01},
-        ...     'Sex': {'aor': '0.92 (0.75-1.14)', 'ap': 0.45},
+        ...     'Age': {'aor': 1.05, 'ci_low': 1.01, 'ci_high': 1.09},
+        ...     'Sex': {'aor': 0.92, 'ci_low': 0.75, 'ci_high': 1.14},
         ... }
         >>> fig = create_forest_plot_from_logit(aor_results)
         >>> st.plotly_chart(fig, use_container_width=True)
     """
-    # Parse aOR strings like "1.50 (1.20-1.80)" -> extract 1.50, 1.20, 1.80
+    # Parse aOR results
     data = []
     
     for var, result in aor_dict.items():
-        aor_str = result.get('aor', '')
-        if not aor_str or aor_str == '-':
+        estimate = result.get('aor', result.get('or'))
+        ci_low = result.get('ci_low')
+        ci_high = result.get('ci_high')
+        
+        if estimate is None or ci_low is None or ci_high is None:
             continue
         
-        try:
-            # Format: "1.50 (1.20-1.80)"
-            parts = aor_str.split('(')
-            estimate = float(parts[0].strip())
-            ci_part = parts[1].replace(')', '').split('-')
-            ci_low = float(ci_part[0].strip())
-            ci_high = float(ci_part[1].strip())
-            
-            data.append({
-                'variable': var,
-                'aor': estimate,
-                'ci_low': ci_low,
-                'ci_high': ci_high,
-            })
-        except (ValueError, IndexError) as e:
-            logger.warning(f"Could not parse aOR for {var}: {aor_str} ({e})")
-            continue
+        data.append({
+            'variable': var,
+            'aor': float(estimate),
+            'ci_low': float(ci_low),
+            'ci_high': float(ci_high),
+        })
     
     if not data:
         logger.error("No valid aOR values to plot")
@@ -317,46 +309,39 @@ def create_forest_plot_from_logit(aor_dict: dict, title: str = "Adjusted Odds Ra
         ci_high_col='ci_high',
         label_col='variable',
         title=title,
-        x_label='Adjusted Odds Ratio (95% CI)',
+        x_label='Odds Ratio (95% CI)',
         ref_line=1.0,
     )
 
 
-def create_forest_plot_from_cox(hr_dict: dict, title: str = "Hazard Ratios") -> go.Figure:
+def create_forest_plot_from_cox(hr_dict: dict, title: str = "Hazard Ratios (Cox Regression)") -> go.Figure:
     """
     Convenience function for Cox regression hazard ratios.
     
     Parameters:
-        hr_dict: Dictionary with format {variable: {'hr': '1.50 (1.20-1.80)', 'hp': 0.001}}
+        hr_dict: Dictionary with format {variable: {'hr': float, 'ci_low': float, 'ci_high': float}}
         title: Plot title
     
     Returns:
         go.Figure: Plotly figure
     """
-    # Parse HR strings same as aOR
+    # Parse HR results
     data = []
     
     for var, result in hr_dict.items():
-        hr_str = result.get('hr', '')
-        if not hr_str or hr_str == '-':
+        estimate = result.get('hr', result.get('HR'))
+        ci_low = result.get('ci_low', result.get('CI Lower'))
+        ci_high = result.get('ci_high', result.get('CI Upper'))
+        
+        if estimate is None or ci_low is None or ci_high is None:
             continue
         
-        try:
-            parts = hr_str.split('(')
-            estimate = float(parts[0].strip())
-            ci_part = parts[1].replace(')', '').split('-')
-            ci_low = float(ci_part[0].strip())
-            ci_high = float(ci_part[1].strip())
-            
-            data.append({
-                'variable': var,
-                'hr': estimate,
-                'ci_low': ci_low,
-                'ci_high': ci_high,
-            })
-        except (ValueError, IndexError) as e:
-            logger.warning(f"Could not parse HR for {var}: {hr_str} ({e})")
-            continue
+        data.append({
+            'variable': var,
+            'hr': float(estimate),
+            'ci_low': float(ci_low),
+            'ci_high': float(ci_high),
+        })
     
     if not data:
         logger.error("No valid HR values to plot")
@@ -371,6 +356,58 @@ def create_forest_plot_from_cox(hr_dict: dict, title: str = "Hazard Ratios") -> 
         label_col='variable',
         title=title,
         x_label='Hazard Ratio (95% CI)',
+        ref_line=1.0,
+    )
+
+
+def create_forest_plot_from_rr(
+    rr_or_dict: dict,
+    title: str = "Risk/Odds Ratios",
+    effect_type: str = 'RR'  # 'RR' or 'OR'
+) -> go.Figure:
+    """
+    Convenience function for Risk Ratios or Odds Ratios from Chi-Square analysis.
+    
+    Parameters:
+        rr_or_dict: Dictionary with format {group: {'rr': float, 'ci_low': float, 'ci_high': float}} or similar for OR
+        title: Plot title
+        effect_type: Type of effect ('RR', 'OR')
+    
+    Returns:
+        go.Figure: Plotly figure
+    """
+    # Parse RR/OR results
+    data = []
+    metric_key = effect_type.lower()
+    
+    for group_name, result in rr_or_dict.items():
+        estimate = result.get(metric_key, result.get(effect_type))
+        ci_low = result.get('ci_low', result.get('CI Lower'))
+        ci_high = result.get('ci_high', result.get('CI Upper'))
+        
+        if estimate is None or ci_low is None or ci_high is None:
+            continue
+        
+        data.append({
+            'variable': group_name,
+            metric_key: float(estimate),
+            'ci_low': float(ci_low),
+            'ci_high': float(ci_high),
+        })
+    
+    if not data:
+        logger.error(f"No valid {effect_type} values to plot")
+        return go.Figure()
+    
+    df = pd.DataFrame(data)
+    return create_forest_plot(
+        df,
+        estimate_col=metric_key,
+        ci_low_col='ci_low',
+        ci_high_col='ci_high',
+        label_col='variable',
+        title=title,
+        x_label=f'{effect_type} (95% CI)',
         ref_line=1.0,
     )
 
