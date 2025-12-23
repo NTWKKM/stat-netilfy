@@ -482,6 +482,128 @@ def check_cph_assumptions(cph, data):
         return f"Assumption check failed: {e}", []
 
 
+# --- 🟢 NEW: Generate Forest Plot HTML for Cox Regression ---
+def generate_forest_plot_cox_html(res_df):
+    """
+    Generate an HTML forest plot for Cox regression hazard ratios using Plotly.
+    
+    Parameters:
+        res_df (pandas.DataFrame): Results DataFrame with columns 'HR', '95% CI Lower', '95% CI Upper', 'P-value'.
+    
+    Returns:
+        html_str (str): HTML string containing the forest plot as Plotly embed + summary table.
+    """
+    if res_df is None or res_df.empty:
+        return "<p>No Cox regression results available for forest plot.</p>"
+    
+    # Prepare data
+    variables = res_df.index.tolist()
+    hrs = res_df['HR'].values
+    ci_lows = res_df['95% CI Lower'].values
+    ci_highs = res_df['95% CI Upper'].values
+    p_vals = res_df['P-value'].values
+    
+    # Create Plotly figure
+    fig = go.Figure()
+    
+    # Add HR points and CI error bars
+    fig.add_trace(go.Scatter(
+        x=hrs,
+        y=variables,
+        mode='markers',
+        marker=dict(
+            size=10,
+            color=COLORS['success'],  # Use primary color from palette
+            line=dict(width=2, color='rgba(255,255,255,0.8)')
+        ),
+        name='Hazard Ratio',
+        hovertemplate='<b>%{y}</b><br>HR: %{x:.4f}<extra></extra>'
+    ))
+    
+    # Add error bars (CI)
+    fig.add_trace(go.Scatter(
+        x=ci_highs,
+        y=variables,
+        mode='lines',
+        line=dict(width=0),
+        showlegend=False,
+        hoverinfo='none'
+    ))
+    
+    fig.add_trace(go.Scatter(
+        x=ci_lows,
+        y=variables,
+        mode='lines',
+        line=dict(width=0),
+        showlegend=False,
+        hoverinfo='none',
+        fill='tonextx',
+        fillcolor=_hex_to_rgba(COLORS['success'].lstrip('#'), 0.2) if COLORS['success'].startswith('#') else 'rgba(50,184,198,0.2)',
+        name='95% CI'
+    ))
+    
+    # Add vertical line at HR = 1 (null effect)
+    fig.add_vline(
+        x=1,
+        line_dash='dash',
+        line_color='rgba(192, 21, 47, 0.5)',
+        annotation_text="HR = 1 (No Effect)",
+        annotation_position="top"
+    )
+    
+    # Update layout
+    fig.update_layout(
+        title='🌳 Forest Plot: Cox Regression Hazard Ratios (95% CI)',
+        xaxis_title='Hazard Ratio (log scale)',
+        yaxis_title='Variable',
+        xaxis_type='log',
+        template='plotly_white',
+        height=max(400, len(variables) * 40),
+        hovermode='y unified',
+        margin=dict(l=200, r=100)
+    )
+    
+    # Convert figure to HTML (embedded)
+    plot_html = fig.to_html(include_plotlyjs='cdn', div_id='cox_forest_plot')
+    
+    # Create summary table HTML
+    table_html = "<h3>Summary Table: Hazard Ratios</h3>"
+    table_html += "<table style='border-collapse: collapse; width: 100%; margin: 10px 0;'>"
+    table_html += "<tr style='background-color: " + COLORS.get('primary', '#1f8085') + "; color: white;'>"
+    table_html += "<th style='border: 1px solid #ddd; padding: 8px;'>Variable</th>"
+    table_html += "<th style='border: 1px solid #ddd; padding: 8px;'>HR</th>"
+    table_html += "<th style='border: 1px solid #ddd; padding: 8px;'>95% CI Lower</th>"
+    table_html += "<th style='border: 1px solid #ddd; padding: 8px;'>95% CI Upper</th>"
+    table_html += "<th style='border: 1px solid #ddd; padding: 8px;'>P-value</th>"
+    table_html += "</tr>"
+    
+    for i, var in enumerate(variables):
+        sig = "✅" if p_vals[i] < 0.05 else "⚠️"
+        table_html += f"<tr style='background-color: #f8f9fa;'>"
+        table_html += f"<td style='border: 1px solid #ddd; padding: 8px;'><b>{var}</b></td>"
+        table_html += f"<td style='border: 1px solid #ddd; padding: 8px;'>{hrs[i]:.4f}</td>"
+        table_html += f"<td style='border: 1px solid #ddd; padding: 8px;'>{ci_lows[i]:.4f}</td>"
+        table_html += f"<td style='border: 1px solid #ddd; padding: 8px;'>{ci_highs[i]:.4f}</td>"
+        table_html += f"<td style='border: 1px solid #ddd; padding: 8px;'>{p_vals[i]:.4f} {sig}</td>"
+        table_html += "</tr>"
+    
+    table_html += "</table>"
+    
+    # Interpretation guide
+    interp_html = """
+    <h3>💡 Interpretation Guide</h3>
+    <ul>
+        <li><b>HR > 1:</b> Increased hazard (Risk Factor) 🔴</li>
+        <li><b>HR < 1:</b> Decreased hazard (Protective Factor) 🟢</li>
+        <li><b>HR = 1:</b> No effect (null)</li>
+        <li><b>CI crosses 1.0:</b> Not statistically significant ⚠️</li>
+        <li><b>CI doesn't cross 1.0:</b> Statistically significant ✅</li>
+        <li><b>P < 0.05:</b> Statistically significant ✅</li>
+    </ul>
+    """
+    
+    return f"<div style='margin: 20px 0;'>{plot_html}{table_html}{interp_html}</div>"
+
 # --- 4. Landmark Analysis (KM) 🟢 FIX LM CI ---
 def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
     """
@@ -632,6 +754,7 @@ def generate_report_survival(title, elements):
     - "table": a pandas DataFrame (or DataFrame-like) rendered via DataFrame.to_html().
     - "plot": a Plotly Figure-like object (with to_html) or a Matplotlib Figure-like object (with savefig).
     - "image": raw image bytes (PNG) which will be embedded as a base64 data URL.
+    - "html": raw HTML string to embed directly.
     
     Parameters:
         title: The report title; will be HTML-escaped.
@@ -668,6 +791,10 @@ def generate_report_survival(title, elements):
             padding-left: 12px;
             margin: 25px 0 15px 0;
         }}
+        h3{{
+            color: {primary_dark};
+            margin: 15px 0 10px 0;
+        }}
         table{{
             border-collapse: collapse;
             width: 100%;
@@ -701,6 +828,13 @@ def generate_report_survival(title, elements):
             border-radius: 5px;
             overflow-x: auto;
             border-left: 4px solid {primary_color};
+        }}
+        ul, ol {{
+            margin: 12px 0;
+            padding-left: 20px;
+        }}
+        li {{
+            margin: 8px 0;
         }}
         .report-footer {{
             text-align: center;
@@ -753,10 +887,13 @@ def generate_report_survival(title, elements):
                 buf = io.BytesIO()
                 d.savefig(buf, format='png', bbox_inches='tight')
                 b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-                html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'  
+                html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
         elif t == 'image':
             b64 = base64.b64encode(d).decode('utf-8')
             html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
+        elif t == 'html':
+            # 🟢 NEW: Embed raw HTML (used for forest plot)
+            html_doc += str(d)
     
     html_doc += """<div class='report-footer'>
     &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank">NTWKKM n Donate</a> | All Rights Reserved. | Powered by GitHub, Gemini, Streamlit
