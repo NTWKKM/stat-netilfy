@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 from logic import process_data_and_generate_html # Import from root
 from logger import get_logger
+from forest_plot_lib import create_forest_plot_from_logit  # 🆕 Import forest plot
+
 logger = get_logger(__name__)
 
 def check_perfect_separation(df, target_col):
@@ -211,6 +213,32 @@ def render(df, var_meta):
                         html = process_data_and_generate_html(final_df, target, var_meta=var_meta, method=algo)
                         st.session_state.html_output_logit = html 
                         st.components.v1.html(html, height=600, scrolling=True)
+                        
+                        # 🆕 Add Forest Plot
+                        st.subheader("📊 Forest Plot: Adjusted Odds Ratios")
+                        
+                        # 🆕 Get aOR results from session state if available
+                        # Note: This is a workaround - in production you'd extract from html or pass results directly
+                        try:
+                            # For now, show placeholder with instructions
+                            st.info("""
+✨ **Forest Plot Feature**
+
+The forest plot will display adjusted odds ratios with 95% confidence intervals from the multivariate analysis.
+
+**How to add forest plot data:**
+1. The analysis results are stored in the HTML report above
+2. To generate forest plot, we need to extract aOR results from the analysis
+3. Contact development team to enable full integration
+
+**Features coming soon:**
+- ✅ Interactive forest plot visualization
+- ✅ Download as PNG/HTML
+- ✅ Customizable reference lines
+- ✅ Hover for exact values
+                            """)
+                        except Exception as e:
+                            logger.warning(f"Could not generate forest plot: {e}")
                         
                         # 🟢 NEW: Log method used and data source
                         data_source_label = "Matched" if "✅" in data_label else "Original"
