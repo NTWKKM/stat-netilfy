@@ -95,6 +95,7 @@
         ],
         entrypoint: "app.py",
         files: {
+          // --- Root Files ---
           "app.py": { url: "./app.py" },
           "config.py": { url: "./config.py" },
           "logger.py": { url: "./logger.py" },
@@ -105,10 +106,13 @@
           "diag_test.py": { url: "./diag_test.py" },
           "correlation.py": { url: "./correlation.py" },
           "forest_plot_lib.py": { url: "./forest_plot_lib.py" },
+          "subgroup_analysis_module.py": { url: "./subgroup_analysis_module.py" },
 
+          // --- Utils ---
           "utils/__init__.py": { url: "./utils/__init__.py" },
           "utils/dataset_selector.py": { url: "./utils/dataset_selector.py" },
           
+          // --- Tabs (Main) ---
           "tabs/__init__.py": { url: "./tabs/__init__.py" },
           "tabs/_common.py": { url: "./tabs/_common.py" },
           "tabs/tab_data.py": { url: "./tabs/tab_data.py" },
@@ -117,7 +121,11 @@
           "tabs/tab_corr.py": { url: "./tabs/tab_corr.py" },
           "tabs/tab_logit.py": { url: "./tabs/tab_logit.py" },
           "tabs/tab_survival.py": { url: "./tabs/tab_survival.py" },
-          "tabs/tab_adv_survival.py": { url: "./tabs/tab_adv_survival.py" }
+          
+          // --- Tabs (New Subfolders) ---
+          // ต้องระบุ Path เต็มให้ตรงกับ structure เพื่อให้ import ได้ถูกต้อง
+          "tabs/cox_regression/subgroup_tab.py": { url: "./tabs/cox_regression/subgroup_tab.py" },
+          "tabs/logistic_regression/subgroup_tab.py": { url: "./tabs/logistic_regression/subgroup_tab.py" }
         },
         streamlitConfig: {
           "theme.base": "light",
