@@ -179,7 +179,7 @@ class ForestPlot:
         - Significance stars for p-values
         - 🎨 CI width color coding (narrow=opaque, wide=transparent)
         - ✂️ Significant/Non-significant split divider
-        - 📊 Summary statistics at top
+        - 📊 Summary statistics integrated into title
         """
         if color is None:
             color = COLORS['primary']
@@ -199,7 +199,6 @@ class ForestPlot:
                     return f"{p:.3f}"
                 except: return ""
             self.data['__display_p'] = self.data[self.pval_col].apply(fmt_p)
-            # Determine color for p-values (Red if < 0.05)
             p_text_colors = self.data[self.pval_col].apply(
                 lambda p: "red" if (isinstance(p, (int, float)) and p < 0.05) or (isinstance(p, str) and '<' in p) else "black"
             ).tolist()
@@ -207,7 +206,7 @@ class ForestPlot:
             self.data['__display_p'] = ""
             p_text_colors = ["black"] * len(self.data)
         
-        # 3. Add significance stars to labels (if enabled)
+        # 3. Add significance stars to labels
         if show_sig_stars and self.pval_col:
             self.data['__sig_stars'] = self.data[self.pval_col].apply(self._add_significance_stars)
             self.data['__display_label'] = (
@@ -217,276 +216,119 @@ class ForestPlot:
             self.data['__display_label'] = self.data[self.label_col]
         
         # 4. 🎨 Get CI width colors
-        if show_ci_width_colors:
-            marker_colors, ci_width_norm = self._get_ci_width_colors(color)
-        else:
-            marker_colors = [color] * len(self.data)
-            ci_width_norm = None
+        marker_colors, _ = self._get_ci_width_colors(color) if show_ci_width_colors else ([color] * len(self.data), None)
 
         # --- Dynamic Column Layout ---
-        # Determine if we have P-value column
         has_pval = self.pval_col is not None and not self.data[self.pval_col].isna().all()
+        column_widths = [0.25, 0.20, 0.10, 0.45] if has_pval else [0.25, 0.20, 0.55]
+        num_cols = 4 if has_pval else 3
+        plot_col = 4 if has_pval else 3
         
-        # Build column widths dynamically
-        column_widths = [0.25, 0.20]  # Variable, Estimate
-        num_cols = 2
-        
-        if has_pval:
-            column_widths.extend([0.10, 0.45])  # P-value, Plot
-            num_cols = 4
-        else:
-            column_widths.append(0.55)  # Plot gets more space
-            num_cols = 3
-        
-        # Create subplots with dynamic specs
-        specs = [[{"type": "scatter"} for _ in range(num_cols)]]
         fig = make_subplots(
             rows=1, cols=num_cols,
             shared_yaxes=True,
             horizontal_spacing=0.02,
             column_widths=column_widths,
-            specs=specs
+            specs=[[{"type": "scatter"} for _ in range(num_cols)]]
         )
 
         y_pos = list(range(len(self.data)))
         
-        # Column 1: Variable Labels (with significance stars)
-        fig.add_trace(go.Scatter(
-            x=[0] * len(self.data),
-            y=y_pos,
-            text=self.data['__display_label'],
-            mode="text",
-            textposition="middle right",
-            textfont=dict(size=13, color="black"),
-            hoverinfo="none",
-            showlegend=False
-        ), row=1, col=1)
+        # Column 1: Variable Labels
+        fig.add_trace(go.Scatter(x=[0]*len(y_pos), y=y_pos, text=self.data['__display_label'], mode="text", textposition="middle right", textfont=dict(size=13, color="black"), hoverinfo="none", showlegend=False), row=1, col=1)
 
         # Column 2: Estimate (95% CI)
-        fig.add_trace(go.Scatter(
-            x=[0] * len(self.data),
-            y=y_pos,
-            text=self.data['__display_est'],
-            mode="text",
-            textposition="middle center",
-            textfont=dict(size=13, color="black"),
-            hoverinfo="none",
-            showlegend=False
-        ), row=1, col=2)
+        fig.add_trace(go.Scatter(x=[0]*len(y_pos), y=y_pos, text=self.data['__display_est'], mode="text", textposition="middle center", textfont=dict(size=13, color="black"), hoverinfo="none", showlegend=False), row=1, col=2)
 
-        # Column 3: P-value (if present)
+        # Column 3: P-value
         if has_pval:
-            fig.add_trace(go.Scatter(
-                x=[0] * len(self.data),
-                y=y_pos,
-                text=self.data['__display_p'],
-                mode="text",
-                textposition="middle center",
-                textfont=dict(size=13, color=p_text_colors),
-                hoverinfo="none",
-                showlegend=False
-            ), row=1, col=3)
-            plot_col = 4
-        else:
-            plot_col = 3
+            fig.add_trace(go.Scatter(x=[0]*len(y_pos), y=y_pos, text=self.data['__display_p'], mode="text", textposition="middle center", textfont=dict(size=13, color=p_text_colors), hoverinfo="none", showlegend=False), row=1, col=3)
 
         # Column N: Forest Plot
-        # 🟢 Auto-detect log scale
-        est_min = self.data[self.estimate_col].min()
-        est_max = self.data[self.estimate_col].max()
+        est_min, est_max = self.data[self.estimate_col].min(), self.data[self.estimate_col].max()
         use_log_scale = est_min > 0 and (est_max / est_min > 5)
-        
-        # Reference Line
-        if show_ref_line:
-            fig.add_vline(
-                x=ref_line,
-                line_dash='dash',
-                line_color='rgba(192, 21, 47, 0.6)',  # 🟢 Red for visibility
-                line_width=2,  # 🟢 Thicker
-                annotation_text=f'No Effect ({ref_line})',
-                annotation_position='top',
-                row=1, col=plot_col
-            )
-        
-        # ✂️ Add horizontal divider between Significant and Non-significant
-        if show_sig_divider:
-            ci_sig = (
-                ((self.data[self.ci_low_col] > ref_line) | (self.data[self.ci_high_col] < ref_line))
-                if ref_line > 0
-                else ((self.data[self.ci_low_col] * self.data[self.ci_high_col]) > 0)
-            )
-            
-            if ci_sig.any() and (~ci_sig).any():
-                # Find boundary between significant and non-significant
-                divider_y = ci_sig.idxmin() - 0.5
-                fig.add_hline(
-                    y=divider_y,
-                    line_dash='dot',
-                    line_color='rgba(100, 100, 100, 0.3)',
-                    line_width=1.5,
-                    row=1, col=plot_col
-                )
 
-        # 🟢 Complete hover info
-        # Build hover template with conditional P-value
-        hover_parts = [
-            "<b>%{text}</b><br>",
-            f"<b>{self.estimate_col}:</b> %{{x:.3f}}<br>",
-            f"<b>95% CI:</b> %{{customdata[0]:.3f}} - %{{customdata[1]:.3f}}<br>"
-        ]
-        if has_pval:
-            hover_parts.append("<b>P-value:</b> %{customdata[2]}<br>")
-        if show_ci_width_colors:
-            hover_parts.append("<b>CI Width:</b> %{customdata[3]:.3f}<br>")
+        if show_ref_line:
+            fig.add_vline(x=ref_line, line_dash='dash', line_color='rgba(192, 21, 47, 0.6)', line_width=2, annotation_text=f'No Effect ({ref_line})', annotation_position='top', row=1, col=plot_col)
+        
+        if show_sig_divider:
+            ci_sig = ((self.data[self.ci_low_col] > ref_line) | (self.data[self.ci_high_col] < ref_line)) if ref_line > 0 else ((self.data[self.ci_low_col] * self.data[self.ci_high_col]) > 0)
+            if ci_sig.any() and (~ci_sig).any():
+                divider_y = ci_sig.idxmin() - 0.5
+                fig.add_hline(y=divider_y, line_dash='dot', line_color='rgba(100, 100, 100, 0.3)', line_width=1.5, row=1, col=plot_col)
+
+        hover_parts = ["<b>%{text}</b><br>", f"<b>{self.estimate_col}:</b> %{{x:.3f}}<br>", "<b>95% CI:</b> %{customdata[0]:.3f} - %{customdata[1]:.3f}<br>"]
+        if has_pval: hover_parts.append("<b>P-value:</b> %{customdata[2]}<br>")
+        if show_ci_width_colors: hover_parts.append("<b>CI Width:</b> %{customdata[3]:.3f}<br>")
         hover_parts.append("<extra></extra>")
         hovertemplate = "".join(hover_parts)
         
-        # Prepare customdata for hover
-        customdata_list = []
-        for idx in self.data.index:
-            ci_low = self.data.loc[idx, self.ci_low_col]
-            ci_high = self.data.loc[idx, self.ci_high_col]
-            p_val = self.data.loc[idx, self.pval_col] if has_pval else ""
-            ci_width = ci_high - ci_low
-            customdata_list.append([ci_low, ci_high, p_val, ci_width])
-        
-        # Markers & Error Bars with 🎨 CI width color coding
+        customdata = np.stack((
+            self.data[self.ci_low_col], 
+            self.data[self.ci_high_col], 
+            self.data[self.pval_col] if has_pval else [None]*len(self.data),
+            self.data[self.ci_high_col] - self.data[self.ci_low_col]
+        ), axis=-1)
+
         fig.add_trace(go.Scatter(
-            x=self.data[self.estimate_col],
-            y=y_pos,
-            error_x=dict(
-                type='data',
-                symmetric=False,
-                array=self.data[self.ci_high_col] - self.data[self.estimate_col],
-                arrayminus=self.data[self.estimate_col] - self.data[self.ci_low_col],
-                color=color if not show_ci_width_colors else 'rgba(100,100,100,0.5)',  # Neutral if using gradient
-                thickness=2,
-                width=4
-            ),
-            mode='markers',
-            marker=dict(
-                size=10,  # 🟢 Slightly larger
-                color=marker_colors if show_ci_width_colors else color,  # 🎨 Dynamic colors
-                symbol='diamond',  # 🟢 Diamond shape
-                line=dict(width=1.5, color='white')  # 🟢 White border for pop
-            ),
-            text=self.data['__display_label'],
-            customdata=customdata_list,
-            hovertemplate=hovertemplate,
-            showlegend=False
+            x=self.data[self.estimate_col], y=y_pos,
+            error_x=dict(type='data', symmetric=False, array=self.data[self.ci_high_col] - self.data[self.estimate_col], arrayminus=self.data[self.estimate_col] - self.data[self.ci_low_col], color='rgba(100,100,100,0.5)', thickness=2, width=4),
+            mode='markers', marker=dict(size=10, color=marker_colors, symbol='diamond', line=dict(width=1.5, color='white')),
+            text=self.data['__display_label'], customdata=customdata, hovertemplate=hovertemplate, showlegend=False
         ), row=1, col=plot_col)
 
         # --- Update Layout ---
-        if height is None:
-            height = max(400, len(self.data) * 35 + 120)
+        if height is None: height = max(400, len(self.data) * 35 + 120)
         
-        # 📊 Get summary statistics
         summary = self.get_summary_stats(ref_line)
-        summary_text = (
-            f"<b>Summary:</b> N={summary['n_variables']}, "
-            f"Median={summary['median_est']:.2f}, "
-            f"Range=[{summary['min_est']:.2f}, {summary['max_est']:.2f}]"
-        )
-        if summary['pct_significant'] is not None:
-            summary_text += f", Sig={summary['pct_significant']:.0f}%"
+        summary_text = f"N={summary['n_variables']}, Median={summary['median_est']:.2f}, Range=[{summary['min_est']:.2f}, {summary['max_est']:.2f}]"
+        if summary['pct_significant'] is not None: summary_text += f", Sig={summary['pct_significant']:.0f}%"
+        
+        # 🔧 FIX: Integrate summary into title to avoid overlap
+        title_with_summary = f"<b>{title}</b><br><span style='font-size: 13px; color: rgba(100,100,100,0.9);'>{summary_text}</span>"
 
         fig.update_layout(
-            title=dict(text=title, x=0.01, xanchor='left', font=dict(size=18)),
-            height=height,
-            showlegend=False,
-            template='plotly_white',
-            margin=dict(l=10, r=20, t=120, b=40),  # Increased top margin for summary
-            plot_bgcolor='white',
-            autosize=True  # 🔧 Fixed: Use autosize instead of responsive
+            title=dict(text=title_with_summary, x=0.01, xanchor='left', font=dict(size=18)),
+            height=height, showlegend=False, template='plotly_white',
+            margin=dict(l=10, r=20, t=120, b=40),
+            plot_bgcolor='white', autosize=True
         )
         
-        # Add summary statistics annotation at top
-        fig.add_annotation(
-            text=summary_text,
-            xref='paper', yref='paper',
-            x=0.01, y=0.98,
-            xanchor='left', yanchor='top',
-            showarrow=False,
-            font=dict(size=12, color='rgba(100,100,100,0.8)'),
-            bgcolor='rgba(240,240,240,0.8)',
-            bordercolor='rgba(100,100,100,0.3)',
-            borderwidth=1,
-            borderpad=8
-        )
+        # Remove the separate summary annotation
+        # fig.add_annotation(...) - REMOVED
 
-        # Hide Axes for Text Columns
         for c in range(1, plot_col):
             fig.update_xaxes(visible=False, showgrid=False, zeroline=False, row=1, col=c)
             fig.update_yaxes(visible=False, showgrid=False, zeroline=False, row=1, col=c)
 
-        # Set Axis for Plot Column
         fig.update_yaxes(visible=False, range=[-0.5, len(self.data)-0.5], row=1, col=plot_col)
-        fig.update_xaxes(
-            title_text=x_label,
-            type='log' if use_log_scale else 'linear',  # 🟢 Auto log scale
-            row=1, col=plot_col,
-            gridcolor='rgba(200, 200, 200, 0.2)'
-        )
+        fig.update_xaxes(title_text=x_label, type='log' if use_log_scale else 'linear', row=1, col=plot_col, gridcolor='rgba(200, 200, 200, 0.2)')
 
-        # --- Add Headers ---
-        headers = ["Variable", "Estimate (95% CI)"]
-        if has_pval:
-            headers.extend(["P-value", f"{x_label} Plot"])
-        else:
-            headers.append(f"{x_label} Plot")
+        headers = ["Variable", "Estimate (95% CI)"] + (["P-value", f"{x_label} Plot"] if has_pval else [f"{x_label} Plot"])
         
         for i, h in enumerate(headers, 1):
-            # 🟢 FIX: Handle x domain naming (x, x2, x3, x4)
-            xref_val = "x domain" if i == 1 else f"x{i} domain"
-            
-            fig.add_annotation(
-                x=0.5 if i != 1 else 1.0,  # Right align 'Variable' header
-                y=1.0,
-                xref=xref_val,
-                yref="paper",
-                text=f"<b>{h}</b>",
-                showarrow=False,
-                yanchor="bottom",
-                font=dict(size=14, color="black")
-            )
+            xref_val = f"x{i} domain" if i > 1 else "x domain"
+            fig.add_annotation(x=0.5 if i != 1 else 1.0, y=1.0, xref=xref_val, yref="paper", text=f"<b>{h}</b>", showarrow=False, yanchor="bottom", font=dict(size=14, color="black"))
 
-        logger.info(
-            f"Forest plot generated: {title}, {len(self.data)} variables, "
-            f"log_scale={use_log_scale}, ci_width_colors={show_ci_width_colors}, sig_divider={show_sig_divider}"
-        )
+        logger.info(f"Forest plot generated: {title}, {len(self.data)} variables, log_scale={use_log_scale}")
         return fig
 
 
 def create_forest_plot(
-    data: pd.DataFrame,
-    estimate_col: str,
-    ci_low_col: str,
-    ci_high_col: str,
-    label_col: str,
-    pval_col: str = None, 
-    title: str = "Forest Plot",
-    x_label: str = "Effect Size (95% CI)",
-    ref_line: float = 1.0,
-    height: int = None,
-    **kwargs
+    data: pd.DataFrame, estimate_col: str, ci_low_col: str, ci_high_col: str, label_col: str,
+    pval_col: str = None, title: str = "Forest Plot", x_label: str = "Effect Size (95% CI)",
+    ref_line: float = 1.0, height: int = None, **kwargs
 ) -> go.Figure:
-    """
-    Convenience function to create forest plot in one call.
-    """
+    """Convenience function to create forest plot in one call."""
     try:
         fp = ForestPlot(data, estimate_col, ci_low_col, ci_high_col, label_col, pval_col)
-        fig = fp.create(
-            title=title,
-            x_label=x_label,
-            ref_line=ref_line,
-            height=height,
-            **kwargs
-        )
-        return fig
+        return fp.create(title=title, x_label=x_label, ref_line=ref_line, height=height, **kwargs)
     except ValueError as e:
         logger.error(f"Forest plot creation failed: {e}")
         st.error(f"Could not create forest plot: {e}")
         return go.Figure()
+
+# ... (the rest of the convenience functions remain the same)
 
 
 def create_forest_plot_from_logit(aor_dict: dict, title: str = "Adjusted Odds Ratios") -> go.Figure:
