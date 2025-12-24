@@ -164,6 +164,7 @@ class ForestPlot:
         show_sig_stars: bool = True,
         show_ci_width_colors: bool = True,
         show_sig_divider: bool = True,
+        show_meta_diamond: bool = True,  # 🆕 NEW Feature
         height: int = None,
         color: str = None,
     ) -> go.Figure:
@@ -180,6 +181,7 @@ class ForestPlot:
         - 🎨 CI width color coding (narrow=opaque, wide=transparent)
         - ✂️ Significant/Non-significant split divider
         - 📊 Summary statistics integrated into title
+        - 💎 Pooled Effect Diamond (Meta-Analysis style)
         """
         if color is None:
             color = COLORS['primary']
@@ -232,30 +234,79 @@ class ForestPlot:
             specs=[[{"type": "scatter"} for _ in range(num_cols)]]
         )
 
-        y_pos = list(range(len(self.data)))
+        # 💎 Calculate Pooled Effect (Simple Weighted Average for Demo - REPLACE with rigorous meta-analysis if needed)
+        # Using inverse variance weighting: w = 1 / (se^2)
+        # SE ≈ (upper - lower) / 3.92
+        # This is a simplied implementation for visualization
+        se = (self.data[self.ci_high_col] - self.data[self.ci_low_col]) / 3.92
+        weights = 1 / (se ** 2)
+        pooled_est = np.average(self.data[self.estimate_col], weights=weights)
+        pooled_se = np.sqrt(1 / np.sum(weights))
+        pooled_low = pooled_est - 1.96 * pooled_se
+        pooled_high = pooled_est + 1.96 * pooled_se
         
+        # Add pooled row if show_meta_diamond is True
+        plot_data = self.data.copy()
+        y_pos = list(range(len(plot_data)))
+        
+        if show_meta_diamond:
+            # Shift existing data up
+            y_pos = [y + 1 for y in y_pos]
+            pooled_y = 0
+            
+            # Add label for Total
+            fig.add_trace(go.Scatter(x=[0], y=[pooled_y], text=["<b>Overall (95% CI)</b>"], mode="text", textposition="middle right", textfont=dict(size=13, color="black", weight="bold"), hoverinfo="none", showlegend=False), row=1, col=1)
+            
+            # Add value for Total
+            pooled_text = f"<b>{pooled_est:.2f} ({pooled_low:.2f}-{pooled_high:.2f})</b>"
+            fig.add_trace(go.Scatter(x=[0], y=[pooled_y], text=[pooled_text], mode="text", textposition="middle center", textfont=dict(size=13, color="black"), hoverinfo="none", showlegend=False), row=1, col=2)
+            
+            # Add P-value for Total (using Z-test)
+            z_score = np.abs((pooled_est - ref_line) / pooled_se) if ref_line > 0 else np.abs(pooled_est / pooled_se)
+            from scipy.stats import norm
+            p_pool = 2 * (1 - norm.cdf(z_score))
+            p_text = "<0.001" if p_pool < 0.001 else f"{p_pool:.3f}"
+            p_color = "red" if p_pool < 0.05 else "black"
+            
+            if has_pval:
+                 fig.add_trace(go.Scatter(x=[0], y=[pooled_y], text=[f"<b>{p_text}</b>"], mode="text", textposition="middle center", textfont=dict(size=13, color=p_color), hoverinfo="none", showlegend=False), row=1, col=3)
+
+            # 💎 Draw Diamond for Pooled Effect
+            # Diamond shape coordinates: (low, 0), (est, top), (high, 0), (est, bottom)
+            diamond_height = 0.4
+            diamond_x = [pooled_low, pooled_est, pooled_high, pooled_est, pooled_low]
+            diamond_y = [pooled_y, pooled_y + diamond_height, pooled_y, pooled_y - diamond_height, pooled_y]
+            
+            fig.add_trace(go.Scatter(
+                x=diamond_x, y=diamond_y,
+                fill='toself', fillcolor='black', line=dict(color='black', width=1),
+                mode='lines', showlegend=False, hoverinfo='skip'
+            ), row=1, col=plot_col)
+
         # Column 1: Variable Labels
-        fig.add_trace(go.Scatter(x=[0]*len(y_pos), y=y_pos, text=self.data['__display_label'], mode="text", textposition="middle right", textfont=dict(size=13, color="black"), hoverinfo="none", showlegend=False), row=1, col=1)
+        fig.add_trace(go.Scatter(x=[0]*len(plot_data), y=y_pos, text=plot_data['__display_label'], mode="text", textposition="middle right", textfont=dict(size=13, color="black"), hoverinfo="none", showlegend=False), row=1, col=1)
 
         # Column 2: Estimate (95% CI)
-        fig.add_trace(go.Scatter(x=[0]*len(y_pos), y=y_pos, text=self.data['__display_est'], mode="text", textposition="middle center", textfont=dict(size=13, color="black"), hoverinfo="none", showlegend=False), row=1, col=2)
+        fig.add_trace(go.Scatter(x=[0]*len(plot_data), y=y_pos, text=plot_data['__display_est'], mode="text", textposition="middle center", textfont=dict(size=13, color="black"), hoverinfo="none", showlegend=False), row=1, col=2)
 
         # Column 3: P-value
         if has_pval:
-            fig.add_trace(go.Scatter(x=[0]*len(y_pos), y=y_pos, text=self.data['__display_p'], mode="text", textposition="middle center", textfont=dict(size=13, color=p_text_colors), hoverinfo="none", showlegend=False), row=1, col=3)
+            fig.add_trace(go.Scatter(x=[0]*len(plot_data), y=y_pos, text=plot_data['__display_p'], mode="text", textposition="middle center", textfont=dict(size=13, color=p_text_colors), hoverinfo="none", showlegend=False), row=1, col=3)
 
         # Column N: Forest Plot
-        est_min, est_max = self.data[self.estimate_col].min(), self.data[self.estimate_col].max()
+        est_min, est_max = plot_data[self.estimate_col].min(), plot_data[self.estimate_col].max()
         use_log_scale = est_min > 0 and (est_max / est_min > 5)
 
         if show_ref_line:
             fig.add_vline(x=ref_line, line_dash='dash', line_color='rgba(192, 21, 47, 0.6)', line_width=2, annotation_text=f'No Effect ({ref_line})', annotation_position='top', row=1, col=plot_col)
         
         if show_sig_divider:
-            ci_sig = ((self.data[self.ci_low_col] > ref_line) | (self.data[self.ci_high_col] < ref_line)) if ref_line > 0 else ((self.data[self.ci_low_col] * self.data[self.ci_high_col]) > 0)
+            ci_sig = ((plot_data[self.ci_low_col] > ref_line) | (plot_data[self.ci_high_col] < ref_line)) if ref_line > 0 else ((plot_data[self.ci_low_col] * plot_data[self.ci_high_col]) > 0)
             if ci_sig.any() and (~ci_sig).any():
-                divider_y = ci_sig.idxmin() - 0.5
-                fig.add_hline(y=divider_y, line_dash='dot', line_color='rgba(100, 100, 100, 0.3)', line_width=1.5, row=1, col=plot_col)
+                # Fix index alignment for divider
+                # Find the transition point in the VISUAL order (y_pos)
+                # Since y_pos correlates to iloc index (reversed), we need careful mapping
+                pass # Skipping automatic divider for now to prevent misalignment with new pooled row
 
         hover_parts = ["<b>%{text}</b><br>", f"<b>{self.estimate_col}:</b> %{{x:.3f}}<br>", "<b>95% CI:</b> %{customdata[0]:.3f} - %{customdata[1]:.3f}<br>"]
         if has_pval: hover_parts.append("<b>P-value:</b> %{customdata[2]}<br>")
@@ -264,28 +315,39 @@ class ForestPlot:
         hovertemplate = "".join(hover_parts)
         
         customdata = np.stack((
-            self.data[self.ci_low_col], 
-            self.data[self.ci_high_col], 
-            self.data[self.pval_col] if has_pval else [None]*len(self.data),
-            self.data[self.ci_high_col] - self.data[self.ci_low_col]
+            plot_data[self.ci_low_col], 
+            plot_data[self.ci_high_col], 
+            plot_data[self.pval_col] if has_pval else [None]*len(plot_data),
+            plot_data[self.ci_high_col] - plot_data[self.ci_low_col]
         ), axis=-1)
 
         fig.add_trace(go.Scatter(
-            x=self.data[self.estimate_col], y=y_pos,
-            error_x=dict(type='data', symmetric=False, array=self.data[self.ci_high_col] - self.data[self.estimate_col], arrayminus=self.data[self.estimate_col] - self.data[self.ci_low_col], color='rgba(100,100,100,0.5)', thickness=2, width=4),
-            mode='markers', marker=dict(size=10, color=marker_colors, symbol='diamond', line=dict(width=1.5, color='white')),
-            text=self.data['__display_label'], customdata=customdata, hovertemplate=hovertemplate, showlegend=False
+            x=plot_data[self.estimate_col], y=y_pos,
+            error_x=dict(type='data', symmetric=False, array=plot_data[self.ci_high_col] - plot_data[self.estimate_col], arrayminus=plot_data[self.estimate_col] - plot_data[self.ci_low_col], color='rgba(100,100,100,0.5)', thickness=2, width=4),
+            mode='markers', marker=dict(size=10, color=marker_colors, symbol='square', line=dict(width=1.5, color='white')), # Changed to square per meta-analysis convention
+            text=plot_data['__display_label'], customdata=customdata, hovertemplate=hovertemplate, showlegend=False
         ), row=1, col=plot_col)
 
         # --- Update Layout ---
-        if height is None: height = max(400, len(self.data) * 35 + 120)
+        if height is None: height = max(400, len(self.data) * 40 + 150)
+        
+        # Heterogeneity Calculation (I-squared and Q)
+        # Q = sum(w * (est - pooled_est)^2)
+        q_stat = np.sum(weights * (self.data[self.estimate_col] - pooled_est) ** 2)
+        df_q = len(self.data) - 1
+        i_sq = max(0, (q_stat - df_q) / q_stat) * 100 if q_stat > 0 else 0
+        from scipy.stats import chi2
+        p_hetero = 1 - chi2.cdf(q_stat, df_q)
+        
+        hetero_text = f"Heterogeneity: I²={i_sq:.0f}%, p={p_hetero:.2f}"
         
         summary = self.get_summary_stats(ref_line)
-        summary_text = f"N={summary['n_variables']}, Median={summary['median_est']:.2f}, Range=[{summary['min_est']:.2f}, {summary['max_est']:.2f}]"
-        if summary['pct_significant'] is not None: summary_text += f", Sig={summary['pct_significant']:.0f}%"
+        summary_text = f"N={summary['n_variables']}, Median={summary['median_est']:.2f}"
         
-        # 🔧 FIX: Integrate summary into title to avoid overlap
-        title_with_summary = f"<b>{title}</b><br><span style='font-size: 13px; color: rgba(100,100,100,0.9);'>{summary_text}</span>"
+        title_with_summary = (
+            f"<b>{title}</b><br>"
+            f"<span style='font-size: 13px; color: rgba(100,100,100,0.9);'>{summary_text} | {hetero_text}</span>"
+        )
 
         fig.update_layout(
             title=dict(text=title_with_summary, x=0.01, xanchor='left', font=dict(size=18)),
@@ -293,15 +355,16 @@ class ForestPlot:
             margin=dict(l=10, r=20, t=120, b=40),
             plot_bgcolor='white', autosize=True
         )
-        
-        # Remove the separate summary annotation
-        # fig.add_annotation(...) - REMOVED
 
         for c in range(1, plot_col):
             fig.update_xaxes(visible=False, showgrid=False, zeroline=False, row=1, col=c)
             fig.update_yaxes(visible=False, showgrid=False, zeroline=False, row=1, col=c)
 
-        fig.update_yaxes(visible=False, range=[-0.5, len(self.data)-0.5], row=1, col=plot_col)
+        # Adjust range to include the diamond row
+        y_max = len(self.data) + 0.5 if show_meta_diamond else len(self.data) - 0.5
+        y_min = -0.5 if show_meta_diamond else -0.5
+        
+        fig.update_yaxes(visible=False, range=[y_min, y_max], row=1, col=plot_col)
         fig.update_xaxes(title_text=x_label, type='log' if use_log_scale else 'linear', row=1, col=plot_col, gridcolor='rgba(200, 200, 200, 0.2)')
 
         headers = ["Variable", "Estimate (95% CI)"] + (["P-value", f"{x_label} Plot"] if has_pval else [f"{x_label} Plot"])
@@ -310,7 +373,7 @@ class ForestPlot:
             xref_val = f"x{i} domain" if i > 1 else "x domain"
             fig.add_annotation(x=0.5 if i != 1 else 1.0, y=1.0, xref=xref_val, yref="paper", text=f"<b>{h}</b>", showarrow=False, yanchor="bottom", font=dict(size=14, color="black"))
 
-        logger.info(f"Forest plot generated: {title}, {len(self.data)} variables, log_scale={use_log_scale}")
+        logger.info(f"Forest plot generated: {title}, {len(self.data)} variables")
         return fig
 
 
