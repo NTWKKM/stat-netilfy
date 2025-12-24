@@ -4,6 +4,8 @@ import numpy as np
 from logic import process_data_and_generate_html # Import from root
 from logger import get_logger
 from forest_plot_lib import create_forest_plot  # 🟢 IMPORT NEW LIBRARY
+import json
+from subgroup_analysis_module import SubgroupAnalysisLogit
 
 logger = get_logger(__name__)
 
@@ -57,6 +59,287 @@ def _get_dataset_for_analysis(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     
     return selected_df, label
 
+
+def _render_logit_subgroup_analysis(df: pd.DataFrame):
+    """
+    Render Subgroup Analysis SubTab for Logistic Regression within the Logit Tab.
+    """
+    st.header("🗒️ Subgroup Analysis")
+    
+    # Info box
+    with st.container():
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            st.info("🚀", help="Click for more information")
+        with col2:
+            st.markdown("""
+            **Test for Treatment-by-Subgroup Interaction**
+            
+            Determine if treatment effect varies by patient characteristics.
+            🙋: Does the drug work differently in men vs women? Young vs old?
+            """)
+    
+    st.markdown("---")
+    
+    # ========== INPUT SECTION ==========
+    st.subheader("📝 Step 1: Select Variables")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    # Outcome variable
+    with col1:
+        outcome_col = st.selectbox(
+            "Outcome (Binary)",
+            options=[col for col in df.columns if df[col].nunique() == 2],
+            index=0 if len([col for col in df.columns if df[col].nunique() == 2]) > 0 else 0,
+            help="Select binary outcome variable (0/1 or No/Yes)",
+            key="logit_sg_outcome"
+        )
+    
+    # Treatment variable
+    with col2:
+        treatment_col = st.selectbox(
+            "Treatment/Exposure",
+            options=[col for col in df.columns if col != outcome_col],
+            index=0,
+            help="Main variable of interest",
+            key="logit_sg_treatment"
+        )
+    
+    # Subgroup variable
+    with col3:
+        subgroup_col = st.selectbox(
+            "Stratify By",
+            options=[col for col in df.columns 
+                    if col not in [outcome_col, treatment_col] 
+                    and df[col].nunique() >= 2 
+                    and df[col].nunique() <= 10],
+            help="Categorical variable with 2-10 categories",
+            key="logit_sg_subgroup"
+        )
+    
+    st.markdown("---")
+    
+    # ========== ADJUSTMENT VARIABLES ==========
+    st.subheader("📌 Step 2: Adjustment Variables (Optional)")
+    
+    adjustment_cols = st.multiselect(
+        "Select covariates to adjust for:",
+        options=[col for col in df.columns 
+                if col not in [outcome_col, treatment_col, subgroup_col]],
+        help="Same covariates as your main analysis",
+        default=[],
+        key="logit_sg_adjust"
+    )
+    
+    st.markdown("---")
+    
+    # ========== SETTINGS ==========
+    with st.expander("⚙️ Advanced Settings", expanded=False):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            min_subgroup_n = st.number_input(
+                "Minimum N per subgroup:",
+                min_value=2, max_value=50, value=5, step=1,
+                help="Subgroups with N < this value will be excluded",
+                key="logit_sg_min_n"
+            )
+        
+        with col2:
+            analysis_title = st.text_input(
+                "Custom title (optional):",
+                value=f"Subgroup Analysis by {subgroup_col}",
+                help="Leave blank for auto title",
+                key="logit_sg_title"
+            )
+    
+    st.markdown("---")
+    
+    # ========== RUN ANALYSIS ==========
+    if st.button("🚀 Run Subgroup Analysis", key="logit_subgroup_run", use_container_width=True, type="primary"):
+        try:
+            # Initialize analyzer
+            analyzer = SubgroupAnalysisLogit(df)
+            
+            # Run analysis with progress tracking
+            with st.spinner("🧰 Running analysis..."):
+                results = analyzer.analyze(
+                    outcome_col=outcome_col,
+                    treatment_col=treatment_col,
+                    subgroup_col=subgroup_col,
+                    adjustment_cols=adjustment_cols if adjustment_cols else None,
+                    min_subgroup_n=min_subgroup_n
+                )
+            
+            # Store in session state for persistence
+            st.session_state['subgroup_results_logit'] = results
+            st.session_state['subgroup_analyzer_logit'] = analyzer
+            
+            st.success("✅ Analysis complete!")
+            
+            # ========== RESULTS DISPLAY ==========
+            st.markdown("---")
+            st.header("📈 Results")
+            
+            # Forest Plot
+            with st.container():
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.subheader("Forest Plot")
+                with col2:
+                    if st.button("🗐️ Edit Title", key="edit_forest_title_logit"):
+                        st.session_state['edit_forest_title_logit'] = True
+                
+                if st.session_state.get('edit_forest_title_logit', False):
+                    forest_title = st.text_input(
+                        "Plot title:",
+                        value=analysis_title,
+                        key="forest_title_input_logit"
+                    )
+                else:
+                    forest_title = analysis_title
+                
+                fig = analyzer.create_forest_plot(title=forest_title)
+                st.plotly_chart(fig, use_container_width=True, key="logit_forest_plot")
+            
+            # Summary Statistics
+            st.subheader("📊 Summary Statistics")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            summary = results['summary']
+            overall = results['overall']
+            
+            with col1:
+                st.metric(
+                    label="Overall N",
+                    value=f"{summary['n_overall']:,}",
+                    delta=f"{overall['events']} events"
+                )
+            
+            with col2:
+                st.metric(
+                    label="Overall OR",
+                    value=f"{overall['or']:.3f}",
+                    delta=f"[{overall['ci'][0]:.3f}-{overall['ci'][1]:.3f}]"
+                )
+            
+            with col3:
+                st.metric(
+                    label="Overall P-value",
+                    value=f"{overall['p_value']:.4f}",
+                    delta="Significant" if overall['p_value'] < 0.05 else "Not Sig"
+                )
+            
+            with col4:
+                p_int = results['interaction']['p_value']
+                het_status = "⚠️ Het" if results['interaction']['significant'] else "✅ Hom"
+                st.metric(
+                    label="P for Interaction",
+                    value=f"{p_int:.4f}" if p_int is not None else "N/A",
+                    delta=het_status
+                )
+            
+            st.markdown("---")
+            
+            # Detailed Results Table
+            st.subheader("📄 Detailed Results")
+            
+            results_df = results['results_df'].copy()
+            display_cols = ['group', 'n', 'events', 'or', 'ci_low', 'ci_high', 'p_value']
+            
+            # Format for display
+            display_table = results_df[display_cols].copy()
+            display_table.columns = ['Group', 'N', 'Events', 'OR', 'CI Lower', 'CI Upper', 'P-value']
+            display_table['OR'] = display_table['OR'].apply(lambda x: f"{x:.3f}")
+            display_table['CI Lower'] = display_table['CI Lower'].apply(lambda x: f"{x:.3f}")
+            display_table['CI Upper'] = display_table['CI Upper'].apply(lambda x: f"{x:.3f}")
+            display_table['P-value'] = display_table['P-value'].apply(lambda x: f"{x:.4f}")
+            
+            st.dataframe(display_table, use_container_width=True, hide_index=True)
+            
+            st.markdown("---")
+            
+            # Interpretation
+            st.subheader("💡 Interpretation")
+            
+            interpretation = analyzer.get_interpretation()
+            if results['interaction']['significant']:
+                st.warning(interpretation, icon="⚠️")
+            else:
+                st.success(interpretation, icon="✅")
+            
+            # Clinical Guidelines
+            with st.expander("📚 Clinical Reporting Guidelines", expanded=False):
+                st.markdown(f"""
+                ### Subgroup Analysis Reporting (CONSORT, ICMJE)
+                
+                **Findings:**
+                - Overall sample: {summary['n_overall']:,} participants ({overall['events']} events)
+                - Number of subgroups: {summary['n_subgroups']}
+                - Subgroup variable: {subgroup_col}
+                - Effect range: {summary['or_range'][0]:.3f} to {summary['or_range'][1]:.3f}
+                
+                **Interaction Test:**
+                - Test: Wald test of {treatment_col} × {subgroup_col} interaction
+                - P-value: {results['interaction']['p_value']:.4f}
+                - Conclusion: {"Evidence of significant heterogeneity" if results['interaction']['significant'] else "No significant heterogeneity detected"}
+                
+                **Recommendations:**
+                {"- Report results separately for each subgroup\n- Discuss possible mechanisms for differential effect" if results['interaction']['significant'] else "- Overall estimate is appropriate for all subgroups"}
+                """)
+            
+            st.markdown("---")
+            
+            # Export Options
+            st.subheader("📥 Export Results")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            # HTML Export
+            with col1:
+                html_plot = analyzer.figure.to_html(include_plotlyjs='cdn')
+                st.download_button(
+                    label="📿 HTML Plot",
+                    data=html_plot,
+                    file_name=f"subgroup_{treatment_col}_{subgroup_col}.html",
+                    mime="text/html",
+                    use_container_width=True
+                )
+            
+            # CSV Export
+            with col2:
+                csv_data = display_table.to_csv(index=False)
+                st.download_button(
+                    label="📋 CSV Results",
+                    data=csv_data,
+                    file_name=f"subgroup_{treatment_col}_{subgroup_col}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            
+            # JSON Export
+            with col3:
+                json_data = json.dumps(results, indent=2, default=str)
+                st.download_button(
+                    label="📝 JSON Data",
+                    data=json_data,
+                    file_name=f"subgroup_{treatment_col}_{subgroup_col}.json",
+                    mime="application/json",
+                    use_container_width=True
+                )
+        
+        except Exception as e:
+            st.error(f"❌ Error: {str(e)}", icon="💥")
+            st.info("**Troubleshooting:**\n- Ensure outcome is binary (2 categories)\n- Check subgroup has 2-10 categories\n- Verify minimum N per subgroup", icon="💭")
+            logger.error(f"Logit subgroup analysis error: {e}")
+    
+    # Display previous results if available
+    elif 'subgroup_results_logit' in st.session_state and st.session_state.get('show_previous_results', True):
+        st.info("💻 Showing previous results. Click 'Run Subgroup Analysis' to refresh.")
+
+
 def render(df, var_meta):
     """
     Render the "4. Logistic Regression Analysis" section in a Streamlit app.
@@ -67,8 +350,9 @@ def render(df, var_meta):
         st.info("✅ **Matched Dataset Available** - You can select it below for analysis")
     
     # Create subtabs
-    sub_tab1, sub_tab2 = st.tabs([
+    sub_tab1, sub_tab2, sub_tab3 = st.tabs([
         "📈 Binary Logistic Regression",
+        "🗒️ Subgroup Analysis",
         "ℹ️ Reference & Interpretation"
     ])
     
@@ -214,19 +498,27 @@ def render(df, var_meta):
                 st.button("📥 Download Report", disabled=True, key='ph_logit')
 
     # ==================================================
-    # SUB-TAB 2: Reference & Interpretation
+    # SUB-TAB 2: Logistic Regression Subgroup Analysis
     # ==================================================
     with sub_tab2:
+        selected_df, _ = _get_dataset_for_analysis(df)
+        _render_logit_subgroup_analysis(selected_df)
+
+    # ==================================================
+    # SUB-TAB 3: Reference & Interpretation
+    # ==================================================
+    with sub_tab3:
         st.markdown("##### 📚 Quick Reference: Logistic Regression")
         
         st.info("""
-        **🎯 When to Use Logistic Regression:**
+        **🎲 When to Use Logistic Regression:**
         
         | Type | Outcome | Predictors | Example |
         |------|---------|-----------|----------|
         | **Binary** | 2 categories (Yes/No) | Any | Disease/No Disease |
         | **Multinomial** | 3+ unordered categories | Any | Stage (I/II/III/IV) |
         | **Ordinal** | 3+ ordered categories | Any | Severity (Low/Med/High) |
+        | **Subgroup Analysis** | Binary + treatment × subgroup | Treatment variable | Drug effectiveness varies by age/sex? |
         """)
         
         col1, col2 = st.columns(2)
@@ -285,6 +577,31 @@ def render(df, var_meta):
             - **Overfitting** (too many variables) → Use variable selection
             - **Log-transformed interpreters** → Multiply by e^(unit change)
             """)
+        
+        st.markdown("---")
+        
+        st.markdown("""
+        ### Subgroup Analysis
+        
+        **When to Use:**
+        - Testing for treatment × subgroup interactions
+        - Examining differential treatment effects
+        - Identifying patient populations with greater benefit
+        
+        **Key Concepts:**
+        - **Homogeneous effect** → One OR applies to all (no interaction)
+        - **Heterogeneous effect** → Different OR by subgroup (interaction exists)
+        - **Interaction p-value** → p < 0.05 = significant heterogeneity
+        
+        **Interpretation:**
+        - If p_interaction < 0.05: Report results separately by subgroup
+        - If p_interaction ≥ 0.05: Overall estimate applies to all
+        
+        **Forest Plot in Subgroup Tab:**
+        - Shows OR with 95% CI by subgroup
+        - Horizontal line at OR=1 (null effect)
+        - Interactive plot for data exploration
+        """)
         
         st.markdown("---")
         
