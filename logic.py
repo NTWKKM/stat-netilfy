@@ -243,6 +243,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     results_db = {} 
     sorted_cols = sorted(df.columns)
 
+    # 🟢 NEW: CATEGORICAL TRACKER for Multivariate Step
+    # Key = Column Name, Value = List of Levels (First is Reference)
+    categorical_map = {}
+
     # 🔍 NEW: DETECT DATA QUALITY FOR AUTO-METHOD SELECTION
     has_perfect_separation = False
     small_sample = len(df) < 50
@@ -286,8 +290,20 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         preferred_method = 'firth' if HAS_FIRTH else 'bfgs'
     elif method == 'bfgs':
         preferred_method = 'bfgs'
-    elif method == 'default':  
+    elif method == 'default':   
         preferred_method = 'default'
+
+    # ✅ HELPERS FOR FORMATTING
+    def fmt_p(val) -> str:
+        if pd.isna(val): 
+            return "-"
+        if val < -0.0001 or val > 1.0001:
+            val = max(0, min(1, val)) 
+        if val < 0.001:
+            return "<0.001"
+        if val > 0.999:
+            return ">0.999"
+        return f"{val:.3f}"
 
     # 🟢 NEW: Initialize OR results dict for crude OR
     or_results = {}
@@ -339,6 +355,9 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 elif user_setting.get('type') == 'Continuous':
                     is_categorical = False
             
+            # =================================================================================
+            # 🟢 PATH A: CATEGORICAL VARIABLE (Every Level vs Ref)
+            # =================================================================================
             if is_categorical:
                 n_used = len(X_raw.dropna())
                 mapper = user_setting.get('map', {})
@@ -348,25 +367,18 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 except (ValueError, TypeError):
                     levels = sorted(X_raw.astype(str).unique())
     
+                # Store levels for multivariate step (First level = Reference)
+                categorical_map[col] = levels
+
                 desc_tot = [f"<span class='n-badge'>n={n_used}</span>"]
                 desc_neg = [f"<span class='n-badge'>n={len(X_neg.dropna())}</span>"]
                 desc_pos = [f"<span class='n-badge'>n={len(X_pos.dropna())}</span>"]
     
                 # ✅ DEFINE count_val ONCE, BEFORE THE LOOP
                 def count_val(series, v_str) -> int:
-                    """
-                    Count occurrences in a Series matching a target string after normalizing numeric-like values (e.g., converting "1.0" to "1").
-                    
-                    Parameters:
-                        series (pandas.Series): Series whose elements will be compared as strings after normalization.
-                        v_str (str): Target string to match against each normalized element.
-                    
-                    Returns:
-                        int: Number of elements equal to `v_str` after normalization.
-                    """
                     return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
     
-                for lvl in levels:  # ← Loop starts here
+                for lvl in levels:
                     try:
                         if float(lvl).is_integer():
                             key = int(float(lvl))
@@ -374,17 +386,14 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                             key = float(lvl)
                     except (ValueError, TypeError):
                         key = lvl
-        
+       
                     label_txt = mapper.get(key, str(lvl))
                     lvl_str = str(lvl)
                     if str(lvl).endswith('.0'): 
                         lvl_str = str(int(float(lvl)))
-        
-                    # ✅ Just call it - no definition here anymore!
+       
                     c_all = count_val(X_raw, lvl_str)
-                        
-                    if c_all == 0:
-                        c_all = (X_raw == lvl).sum()
+                    if c_all == 0: c_all = (X_raw == lvl).sum()
                     
                     p_all = (c_all/n_used)*100 if n_used else 0
                     c_n = count_val(X_neg, lvl_str)
@@ -400,6 +409,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 res['desc_neg'] = "<br>".join(desc_neg)
                 res['desc_pos'] = "<br>".join(desc_pos)
                 
+                # Chi-Square Test
                 try:
                     contingency = pd.crosstab(X_raw, y)
                     if contingency.size > 0:
@@ -412,7 +422,63 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 except (ValueError, np.linalg.LinAlgError):
                     res['p_comp'] = np.nan
                     res['test_name'] = "-"
-                
+
+                # --- UNIVARIATE REGRESSION (DUMMIES) ---
+                # Manual One-Hot Encoding: Every Level vs Ref (levels[0])
+                if len(levels) > 1:
+                    temp_df = pd.DataFrame({'y': y, 'raw': X_raw}).dropna()
+                    
+                    if not temp_df.empty:
+                        dummy_cols = []
+                        # Create dummies for levels[1:] only. Ref is levels[0].
+                        for lvl in levels[1:]:
+                            d_name = f"{col}::{lvl}"
+                            # Strict string comparison to prevent type mismatch
+                            is_match = (temp_df['raw'].astype(str) == str(lvl)).astype(int)
+                            temp_df[d_name] = is_match
+                            dummy_cols.append(d_name)
+                        
+                        # Only run if we have dummies and variance
+                        if dummy_cols and temp_df[dummy_cols].std().sum() > 0:
+                             params, conf, pvals, status = run_binary_logit(temp_df['y'], temp_df[dummy_cols], method=preferred_method)
+                             
+                             if status == "OK":
+                                or_lines = ["Ref."] # First line for Reference
+                                p_lines = ["-"]
+                                
+                                for lvl in levels[1:]:
+                                    d_name = f"{col}::{lvl}"
+                                    if d_name in params:
+                                        odd = np.exp(params[d_name])
+                                        ci_l = np.exp(conf.loc[d_name][0])
+                                        ci_h = np.exp(conf.loc[d_name][1])
+                                        pv = pvals[d_name]
+                                        
+                                        or_lines.append(f"{odd:.2f} ({ci_l:.2f}-{ci_h:.2f})")
+                                        p_lines.append(fmt_p(pv))
+                                        
+                                        # Add to forest plot
+                                        or_results[f"{col}: {lvl} vs {levels[0]}"] = {
+                                            'or': odd, 'ci_low': ci_l, 'ci_high': ci_h, 'p_value': pv
+                                        }
+                                    else:
+                                        or_lines.append("-")
+                                        p_lines.append("-")
+                                
+                                res['or'] = "<br>".join(or_lines)
+                                res['p_or'] = "<br>".join(p_lines)
+                             else:
+                                res['or'] = "-"
+                        else:
+                            res['or'] = "-"
+                    else:
+                        res['or'] = "-"
+                else:
+                    res['or'] = "-"
+
+            # =================================================================================
+            # 🟢 PATH B: CONTINUOUS VARIABLE
+            # =================================================================================
             else:
                 n_used = len(X_num.dropna())
                 m_t, s_t = X_num.mean(), X_num.std()
@@ -431,73 +497,128 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                     res['p_comp'] = np.nan
                     res['test_name'] = "-"
 
-            # --- UNIVARIATE REGRESSION ---
-            data_uni = pd.DataFrame({'y': y, 'x': X_num}).dropna()
-            if not data_uni.empty and data_uni['x'].nunique() > 1:
-                params, conf, pvals, status = run_binary_logit(data_uni['y'], data_uni[['x']], method=preferred_method)
-                if status == "OK" and 'x' in params:
-                    coef = params['x']
-                    or_val = np.exp(coef)
-                    
-                    if 'x' in conf.index:
+                # --- UNIVARIATE REGRESSION (LINEAR) ---
+                data_uni = pd.DataFrame({'y': y, 'x': X_num}).dropna()
+                if not data_uni.empty and data_uni['x'].nunique() > 1:
+                    params, conf, pvals, status = run_binary_logit(data_uni['y'], data_uni[['x']], method=preferred_method)
+                    if status == "OK" and 'x' in params:
+                        coef = params['x']
+                        or_val = np.exp(coef)
                         ci_low, ci_high = np.exp(conf.loc['x'][0]), np.exp(conf.loc['x'][1])
-                    else:
-                        ci_low, ci_high = np.nan, np.nan 
-                    
-                    # 🟢 NEW: Store crude OR results for forest plot
-                    or_results[col] = {
-                        'or': or_val,
-                        'ci_low': ci_low,
-                        'ci_high': ci_high,
-                        'p_value': pvals['x']
-                    }
                         
-                    res['or'] = f"{or_val:.2f} ({ci_low:.2f}-{ci_high:.2f})"
-                    res['p_or'] = pvals['x']
+                        or_results[col] = {
+                            'or': or_val,
+                            'ci_low': ci_low,
+                            'ci_high': ci_high,
+                            'p_value': pvals['x']
+                        }
+                            
+                        res['or'] = f"{or_val:.2f} ({ci_low:.2f}-{ci_high:.2f})"
+                        res['p_or'] = pvals['x']
+                    else: 
+                        res['or'] = "-"
                 else: 
                     res['or'] = "-"
-            else: 
-                res['or'] = "-"
 
             results_db[col] = res
             
             p_screen = res.get('p_comp', np.nan)
             if pd.isna(p_screen): 
-                p_screen = res.get('p_or', np.nan)
+                # If continuous, check p_or. If categorical, p_or is string so this fails, but that's fine.
+                # For categorical, we rely on p_comp (Chi2) for screening.
+                pv_chk = res.get('p_or', np.nan)
+                if isinstance(pv_chk, (int, float)):
+                    p_screen = pv_chk
+                    
             if pd.notna(p_screen) and p_screen < 0.20:
                 candidates.append(col)
 
     # --- MULTIVARIATE ANALYSIS ---
     with logger.track_time("multivariate_analysis", log_level="debug"):  # ✅ TRACK TIMING
         aor_results = {}
-        cand_valid = [c for c in candidates if df_aligned[c].apply(clean_numeric_value).notna().sum() > 5]
+        # Filter candidates for basic data presence
+        cand_valid = [c for c in candidates if df_aligned[c].apply(clean_numeric_value).notna().sum() > 5 or c in categorical_map]
         final_n_multi = 0
 
         if len(cand_valid) > 0:
             multi_df = pd.DataFrame({'y': y})
+            
+            # 🟢 CONSTRUCT MULTIVARIATE MATRIX WITH DUMMIES
+            col_mapping = {} # To track which dummies belong to which variable
+            
             for c in cand_valid:
-                multi_df[c] = df_aligned[c].apply(clean_numeric_value)
+                # 1. Categorical: Create Dummies
+                if c in categorical_map:
+                    levels = categorical_map[c]
+                    # Original raw values
+                    raw_vals = df_aligned[c]
+                    if len(levels) > 1:
+                        for lvl in levels[1:]: # Skip Ref
+                            d_name = f"{c}::{lvl}"
+                            multi_df[d_name] = (raw_vals.astype(str) == str(lvl)).astype(int)
+                            col_mapping.setdefault(c, []).append(d_name)
+                    else:
+                        # Should not happen if screened correctly, but just in case
+                        pass
+                        
+                # 2. Continuous: Use Numeric
+                else:
+                    multi_df[c] = df_aligned[c].apply(clean_numeric_value)
+                    col_mapping[c] = [c] # Direct map
+
             multi_data = multi_df.dropna()
             final_n_multi = len(multi_data)
             
-            if not multi_data.empty and final_n_multi > 10:
-                params, conf, pvals, status = run_binary_logit(multi_data['y'], multi_data[cand_valid], method=preferred_method)
+            # Predictors list
+            predictors = [col for col in multi_data.columns if col != 'y']
+
+            if not multi_data.empty and final_n_multi > 10 and len(predictors) > 0:
+                params, conf, pvals, status = run_binary_logit(multi_data['y'], multi_data[predictors], method=preferred_method)
                 
                 if status == "OK":
+                    # 🟢 MAP RESULTS BACK TO VARIABLES
                     for var in cand_valid:
-                        if var in params:
-                            coef = params[var]
-                            aor = np.exp(coef)
-                            ci_low, ci_high = np.exp(conf.loc[var][0]), np.exp(conf.loc[var][1])
-                            ap = pvals[var]
+                        if var in categorical_map:
+                            levels = categorical_map[var]
+                            aor_entries = []
                             
-                            # 🟢 NEW: Store aOR results for forest plot
-                            aor_results[var] = {
-                                'aor': aor,
-                                'ci_low': ci_low,
-                                'ci_high': ci_high,
-                                'p_value': ap
-                            }
+                            # Ref line
+                            # We can't store "Ref" in aor_results directly if it expects {aor, ci..}
+                            # But we need to construct the display string and forest plot data.
+                            
+                            for lvl in levels[1:]:
+                                d_name = f"{var}::{lvl}"
+                                if d_name in params:
+                                    aor = np.exp(params[d_name])
+                                    ci_l = np.exp(conf.loc[d_name][0])
+                                    ci_h = np.exp(conf.loc[d_name][1])
+                                    ap = pvals[d_name]
+                                    
+                                    aor_entries.append({'lvl': lvl, 'aor': aor, 'l': ci_l, 'h': ci_h, 'p': ap})
+                                    
+                                    # Store forest data
+                                    aor_results[f"{var}: {lvl} vs {levels[0]}"] = {
+                                        'aor': aor, 'ci_low': ci_l, 'ci_high': ci_h, 'p_value': ap
+                                    }
+                            
+                            # Store grouped result for HTML generation
+                            results_db[var]['multi_res'] = aor_entries
+                            
+                        else:
+                            # Continuous
+                            if var in params:
+                                coef = params[var]
+                                aor = np.exp(coef)
+                                ci_low, ci_high = np.exp(conf.loc[var][0]), np.exp(conf.loc[var][1])
+                                ap = pvals[var]
+                                
+                                results_db[var]['multi_res'] = {
+                                    'aor': aor, 'l': ci_low, 'h': ci_high, 'p': ap
+                                }
+                                
+                                aor_results[var] = {
+                                    'aor': aor, 'ci_low': ci_low, 'ci_high': ci_high, 'p_value': ap
+                                }
 
     # --- HTML BUILD ---
     html_rows = []
@@ -513,38 +634,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
 
     # 🟢 3. เรียงลำดับ
     grouped_cols = sorted(valid_cols_for_html, key=sort_key_for_grouping)
-
-    # ✅ FIX #5: P-VALUE BOUNDS CHECKING
-    def fmt_p(val) -> str:
-        """
-        Format a p-value for display, clipping small numerical errors to the valid range [0, 1] and applying display thresholds.
-        
-        Returns:
-            str: Formatted p-value:
-                - "-" if the input is missing (NaN).
-                - "<0.001" if the value is less than 0.001.
-                - ">0.999" if the value is greater than 0.999.
-                - Otherwise the p-value rounded to three decimal places (e.g., "0.123").
-        """
-        if pd.isna(val): 
-            return "-"
-            
-        # Bounds check: p-values must be in [0, 1]
-        if val < -0.0001 or val > 1.0001:
-            # Numerical error detected - log warning
-            logger.warning("⚠️ P-value out of bounds detected: %.6f. Clipping to valid range [0, 1].", val)  # ✅ LOG WARNING
-            val = max(0, min(1, val))  # Clip to [0, 1]
-        else:
-            # Safe clipping within tolerance
-            val = max(0, min(1, val))
-            
-        # Format the p-value
-        if val < 0.001:
-            return "<0.001"
-        if val > 0.999:
-            return ">0.999"
-            
-        return f"{val:.3f}"
             
     for col in grouped_cols:
         if col == outcome_name:
@@ -559,17 +648,46 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         lbl = get_label(col, var_meta)
         or_s = res.get('or', '-')
 
+        # Univariate P-value Logic
         p_val = res.get('p_comp', np.nan)
         p_s = fmt_p(p_val)
         if pd.notna(p_val) and p_val < 0.05: p_s = f"<span class='sig-p'>{p_s}*</span>"
         
+        # Categorical P-value display needs to match lines if p_or is multiline?
+        # Current design: "Test Used" & "Crude P-value" usually refer to the Variable level test (Chi2)
+        # But user might want to see specific level significance.
+        # res['p_or'] contains formatted p-values per level for categorical.
+        if col in categorical_map:
+             # Use the per-level p-values stored in res['p_or']
+             p_col_display = res.get('p_or', '-')
+        else:
+             # Use the comparison p-value (Mann-Whitney)
+             p_col_display = p_s
+        
+        # Adjusted OR Logic
         aor_s, ap_s = "-", "-"
-        if col in aor_results:
-            ar = aor_results[col]
-            aor_s = f"{ar['aor']:.2f} ({ar['ci_low']:.2f}-{ar['ci_high']:.2f})"
-            ap_val = ar['p_value']
-            ap_s = fmt_p(ap_val)
-            if pd.notna(ap_val) and ap_val < 0.05: ap_s = f"<span class='sig-p'>{ap_s}*</span>"
+        multi_res = res.get('multi_res')
+        
+        if multi_res:
+            if isinstance(multi_res, list): # Categorical
+                aor_lines = ["Ref."]
+                ap_lines = ["-"]
+                for item in multi_res:
+                    a_txt = f"{item['aor']:.2f} ({item['l']:.2f}-{item['h']:.2f})"
+                    p_txt = fmt_p(item['p'])
+                    if item['p'] < 0.05: p_txt = f"<span class='sig-p'>{p_txt}*</span>"
+                    
+                    aor_lines.append(a_txt)
+                    ap_lines.append(p_txt)
+                
+                aor_s = "<br>".join(aor_lines)
+                ap_s = "<br>".join(ap_lines)
+                
+            else: # Continuous
+                aor_s = f"{multi_res['aor']:.2f} ({multi_res['l']:.2f}-{multi_res['h']:.2f})"
+                ap_val = multi_res['p']
+                ap_s = fmt_p(ap_val)
+                if pd.notna(ap_val) and ap_val < 0.05: ap_s = f"<span class='sig-p'>{ap_s}*</span>"
             
         row_html = f"""
         <tr>
@@ -578,7 +696,8 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             <td>{res.get('desc_neg','')}</td>
             <td>{res.get('desc_pos','')}</td>
             <td>{or_s}</td>
-            <td>{res.get('test_name', '-')}</td> <td>{p_s}</td>
+            <td>{res.get('test_name', '-')}</td> 
+            <td>{p_col_display}</td>
             <td>{aor_s}</td>
             <td>{ap_s}</td>
         </tr>"""
@@ -586,22 +705,14 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     
     # Update Footer Note
     if preferred_method == 'firth':
-        if method == 'auto':
-            method_note = "Firth's Penalized Likelihood (Auto-detected - data quality concern)"
-        else:
-            method_note = "Firth's Penalized Likelihood (User Selected)"
+        method_note = f"Firth's Penalized Likelihood ({'Auto-detected' if method=='auto' else 'User Selected'})"
     elif preferred_method == 'bfgs':
-        if method == 'auto':
-            method_note = "Standard Binary Logistic Regression (Auto-selected - data quality OK)"
-        else:
-            method_note = "Standard Binary Logistic Regression (MLE)"
-    elif preferred_method == 'default':
-        method_note = "Standard Binary Logistic Regression (Default Optimizer)"
+        method_note = "Standard Binary Logistic Regression (MLE)"
     else:
         method_note = "Binary Logistic Regression"
 
-    # 🟢 4. ส่วน Return HTML (เพิ่มสัญลักษณ์ †)
-    logger.info("✅ Logistic regression analysis completed (n_multi=%d, method=%s)", final_n_multi, preferred_method)  # ✅ LOG COMPLETION
+    # 🟢 4. ส่วน Return HTML
+    logger.info("✅ Logistic regression analysis completed (n_multi=%d, method=%s)", final_n_multi, preferred_method)
     
     html_table = f"""
     <div id='{outcome_name}' class='table-container'>
@@ -626,7 +737,8 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         <i>Univariate comparison uses Chi-square test (Categorical) or Mann-Whitney U test (Continuous).</i>
         <div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee; font-size: 0.9em; color: #666;'>
             <sup style='color:{COLORS['danger']}; font-weight:bold;'>†</sup> <b>Note on aOR:</b> Adjusted Odds Ratios are calculated only for variables with a <b>Crude P-value < 0.20</b> 
-            (Screening criteria) and sufficient data quality to prevent overfitting.
+            (Screening criteria) and sufficient data quality to prevent overfitting. <br>
+            For categorical variables, the first level is used as the Reference (Ref).
         </div>
     </div>
     </div><br>
@@ -638,15 +750,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
 def generate_forest_plot_html(or_results, aor_results, plot_title="Forest Plots: Odds Ratios"):
     """
     Generate standalone HTML for forest plots using the shared `forest_plot_lib`.
-    Ensures identical publication-quality style (Table + Plot) as Cox Regression.
-    
-    Parameters:
-        or_results (dict): Crude OR results {var: {or, ci_low, ci_high, p_value}}
-        aor_results (dict): Adjusted OR results {var: {aor, ci_low, ci_high, p_value}}
-        plot_title (str): Title for the forest plot section
-    
-    Returns:
-        str: HTML string containing embedded Plotly forest plots + interpretation.
     """
     html_parts = []
     html_parts.append(f"<h2 style='margin-top:30px; color:{COLORS['primary']};'>{plot_title}</h2>")
@@ -655,7 +758,6 @@ def generate_forest_plot_html(or_results, aor_results, plot_title="Forest Plots:
 
     # --- 1. Crude OR Plot ---
     if or_results:
-        # Convert dict to DataFrame for library
         data_crude = []
         for var, res in or_results.items():
             data_crude.append({
@@ -676,13 +778,11 @@ def generate_forest_plot_html(or_results, aor_results, plot_title="Forest Plots:
                 x_label="Odds Ratio (OR)",
                 ref_line=1.0
             )
-            # Embed Plotly (Offline support consistent with survival_lib)
             html_parts.append(fig_crude.to_html(full_html=False, include_plotlyjs=True))
             has_plot = True
 
     # --- 2. Adjusted OR Plot ---
     if aor_results:
-        # Convert dict to DataFrame for library
         data_adj = []
         for var, res in aor_results.items():
             data_adj.append({
@@ -703,14 +803,13 @@ def generate_forest_plot_html(or_results, aor_results, plot_title="Forest Plots:
                 x_label="Adjusted Odds Ratio (aOR)",
                 ref_line=1.0
             )
-            # Embed Plotly (Offline support consistent with survival_lib)
             html_parts.append(fig_adj.to_html(full_html=False, include_plotlyjs=False)) # JS already loaded
             has_plot = True
 
     if not has_plot:
         html_parts.append("<p style='color:#999; font-style:italic;'>📋 No OR/aOR results available for forest plots.</p>")
     else:
-        # --- 3. Interpretation Guide (Identical to Survival Analysis) ---
+        # --- 3. Interpretation Guide ---
         interp_html = f"""
         <div style='margin-top:20px; padding:15px; background:#f8f9fa; border-left:4px solid {COLORS.get('primary', '#218084')}; border-radius:4px;'>
             <h4 style='color:{COLORS.get('primary_dark', '#1f8085')}; margin-top:0;'>💡 Interpretation Guide</h4>
@@ -732,18 +831,6 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None, method='au
     """
     Primary entry point to run univariate/multivariate logistic regression analysis 
     on a DataFrame and generate a complete HTML report with forest plots.
-
-    Parameters:
-        df (pandas.DataFrame): The input data.
-        target_outcome (str): The column name of the binary outcome variable.
-        var_meta (dict, optional): Metadata mapping for variable types and labels. Defaults to None.
-        method (str, optional): The logistic regression estimation method ('auto', 'firth', 'bfgs', 'default').
-
-    Returns:
-        tuple: (html_string, or_results, aor_results)
-            - html_string (str): The complete HTML report string with embedded forest plots
-            - or_results (dict): Crude OR results for forest plot
-            - aor_results (dict): Adjusted OR results for forest plot
     """
     
     css_style = f"""
