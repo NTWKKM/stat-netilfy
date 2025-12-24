@@ -5,7 +5,7 @@ from logic import process_data_and_generate_html # Import from root
 from logger import get_logger
 from forest_plot_lib import create_forest_plot  # 🟢 IMPORT NEW LIBRARY
 import json
-from subgroup_analysis_module import SubgroupAnalysisLogit
+from tabs.logistic_regression.subgroup_tab import SubgroupAnalysisLogit # Correct import path
 
 logger = get_logger(__name__)
 
@@ -678,8 +678,7 @@ def render(df, var_meta):
         - aOR = 1.8 (95% CI: 1.2 - 2.4)
         - p = 0.003
         
-        **Interpretation:** 
-        Smoking is associated with 1.8× increased odds of outcome (compared to non-smoking), adjusting for other variables. This difference is statistically significant (p < 0.05), and we're 95% confident the true OR is between 1.2 and 2.4. ✅
+        **Interpretation:** Smoking is associated with 1.8× increased odds of outcome (compared to non-smoking), adjusting for other variables. This difference is statistically significant (p < 0.05), and we're 95% confident the true OR is between 1.2 and 2.4. ✅
         
         ---
         
