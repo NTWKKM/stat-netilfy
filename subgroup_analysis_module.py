@@ -6,7 +6,7 @@ Supports Logistic Regression (binary outcomes) and Cox Regression (survival data
 
 Standard: ICMJE, CONSORT, and Cochrane guidelines
 Author: NTWKKM (Adapted by Gemini)
-Version: 1.0
+Version: 1.1 (Updated Interaction Tests)
 License: MIT
 """
 
@@ -26,7 +26,7 @@ class SubgroupAnalysisLogit:
     Professional Subgroup Analysis for Logistic Regression
     
     Publication-ready implementation with:
-    - Interaction testing (Wald test)
+    - Interaction testing (Likelihood Ratio Test)
     - Multiple effect measures (OR, log-OR, SE)
     - Comprehensive statistics
     - Publication-grade forest plots
@@ -120,7 +120,7 @@ class SubgroupAnalysisLogit:
         """
         try:
             from statsmodels.formula.api import logit
-            from statsmodels.genmod.logistic_regression import LogitResults
+            from scipy import stats # Import for Chi2 test
             
             # Validate inputs
             self.validate_inputs(outcome_col, treatment_col, subgroup_col, adjustment_cols)
@@ -217,35 +217,42 @@ class SubgroupAnalysisLogit:
                     logger.warning(f"Subgroup {subgroup_val} model failed: {e}")
                     continue
             
-            # === INTERACTION TEST ===
-            st.info("📊 Computing Interaction Test...")
+            # === INTERACTION TEST (Likelihood Ratio Test) ===
+            st.info("📊 Computing Interaction Test (LRT)...")
             try:
-                formula_int = f'{outcome_col} ~ {treatment_col} * {subgroup_col}'
+                # Use C() to ensure categorical treatment for correct DoF
+                formula_reduced = f'{outcome_col} ~ {treatment_col} + C({subgroup_col})'
+                formula_full = f'{outcome_col} ~ {treatment_col} * C({subgroup_col})'
+                
                 if adjustment_cols:
-                    formula_int += ' + ' + ' + '.join(adjustment_cols)
+                    adj_str = ' + ' + ' + '.join(adjustment_cols)
+                    formula_reduced += adj_str
+                    formula_full += adj_str
                 
-                model_int = logit(formula_int, data=df_clean).fit(disp=0)
+                # Fit both models
+                model_reduced = logit(formula_reduced, data=df_clean).fit(disp=0)
+                model_full = logit(formula_full, data=df_clean).fit(disp=0)
                 
-                # Find interaction term
-                int_cols = [col for col in model_int.params.index if ':' in col]
-                if int_cols:
-                    int_col = int_cols[0]
-                    p_interaction = model_int.pvalues[int_col]
-                    coef_int = model_int.params[int_col]
-                    se_int = model_int.bse[int_col]
+                # Calculate Likelihood Ratio Test
+                # LR Statistic = -2 * (LL_reduced - LL_full)
+                lr_stat = -2 * (model_reduced.llf - model_full.llf)
+                
+                # Degrees of freedom difference
+                df_diff = model_full.df_model - model_reduced.df_model
+                
+                if df_diff > 0:
+                    p_interaction = stats.chi2.sf(lr_stat, df_diff)
                 else:
-                    p_interaction = np.nan
-                    coef_int = np.nan
-                    se_int = np.nan
+                    p_interaction = np.nan # Should not happen if interaction exists
                 
                 self.interaction_result = {
                     'p_value': p_interaction,
-                    'coefficient': coef_int,
-                    'se': se_int,
-                    'significant': p_interaction < 0.05
+                    'coefficient': None, # Not single coef for >2 groups
+                    'se': None,
+                    'significant': p_interaction < 0.05 if not np.isnan(p_interaction) else False
                 }
                 
-                logger.info(f"Interaction P={p_interaction:.4f}")
+                logger.info(f"Interaction (LRT) P={p_interaction:.4f}")
             
             except Exception as e:
                 st.warning(f"⚠️ Interaction test failed: {e}")
@@ -386,7 +393,7 @@ class SubgroupAnalysisCox:
     Professional Subgroup Analysis for Cox Regression
     
     Publication-ready implementation for survival analysis with:
-    - Interaction testing (Wald test)
+    - Interaction testing (Likelihood Ratio Test)
     - Multiple effect measures (HR, log-HR, SE)
     - Comprehensive statistics
     - Publication-grade forest plots
@@ -475,6 +482,7 @@ class SubgroupAnalysisCox:
         """
         try:
             from lifelines import CoxPHFitter
+            from scipy import stats # Import for Chi2 test
             
             # Validate inputs
             self.validate_inputs(time_col, event_col, treatment_col, subgroup_col, adjustment_cols)
@@ -577,35 +585,57 @@ class SubgroupAnalysisCox:
                     logger.warning(f"Cox model failed for {subgroup_val}: {e}")
                     continue
             
-            # === INTERACTION TEST ===
-            st.info("📊 Computing Interaction Test...")
+            # === INTERACTION TEST (Likelihood Ratio Test) ===
+            st.info("📊 Computing Interaction Test (LRT)...")
             try:
-                # Create dummy interaction term
-                df_clean_copy = df_clean.copy()
-                df_clean_copy['__int_term'] = df_clean_copy[treatment_col] * pd.Categorical(
-                    df_clean_copy[subgroup_col]
-                ).codes
+                # Use formula string with C() to handle categorical variables correctly
+                # Logic: Compare model WITH interaction vs model WITHOUT interaction
                 
-                cph_int = CoxPHFitter()
-                cols_for_int = [treatment_col, '__int_term'] + adjustment_cols
-                cph_int.fit(
-                    df_clean_copy[[time_col, event_col] + cols_for_int],
+                base_formula_parts = [treatment_col, f"C({subgroup_col})"] + adjustment_cols
+                formula_reduced = " + ".join(base_formula_parts)
+                formula_full = f"{treatment_col} * C({subgroup_col})"
+                if adjustment_cols:
+                    formula_full += " + " + " + ".join(adjustment_cols)
+
+                # Fit Reduced Model
+                cph_reduced = CoxPHFitter()
+                cph_reduced.fit(
+                    df_clean,
                     duration_col=time_col,
                     event_col=event_col,
+                    formula=formula_reduced,
                     show_progress=False
                 )
                 
-                if '__int_term' in cph_int.summary.index:
-                    p_interaction = cph_int.summary.loc['__int_term', 'p']
+                # Fit Full Model
+                cph_full = CoxPHFitter()
+                cph_full.fit(
+                    df_clean,
+                    duration_col=time_col,
+                    event_col=event_col,
+                    formula=formula_full,
+                    show_progress=False
+                )
+                
+                # Calculate LRT
+                # LR Statistic = 2 * (LogLikelihood_full - LogLikelihood_reduced)
+                # Note: Cox partial log-likelihoods are usually negative
+                lr_stat = 2 * (cph_full.log_likelihood_ - cph_reduced.log_likelihood_)
+                
+                # Degrees of freedom diff
+                df_diff = len(cph_full.params_) - len(cph_reduced.params_)
+                
+                if df_diff > 0:
+                    p_interaction = stats.chi2.sf(lr_stat, df_diff)
                 else:
                     p_interaction = np.nan
                 
                 self.interaction_result = {
                     'p_value': p_interaction,
-                    'significant': p_interaction < 0.05
+                    'significant': p_interaction < 0.05 if not np.isnan(p_interaction) else False
                 }
                 
-                logger.info(f"Cox Interaction P={p_interaction:.4f}")
+                logger.info(f"Cox Interaction (LRT) P={p_interaction:.4f}")
             
             except Exception as e:
                 st.warning(f"⚠️ Interaction test failed: {e}")
