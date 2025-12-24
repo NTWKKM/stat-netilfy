@@ -61,6 +61,18 @@ def clean_numeric_value(val):
     except (TypeError, ValueError):
         return np.nan
 
+def _robust_sort_key(x):
+    """
+    🟢 IMPROVED: Robust sorting key for mixed numeric/string levels.
+    Returns (sort_priority, value) tuple:
+    - (0, numeric_value) for numeric values
+    - (1, string_value) for non-numeric values
+    """
+    try:
+        return (0, float(x))  # Numeric first
+    except (ValueError, TypeError):
+        return (1, str(x))    # Then string
+
 def run_binary_logit(y, X, method='default'):
     """Perform binary logistic regression using the specified estimation method."""
     try:
@@ -120,7 +132,12 @@ def get_label(col_name, var_meta):
 
 @st.cache_data(show_spinner=False)
 def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
-    """Analyze outcome with support for Categorical, Simple (Risk vs Ref), and Linear modes."""
+    """
+    Analyze outcome with support for 3 OR modes:
+    - 'Categorical': All levels vs Reference (Ref vs 1, Ref vs 2...)
+    - 'Simple': Risk vs Reference (binary comparison, single line)
+    - 'Linear': Continuous/Trend (per-unit increase)
+    """
     
     logger.log_analysis(analysis_type="Logistic Regression", outcome=outcome_name, n_vars=len(df.columns) - 1, n_samples=len(df))
     
@@ -147,7 +164,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     results_db = {} 
     sorted_cols = sorted(df.columns)
 
-    # 🟢 NEW: TRACKING MODES & METADATA FOR MULTIVARIATE
+    # 🟢 TRACKING MODES & METADATA FOR MULTIVARIATE
     mode_map = {} 
     cat_levels_map = {}
 
@@ -200,7 +217,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             mode = 'linear' # Default
             is_binary = set(unique_vals).issubset({0, 1})
             
-            # Auto-detection logic
+            # Auto-detection logic:
+            # - Binary (0/1) → Categorical (for 2-way comparison)
+            # - Few discrete levels (< 10) → Categorical  
+            # - Many/continuous levels → Linear
             if is_binary:
                 mode = 'categorical'
             elif unique_count < 10:
@@ -225,8 +245,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             levels = []
             if mode in ['categorical', 'simple']:
                 try:
-                    levels = sorted(X_raw.dropna().unique(), key=lambda x: float(x) if str(x).replace('.','',1).isdigit() else str(x))
-                except:
+                    # 🟢 IMPROVED: Use robust_sort_key for mixed numeric/string
+                    levels = sorted(X_raw.dropna().unique(), key=_robust_sort_key)
+                except Exception as e:
+                    logger.warning(f"Failed to sort levels for {col}: {e}")
                     levels = sorted(X_raw.astype(str).unique())
                 cat_levels_map[col] = levels
 
@@ -267,15 +289,15 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 res['desc_neg'] = "<br>".join(desc_neg)
                 res['desc_pos'] = "<br>".join(desc_pos)
                 
-                # Chi-Square
+                # Chi-Square (All Levels)
                 try:
                     ct = pd.crosstab(X_raw, y)
                     _, p, _, _ = stats.chi2_contingency(ct) if ct.size > 0 else (0, np.nan, 0, 0)
                     res['p_comp'] = p
-                    res['test_name'] = "Chi-square"
+                    res['test_name'] = "Chi-square (All Levels)"
                 except: res['p_comp'], res['test_name'] = np.nan, "-"
 
-                # Regression (Dummies)
+                # Regression (Dummies): Ref vs Each Level
                 if len(levels) > 1:
                     temp_df = pd.DataFrame({'y': y, 'raw': X_raw}).dropna()
                     dummy_cols = []
@@ -307,16 +329,30 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             # 🟢 MODE B: SIMPLE (Risk vs Ref / Single Line)
             # =========================================================
             elif mode == 'simple':
-                # Binarize: Levels[0] is Ref (0), All others are Risk (1)
-                ref_val = levels[0]
+                # 🟢 IMPROVED: Allow custom reference level via var_meta
+                user_ref = None
+                if var_meta:
+                    key = col if col in var_meta else orig_name
+                    if key in var_meta:
+                        user_ref = var_meta[key].get('ref_level')
+                
+                # Use custom ref if specified, otherwise first level
+                ref_val = user_ref if user_ref is not None else levels[0]
+                
+                # 🟢 Validate reference level exists
+                if ref_val not in levels:
+                    logger.warning(f"Reference level '{ref_val}' not in levels {levels} for {col}. Using first level.")
+                    ref_val = levels[0]
+                
                 X_bin = (X_raw.astype(str) != str(ref_val)).astype(int)
                 X_bin[X_raw.isna()] = np.nan 
                 
                 n_used = len(X_bin.dropna())
+                n_before_drop = len(X_bin)
                 
                 desc_tot, desc_neg, desc_pos = [f"<span class='n-badge'>n={n_used}</span>"], [f"<span class='n-badge'>n={len(X_neg.dropna())}</span>"], [f"<span class='n-badge'>n={len(X_pos.dropna())}</span>"]
                 
-                # Show breakdown but mark Ref
+                # Show breakdown with Ref marked
                 for lvl in levels:
                     lbl_txt = str(lvl)
                     if str(lvl).endswith('.0'): lbl_txt = str(int(float(lvl)))
@@ -336,6 +372,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 res['desc_neg'] = "<br>".join(desc_neg)
                 res['desc_pos'] = "<br>".join(desc_pos)
                 
+                # 🟢 IMPROVED: Log missing data for Simple mode
+                if n_before_drop > n_used:
+                    logger.debug(f"Simple mode {col}: Dropped {n_before_drop - n_used} rows with missing values")
+                
                 # Chi-Square (Binary)
                 try:
                     ct = pd.crosstab(X_bin, y)
@@ -344,7 +384,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                     res['test_name'] = "Chi-square (Binary)"
                 except: res['p_comp'], res['test_name'] = np.nan, "-"
                 
-                # Regression (Binary)
+                # Regression (Binary): Risk vs Ref
                 data_uni = pd.DataFrame({'y': y, 'x': X_bin}).dropna()
                 if not data_uni.empty and data_uni['x'].nunique() > 1:
                     params, conf, pvals, status = run_binary_logit(data_uni['y'], data_uni[['x']], method=preferred_method)
@@ -353,8 +393,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                         ci_l, ci_h = np.exp(conf.loc['x'][0]), np.exp(conf.loc['x'][1])
                         pv = pvals['x']
                         
-                        label_ref = str(levels[0]).replace('.0','')
-                        label_risk = "Others" if len(levels) > 2 else str(levels[1]).replace('.0','')
+                        label_ref = str(ref_val).replace('.0','')
+                        # Label Risk as "Others" if multiple non-Ref levels, else specific level
+                        non_ref_levels = [str(l).replace('.0','') for l in levels if l != ref_val]
+                        label_risk = "Others" if len(non_ref_levels) > 1 else non_ref_levels[0] if non_ref_levels else "Risk"
                         
                         res['or'] = f"{odd:.2f} ({ci_l:.2f}-{ci_h:.2f})"
                         res['p_or'] = pv
@@ -367,6 +409,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             # =========================================================
             else:
                 n_used = len(X_num.dropna())
+                n_before_drop = len(X_num)
                 m_t, s_t = X_num.mean(), X_num.std()
                 m_n, s_n = pd.to_numeric(X_neg, errors='coerce').mean(), pd.to_numeric(X_neg, errors='coerce').std()
                 m_p, s_p = pd.to_numeric(X_pos, errors='coerce').mean(), pd.to_numeric(X_pos, errors='coerce').std()
@@ -374,6 +417,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 res['desc_total'] = f"<span class='n-badge'>n={n_used}</span><br>Mean: {m_t:.2f}<br>(SD {s_t:.2f})"
                 res['desc_neg'] = f"{m_n:.2f} ({s_n:.2f})"
                 res['desc_pos'] = f"{m_p:.2f} ({s_p:.2f})"
+                
+                # 🟢 Log missing data for Linear mode
+                if n_before_drop > n_used:
+                    logger.debug(f"Linear mode {col}: Dropped {n_before_drop - n_used} rows with missing values")
                 
                 try:
                     _, p = stats.mannwhitneyu(pd.to_numeric(X_neg, errors='coerce').dropna(), pd.to_numeric(X_pos, errors='coerce').dropna())
@@ -429,7 +476,17 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 elif mode == 'simple':
                     levels = cat_levels_map.get(c, [])
                     if levels:
-                        ref_val = levels[0]
+                        # 🟢 IMPROVED: Use custom ref level if specified
+                        user_ref = None
+                        if var_meta:
+                            key = c if c in var_meta else c.split('_', 1)[1] if '_' in c else c
+                            if key in var_meta:
+                                user_ref = var_meta[key].get('ref_level')
+                        
+                        ref_val = user_ref if user_ref is not None else levels[0]
+                        if ref_val not in levels:
+                            ref_val = levels[0]
+                        
                         # Binary: Not Ref = 1
                         multi_df[c] = (df_aligned[c].astype(str) != str(ref_val)).astype(int)
                     else:
@@ -472,8 +529,19 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                                 results_db[var]['multi_res'] = {'aor': aor, 'l': l, 'h': h, 'p': pv}
                                 
                                 levels = cat_levels_map.get(var, [])
-                                label_risk = "Others" if len(levels) > 2 else str(levels[1]).replace('.0','')
-                                label_ref = str(levels[0]).replace('.0','')
+                                user_ref = None
+                                if var_meta:
+                                    key = var if var in var_meta else var.split('_', 1)[1] if '_' in var else var
+                                    if key in var_meta:
+                                        user_ref = var_meta[key].get('ref_level')
+                                
+                                ref_val = user_ref if user_ref is not None else levels[0] if levels else None
+                                if ref_val and ref_val not in levels:
+                                    ref_val = levels[0] if levels else None
+                                
+                                label_ref = str(ref_val).replace('.0','') if ref_val else "Ref"
+                                non_ref_levels = [str(l).replace('.0','') for l in (levels or []) if l != ref_val]
+                                label_risk = "Others" if len(non_ref_levels) > 1 else non_ref_levels[0] if non_ref_levels else "Risk"
                                 aor_results[f"{var} ({label_risk} vs {label_ref})"] = {'aor': aor, 'ci_low': l, 'ci_high': h, 'p_value': pv}
                         
                         # --- Multi: Linear ---
@@ -502,8 +570,15 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             current_sheet = sheet
             
         lbl = get_label(col, var_meta)
-        if mode == 'simple': lbl += "<br><span style='font-size:0.8em; color:#888'>(Risk vs Ref)</span>"
-        elif mode == 'linear': lbl += "<br><span style='font-size:0.8em; color:#888'>(Linear Trend)</span>"
+        
+        # 🟢 IMPROVED: Add mode badge with icon
+        mode_badge = {
+            'categorical': '📊 (All Levels vs Ref)',
+            'simple': '📈 (Risk vs Ref)',
+            'linear': '📉 (Trend)'
+        }
+        if mode in mode_badge:
+            lbl += f"<br><span style='font-size:0.8em; color:#888'>{mode_badge[mode]}</span>"
         
         or_s = res.get('or', '-')
         
@@ -572,8 +647,11 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     <div class='summary-box'>
         <b>Method:</b> {preferred_method.capitalize()} Logit. Complete Case Analysis.<br>
         <div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee; font-size: 0.9em; color: #666;'>
-            <sup style='color:{COLORS['danger']}; font-weight:bold;'>†</sup> <b>Note:</b> aOR calculated for variables with Crude P < 0.20. <br>
-            <b>Modes:</b> Categorical (All Levels vs Ref), Simple (Risk vs Ref), Linear (Trend).
+            <sup style='color:{COLORS['danger']}; font-weight:bold;'>†</sup> <b>aOR:</b> Calculated for variables with Crude P < 0.20 (n_multi={final_n_multi}).<br>
+            <b>Modes:</b> 
+            📊 Categorical (All Levels vs Reference) | 
+            📈 Simple (Risk vs Reference) | 
+            📉 Linear (Per-unit Trend)
         </div>
     </div>
     </div><br>
@@ -605,7 +683,7 @@ def generate_forest_plot_html(or_results, aor_results, plot_title="Forest Plots:
     else:
         html_parts.append(f"""
         <div style='margin-top:20px; padding:15px; background:#f8f9fa; border-left:4px solid {COLORS.get('primary', '#218084')};'>
-            <b>Interpretation:</b> OR > 1 (Risk), OR < 1 (Protective), CI crosses 1 (Not Sig).
+            <b>Interpretation:</b> OR > 1 (Risk Factor), OR < 1 (Protective), CI crosses 1 (Not Sig).
         </div>
         """)
     return "".join(html_parts)
