@@ -6,7 +6,7 @@ Supports Logistic Regression (binary outcomes) and Cox Regression (survival data
 
 Standard: ICMJE, CONSORT, and Cochrane guidelines
 Author: NTWKKM (Adapted by Gemini)
-Version: 1.1 (Updated Interaction Tests)
+Version: 1.2 (Enhanced Interaction Tests & Stability)
 License: MIT
 """
 
@@ -120,7 +120,7 @@ class SubgroupAnalysisLogit:
         """
         try:
             from statsmodels.formula.api import logit
-            from scipy import stats # Import for Chi2 test
+            from scipy import stats # For Chi2 test (LRT)
             
             # Validate inputs
             self.validate_inputs(outcome_col, treatment_col, subgroup_col, adjustment_cols)
@@ -181,11 +181,19 @@ class SubgroupAnalysisLogit:
                 
                 df_sub = df_clean[df_clean[subgroup_col] == subgroup_val]
                 
+                # Check N and Treatment variation
                 if len(df_sub) < min_subgroup_n:
                     st.warning(f"  ⚠️ Subgroup {subgroup_val}: N={len(df_sub)} < {min_subgroup_n}, skipping")
-                    logger.warning(f"Skipping subgroup {subgroup_val}: insufficient sample size")
                     continue
                 
+                if df_sub[treatment_col].nunique() < 2:
+                    st.warning(f"  ⚠️ Subgroup {subgroup_val}: No variation in treatment (all same value), skipping")
+                    continue
+                
+                if df_sub[outcome_col].nunique() < 2:
+                    st.warning(f"  ⚠️ Subgroup {subgroup_val}: No variation in outcome (all 0 or all 1), skipping")
+                    continue
+
                 try:
                     model_sub = logit(formula_base, data=df_sub).fit(disp=0)
                     
@@ -217,27 +225,26 @@ class SubgroupAnalysisLogit:
                     logger.warning(f"Subgroup {subgroup_val} model failed: {e}")
                     continue
             
-            # === INTERACTION TEST (Likelihood Ratio Test) ===
+            # === INTERACTION TEST (Likelihood Ratio Test - LRT) ===
             st.info("📊 Computing Interaction Test (LRT)...")
             try:
-                # Use C() to ensure categorical treatment for correct DoF
+                # Use C() to ensure categorical treatment for correct DoF if needed
+                # Model WITHOUT interaction (Reduced)
                 formula_reduced = f'{outcome_col} ~ {treatment_col} + C({subgroup_col})'
-                formula_full = f'{outcome_col} ~ {treatment_col} * C({subgroup_col})'
-                
                 if adjustment_cols:
-                    adj_str = ' + ' + ' + '.join(adjustment_cols)
-                    formula_reduced += adj_str
-                    formula_full += adj_str
+                    formula_reduced += ' + ' + ' + '.join(adjustment_cols)
                 
-                # Fit both models
+                # Model WITH interaction (Full)
+                formula_full = f'{outcome_col} ~ {treatment_col} * C({subgroup_col})'
+                if adjustment_cols:
+                    formula_full += ' + ' + ' + '.join(adjustment_cols)
+                
                 model_reduced = logit(formula_reduced, data=df_clean).fit(disp=0)
                 model_full = logit(formula_full, data=df_clean).fit(disp=0)
                 
-                # Calculate Likelihood Ratio Test
+                # Calculate LRT
                 # LR Statistic = -2 * (LL_reduced - LL_full)
                 lr_stat = -2 * (model_reduced.llf - model_full.llf)
-                
-                # Degrees of freedom difference
                 df_diff = model_full.df_model - model_reduced.df_model
                 
                 if df_diff > 0:
@@ -482,7 +489,7 @@ class SubgroupAnalysisCox:
         """
         try:
             from lifelines import CoxPHFitter
-            from scipy import stats # Import for Chi2 test
+            from scipy import stats # For Chi2 test
             
             # Validate inputs
             self.validate_inputs(time_col, event_col, treatment_col, subgroup_col, adjustment_cols)
@@ -503,9 +510,10 @@ class SubgroupAnalysisCox:
             st.info("📊 Computing Overall Cox Model...")
             try:
                 cph_overall = CoxPHFitter()
-                covariates = [treatment_col] + adjustment_cols
+                # Use formula if possible, or standard fit
+                # Here standard fit is fine as we don't have interaction terms yet
                 cph_overall.fit(
-                    df_clean,
+                    df_clean[[time_col, event_col, treatment_col] + adjustment_cols],
                     duration_col=time_col,
                     event_col=event_col,
                     show_progress=False
@@ -544,16 +552,21 @@ class SubgroupAnalysisCox:
                 df_sub = df_clean[df_clean[subgroup_col] == subgroup_val]
                 n_events = int(df_sub[event_col].sum())
                 
+                # Enhanced Stability Checks
                 if len(df_sub) < min_subgroup_n or n_events < min_events:
                     msg = f"N={len(df_sub)}, events={n_events}"
                     st.warning(f"  ⚠️ Subgroup {subgroup_val}: {msg}, skipping")
-                    logger.warning(f"Skipping {subgroup_val}: {msg}")
+                    continue
+                
+                # FIX: Check if treatment has variation within subgroup
+                if df_sub[treatment_col].nunique() < 2:
+                    st.warning(f"  ⚠️ Subgroup {subgroup_val}: No variation in treatment (all same value), skipping")
                     continue
                 
                 try:
                     cph_sub = CoxPHFitter()
                     cph_sub.fit(
-                        df_sub,
+                        df_sub[[time_col, event_col, treatment_col] + adjustment_cols],
                         duration_col=time_col,
                         event_col=event_col,
                         show_progress=False
@@ -593,6 +606,8 @@ class SubgroupAnalysisCox:
                 
                 base_formula_parts = [treatment_col, f"C({subgroup_col})"] + adjustment_cols
                 formula_reduced = " + ".join(base_formula_parts)
+                
+                # Full formula includes interaction
                 formula_full = f"{treatment_col} * C({subgroup_col})"
                 if adjustment_cols:
                     formula_full += " + " + " + ".join(adjustment_cols)
@@ -619,7 +634,6 @@ class SubgroupAnalysisCox:
                 
                 # Calculate LRT
                 # LR Statistic = 2 * (LogLikelihood_full - LogLikelihood_reduced)
-                # Note: Cox partial log-likelihoods are usually negative
                 lr_stat = 2 * (cph_full.log_likelihood_ - cph_reduced.log_likelihood_)
                 
                 # Degrees of freedom diff
