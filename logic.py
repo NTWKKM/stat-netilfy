@@ -297,9 +297,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 try:
                     ct = pd.crosstab(X_raw, y)
                     _, p, _, _ = stats.chi2_contingency(ct) if ct.size > 0 else (0, np.nan, 0, 0)
-                    res['p_comp'] = p
+                    res['p_comp'] = p  # 🟢 ALWAYS store chi-square p-value
                     res['test_name'] = "Chi-square (All Levels)"
-                except: res['p_comp'], res['test_name'] = np.nan, "-"
+                except: 
+                    res['p_comp'], res['test_name'] = np.nan, "-"
 
                 # Regression (Dummies): Ref vs Each Level
                 if len(levels) > 1:
@@ -368,14 +369,16 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
 
             results_db[col] = res
             
-            # Screening P-value
+            # =========================================================
+            # 🟢 FIX: VARIABLE SCREENING FOR MULTIVARIATE
+            # =========================================================
+            # Always use p_comp (chi-square or Mann-Whitney) for screening
+            # p_or is for display only and may be HTML string for categorical
             p_screen = res.get('p_comp', np.nan)
-            if pd.isna(p_screen): 
-                pv_chk = res.get('p_or', np.nan)
-                if isinstance(pv_chk, (int, float)): p_screen = pv_chk
             
-            # 🟢 Check strict float type before comparison
-            if pd.notna(p_screen) and isinstance(p_screen, (int, float)) and p_screen < 0.20:
+            # Defensive check: ensure p_screen is numeric before comparison
+            # If p_comp not available, never use p_or (which could be HTML string)
+            if isinstance(p_screen, (int, float)) and pd.notna(p_screen) and p_screen < 0.20:
                 candidates.append(col)
 
     # --- MULTIVARIATE ANALYSIS ---
