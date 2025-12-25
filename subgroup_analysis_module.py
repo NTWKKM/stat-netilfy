@@ -604,6 +604,7 @@ class SubgroupAnalysisCox:
                 logger.info(f"Overall Cox: HR={hr_overall:.3f}, P={p_overall:.4f}")
             except Exception as e:
                 st.error(f"❌ Overall Cox model error: {e}")
+                logger.exception("Overall Cox model fitting failed")
                 raise
             
             # === SUBGROUP ANALYSES ===
