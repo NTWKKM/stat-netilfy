@@ -16,7 +16,15 @@ import streamlit as st
 from logger import get_logger
 from forest_plot_lib import create_forest_plot
 import warnings
-warnings.filterwarnings('ignore')
+from contextlib import contextmanager
+
+@contextmanager
+def suppress_convergence_warnings():
+    """Temporarily suppress convergence warnings during model fitting."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
+        warnings.filterwarnings('ignore', message='.*convergence.*')
+        yield
 
 logger = get_logger(__name__)
 
@@ -94,7 +102,6 @@ class SubgroupAnalysisLogit:
         subgroup_col: str,
         adjustment_cols: list = None,
         min_subgroup_n: int = 5,
-        use_firth: bool = False
     ) -> dict:
         """
         Run complete subgroup analysis with interaction testing.
@@ -200,7 +207,7 @@ class SubgroupAnalysisLogit:
             
             st.info(f"📊 Computing {len(subgroups)} Subgroup Models...")
             
-            for i, subgroup_val in enumerate(subgroups, 1):
+            for _i, subgroup_val in enumerate(subgroups, 1):
                 df_sub = df_clean[df_clean[subgroup_col] == subgroup_val]
                 
                 # Check N and Treatment variation
