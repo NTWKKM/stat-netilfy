@@ -967,6 +967,11 @@ def subgroup_analysis_cox(
         st.error(f"Cox subgroup analysis error: {e}")
         return go.Figure(), {}
 
+import re
+
+def _sanitize_filename(name: str) -> str:
+    """Sanitize string for use as filename."""
+    return re.sub(r'[^\w\-]', '_', name.lower())
 
 def render_forest_plot_in_streamlit(
     data: pd.DataFrame,
@@ -1006,7 +1011,7 @@ def render_forest_plot_in_streamlit(
                 st.download_button(
                     label='📥 Download (HTML)',
                     data=html_str,
-                    file_name=f'{title.lower().replace(" ", "_")}.html',
+                    file_name=f'{_sanitize_filename(title)}.html',
                     mime='text/html',
                 )
             
