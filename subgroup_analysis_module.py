@@ -199,7 +199,7 @@ class SubgroupAnalysisLogit:
                 logger.info(f"Overall: OR={or_overall:.3f}, P={p_overall:.4f}")
             except Exception as e:
                 st.error(f"❌ Overall model error: {e}")
-                logger.error(f"Overall model fitting failed: {e}")
+                logger.exception("Overall model fitting failed")
                 raise
             
             # === SUBGROUP ANALYSES ===
@@ -610,7 +610,7 @@ class SubgroupAnalysisCox:
             subgroups = sorted(df_clean[subgroup_col].dropna().unique())
             st.info(f"📊 Computing {len(subgroups)} Subgroup Cox Models...")
             
-            for i, subgroup_val in enumerate(subgroups, 1):
+            for _i, subgroup_val in enumerate(subgroups, 1):
                 df_sub = df_clean[df_clean[subgroup_col] == subgroup_val]
                 n_events = int(df_sub[event_col].sum())
                 
