@@ -163,7 +163,7 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame):
             analyzer = SubgroupAnalysisLogit(df)
             
             # Run analysis with progress tracking
-            with st.spinner("🧰 Running analysis..."):
+            with st.spinner("🚧 Running analysis..."):
                 results = analyzer.analyze(
                     outcome_col=outcome_col,
                     treatment_col=treatment_col,
@@ -293,7 +293,7 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame):
             st.markdown("---")
             
             # Export Options
-            st.subheader("📥 Export Results")
+            st.subheader("📛 Export Results")
             
             col1, col2, col3 = st.columns(3)
             
@@ -301,7 +301,7 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame):
             with col1:
                 html_plot = analyzer.figure.to_html(include_plotlyjs='cdn')
                 st.download_button(
-                    label="📿 HTML Plot",
+                    label="💿 HTML Plot",
                     data=html_plot,
                     file_name=f"subgroup_{treatment_col}_{subgroup_col}.html",
                     mime="text/html",
@@ -332,19 +332,19 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame):
         
         except Exception as e:
             st.error(f"❌ Error: {str(e)}", icon="💥")
-            st.info("**Troubleshooting:**\n- Ensure outcome is binary (2 categories)\n- Check subgroup has 2-10 categories\n- Verify minimum N per subgroup", icon="💭")
+            st.info("**Troubleshooting:**\n- Ensure outcome is binary (2 categories)\n- Check subgroup has 2-10 categories\n- Verify minimum N per subgroup", icon="🗣")
             logger.error(f"Logit subgroup analysis error: {e}")
     
     # Display previous results if available
     elif 'subgroup_results_logit' in st.session_state and st.session_state.get('show_previous_results', True):
-        st.info("💻 Showing previous results. Click 'Run Subgroup Analysis' to refresh.")
+        st.info("📋 Showing previous results. Click 'Run Subgroup Analysis' to refresh.")
 
 
 def render(df, var_meta):
     """
     Render the "4. Logistic Regression Analysis" section in a Streamlit app.
     """
-    st.subheader("📏 Logistic Regression Analysis")
+    st.subheader("📰 Logistic Regression Analysis")
     
     if st.session_state.get('is_matched', False):
         st.info("✅ **Matched Dataset Available** - You can select it below for analysis")
@@ -511,7 +511,7 @@ def render(df, var_meta):
         st.markdown("##### 📚 Quick Reference: Logistic Regression")
         
         st.info("""
-        **🎲 When to Use Logistic Regression:**
+        **🌲 When to Use Logistic Regression:**
         
         | Type | Outcome | Predictors | Example |
         |------|---------|-----------|----------|
@@ -581,31 +581,156 @@ def render(df, var_meta):
         st.markdown("---")
         
         st.markdown("""
-        ### Subgroup Analysis
+        ### 💡 Three OR Modes: When to Use Each
         
-        **When to Use:**
-        - Testing for treatment × subgroup interactions
-        - Examining differential treatment effects
-        - Identifying patient populations with greater benefit
+        The system supports **3 different modes** for handling categorical/continuous variables:
+        """)
         
-        **Key Concepts:**
-        - **Homogeneous effect** → One OR applies to all (no interaction)
-        - **Heterogeneous effect** → Different OR by subgroup (interaction exists)
-        - **Interaction p-value** → p < 0.05 = significant heterogeneity
+        # 🟢 IMPROVED: Add mode guide with examples
+        tab_cat, tab_simple, tab_linear = st.tabs([
+            "📊 Categorical (All Levels)",
+            "📈 Simple (Risk vs Ref)",
+            "📉 Linear (Trend)"
+        ])
         
-        **Interpretation:**
-        - If p_interaction < 0.05: Report results separately by subgroup
-        - If p_interaction ≥ 0.05: Overall estimate applies to all
+        with tab_cat:
+            st.markdown("""
+            #### 📊 Categorical Mode: All Levels vs Reference
+            
+            **When to Use:**
+            - Variable has multiple discrete categories
+            - All level comparisons are meaningful
+            - Example: Stage (I, II, III, IV)
+            
+            **What You Get:**
+            - Separate OR for each level compared to Reference
+            - Ref vs Level 1, Ref vs Level 2, Ref vs Level 3...
+            - **Output: Multiple lines** (one per level)
+            
+            **Example:**
+            ```
+            Stage (Reference = I):
+            - Ref.
+            - Level II vs I: OR = 1.8 (95% CI: 1.2-2.4)
+            - Level III vs I: OR = 2.5 (95% CI: 1.6-3.2)
+            - Level IV vs I: OR = 3.2 (95% CI: 2.0-4.1)
+            ```
+            
+            **When NOT to use:**
+            - Only interested in binary comparison (e.g., High vs Low)
+            - Many categories (>5) with sparse cells
+            - Ordinal variable (consider Linear mode)
+            
+            **How to Specify:**
+            ```python
+            var_meta = {
+                'stage': {'type': 'Categorical'}  # All levels
+            }
+            ```
+            """)
         
-        **Forest Plot in Subgroup Tab:**
-        - Shows OR with 95% CI by subgroup
-        - Horizontal line at OR=1 (null effect)
-        - Interactive plot for data exploration
+        with tab_simple:
+            st.markdown("""
+            ### 📈 Simple Mode: Risk vs Reference
+            
+            **When to Use:**
+            - Binary comparison: Risk vs Reference
+            - Collapse multiple non-Ref levels into one "Risk" group
+            - Example: Urban vs Rural (binary location)
+            
+            **What You Get:**
+            - Single OR: (Others vs Ref)
+            - **Output: Single line**
+            - All non-reference levels grouped together
+            
+            **Example:**
+            ```
+            Location (Reference = Rural):
+            - Urban vs Rural: OR = 1.5 (95% CI: 1.1-1.9)
+            ```
+            
+            **When NOT to use:**
+            - Want separate comparisons per level (use Categorical)
+            - Continuous variable (use Linear)
+            
+            **Allowed Custom Reference:**
+            ```python
+            var_meta = {
+                'location': {
+                    'type': 'Simple',
+                    'ref_level': 'Rural'  # Specify which is Ref
+                }
+            }
+            ```
+            
+            **Note:** First level alphabetically is Ref by default if not specified.
+            """)
+        
+        with tab_linear:
+            st.markdown("""
+            ### 📉 Linear Mode: Per-Unit Trend
+            
+            **When to Use:**
+            - Continuous or quasi-continuous variables
+            - Interested in per-unit increase effect
+            - Example: Age (years), BMI (kg/m²), Blood Pressure (mmHg)
+            
+            **What You Get:**
+            - Single OR per 1-unit increase
+            - **Output: Single line**
+            - Assumes linear dose-response relationship
+            
+            **Example:**
+            ```
+            Age (years):
+            - Per 1-year increase: OR = 1.02 (95% CI: 1.01-1.03)
+            
+            Interpretation: Each additional year of age increases 
+            odds of outcome by 2% (assuming linear relationship)
+            ```
+            
+            **Interpretation Tips:**
+            - For per-SD increase:
+              ```
+              If age SD = 10 years:
+              aOR per 10-year = 1.02^10 = 1.22
+              → Per SD increase = 22% higher odds
+              ```
+            
+            **When NOT to use:**
+            - Non-linear relationship (e.g., U-shaped)
+            - Sparse data in outer ranges
+            - Categorical with few distinct levels (use Categorical)
+            
+            **How to Specify:**
+            ```python
+            var_meta = {
+                'age': {'type': 'Linear'},      # Continuous
+                'bmi': {'type': 'Linear'}       # Continuous
+            }
+            ```
+            """)
+        
+        st.markdown("---")
+        
+        st.markdown("""
+        ### 🛠️ Auto-Detection Logic
+        
+        If you **don't specify** a mode in `var_meta`, the system auto-detects:
+        
+        1. **Binary (0/1)?** → Categorical
+        2. **Few levels (<10) with mostly integers?** → Categorical
+        3. **Otherwise** → Linear
+        
+        **Example Auto-Detection:**
+        - `stage` = [1, 2, 3, 4] → Categorical 📊
+        - `age` = [23.4, 45.2, 67.8...] → Linear 📉
+        - `location` = [0, 1] → Categorical 📊
+        - `treatment` = [0, 1] → Categorical 📊
         """)
         
         st.markdown("---")
         
-        # 🟢 NEW: Perfect Separation & Method Selection Guide
         st.markdown("""
         ### ⚠️ Perfect Separation & Method Selection
         
@@ -667,6 +792,30 @@ def render(df, var_meta):
         3. Click "Run Logistic Regression"
         4. Download HTML report to view forest plots
         5. Done! App handles everything automatically
+        """)
+        
+        st.markdown("---")
+        st.markdown("""
+        ### 📄 Subgroup Analysis
+        
+        **When to Use:**
+        - Testing for treatment × subgroup interactions
+        - Examining differential treatment effects
+        - Identifying patient populations with greater benefit
+        
+        **Key Concepts:**
+        - **Homogeneous effect** → One OR applies to all (no interaction)
+        - **Heterogeneous effect** → Different OR by subgroup (interaction exists)
+        - **Interaction p-value** → p < 0.05 = significant heterogeneity
+        
+        **Interpretation:**
+        - If p_interaction < 0.05: Report results separately by subgroup
+        - If p_interaction ≥ 0.05: Overall estimate applies to all
+        
+        **Forest Plot in Subgroup Tab:**
+        - Shows OR with 95% CI by subgroup
+        - Horizontal line at OR=1 (null effect)
+        - Interactive plot for data exploration
         """)
         
         st.markdown("---")
