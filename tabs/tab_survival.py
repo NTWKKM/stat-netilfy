@@ -47,7 +47,7 @@ def _get_dataset_for_survival(df: pd.DataFrame):
     return selected_df, label
 
 
-def _render_cox_subgroup_analysis(df: pd.DataFrame):
+def _render_cox_subgroup_analysis(df: pd.DataFrame) -> None:
     """
     Render Subgroup Analysis SubTab for Cox Regression within the Survival Tab.
     """
@@ -81,7 +81,7 @@ def _render_cox_subgroup_analysis(df: pd.DataFrame):
         time_col_selected = st.selectbox(
             "Follow-up Time",
             options=numeric_cols,
-            index=0 if len(numeric_cols) > 0 else 0,
+            index=0,
             help="Duration to event or censoring (days, months, years)",
             key="cox_sg_time"
         )
@@ -91,7 +91,7 @@ def _render_cox_subgroup_analysis(df: pd.DataFrame):
         event_col_selected = st.selectbox(
             "Event Indicator (Binary)",
             options=binary_cols,
-            index=0 if len(binary_cols) > 0 else 0,
+            index=0,
             help="1/Yes = event occurred, 0/No = censored",
             key="cox_sg_event"
         )
@@ -364,7 +364,7 @@ def _render_cox_subgroup_analysis(df: pd.DataFrame):
             - Minimum 5 observations per subgroup
             - Minimum 2 events per subgroup
             """, icon="💭")
-            logger.error(f"Cox subgroup analysis error: {e}")
+            logger.exception("Cox subgroup analysis error: %s", e)
     
     # Display previous results if available
     elif 'subgroup_results_cox' in st.session_state and st.session_state.get('show_previous_results_cox', True):
