@@ -472,7 +472,9 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         else:
             p_val = res.get('p_comp', np.nan) # Chi2/Mann-Whitney for single line
             p_s = fmt_p(p_val)
-            if pd.notna(p_val) and isinstance(p_val, (int, float)) and p_val < 0.05: p_s = f"<span class='sig-p'>{p_s}*</span>"
+            # 🟢 FIX: Type check before comparison (Line 326)
+            if isinstance(p_val, (int, float)) and pd.notna(p_val) and p_val < 0.05: 
+                p_s = f"<span class='sig-p'>{p_s}*</span>"
             p_col_display = p_s
 
         # Adjusted OR
@@ -484,7 +486,9 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 aor_lines, ap_lines = ["Ref."], ["-"]
                 for item in multi_res:
                     p_txt = fmt_p(item['p'])
-                    if item['p'] < 0.05: p_txt = f"<span class='sig-p'>{p_txt}*</span>"
+                    # 🟢 FIX: Type check before comparison (Line 335)
+                    if isinstance(item['p'], (int, float)) and pd.notna(item['p']) and item['p'] < 0.05: 
+                        p_txt = f"<span class='sig-p'>{p_txt}*</span>"
                     aor_lines.append(f"{item['aor']:.2f} ({item['l']:.2f}-{item['h']:.2f})")
                     ap_lines.append(p_txt)
                 aor_s, ap_s = "<br>".join(aor_lines), "<br>".join(ap_lines)
@@ -492,7 +496,9 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 aor_s = f"{multi_res['aor']:.2f} ({multi_res['l']:.2f}-{multi_res['h']:.2f})"
                 ap_val = multi_res['p']
                 ap_txt = fmt_p(ap_val)
-                if pd.notna(ap_val) and isinstance(ap_val, (int, float)) and ap_val < 0.05: ap_txt = f"<span class='sig-p'>{ap_txt}*</span>"
+                # 🟢 FIX: Type check before comparison (Line 345)
+                if isinstance(ap_val, (int, float)) and pd.notna(ap_val) and ap_val < 0.05: 
+                    ap_txt = f"<span class='sig-p'>{ap_txt}*</span>"
                 ap_s = ap_txt
             
         html_rows.append(f"""
