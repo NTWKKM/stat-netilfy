@@ -252,7 +252,7 @@ if st.sidebar.button("📄 Load Example Data"):
         # Set Metadata (Correctly Mapped)
         st.session_state.var_meta = {
             'Treatment_Group': {'type':'Categorical', 'map':{0:'Standard Care', 1:'New Drug'}, 'label': 'Treatment Group'},
-            'Sex_Male': {'type':'Categorical', 'map':{0:'Female', 1:'Male'}, 'label': 'Sex'},
+            'Sex_Male': {'type':'Simple', 'map':{0:'Female', 1:'Male'}, 'label': 'Sex', 'ref_level': 0},
             'Comorb_Diabetes': {'type':'Categorical', 'map':{0:'No', 1:'Yes'}, 'label': 'Diabetes'},
             'Comorb_Hypertension': {'type':'Categorical', 'map':{0:'No', 1:'Yes'}, 'label': 'Hypertension'},
             'Outcome_Cured': {'type':'Categorical', 'map':{0:'Not Cured', 1:'Cured'}, 'label': 'Outcome (Cured)'},
@@ -384,57 +384,15 @@ if st.session_state.df is not None:
             is_numeric = pd.api.types.is_numeric_dtype(st.session_state.df[s_var]) if s_var in st.session_state.df.columns else False
             current_type = 'Linear' if is_numeric else 'Categorical'
 
-        # 🟢 NEW: Support 3 OR modes for Categorical variables
         allowed_types = ['Categorical', 'Simple', 'Linear']
         if current_type not in allowed_types:
             current_type = 'Categorical'
 
         with st.sidebar.expander("⚙️ Variable Settings", expanded=True):
             st.markdown(f"**Variable:** `{s_var}`")
+            st.markdown("**ℹ️ Configure this variable in the Logistic tab for better UX.**")
             
-            # Type selection with description
-            st.markdown("#### 📊 Analysis Mode:")
-            n_type = st.radio(
-                "Select analysis mode (for logistic regression):",
-                allowed_types,
-                index=allowed_types.index(current_type) if current_type in allowed_types else 0,
-                help="""
-                📊 Categorical: All levels vs Reference (Ref vs 1, Ref vs 2...)
-                📈 Simple: Binary comparison (Risk vs Ref, single line)
-                📉 Linear: Continuous trend (per-unit increase)
-                """
-            )
-            
-            # Show mode description
-            mode_desc = {
-                'Categorical': "📊 All levels compared to reference level separately",
-                'Simple': "📈 Collapse multiple levels into Risk vs Reference (binary)",
-                'Linear': "📉 Treat as continuous variable (per-unit trend)"
-            }
-            st.info(f"**Selected:** {mode_desc.get(n_type, '')}")
-            
-            # Custom reference level for Simple mode
-            if n_type == 'Simple':
-                st.markdown("#### 🎯 Reference Level (for Simple mode):")
-                unique_vals = sorted(st.session_state.df[s_var].dropna().unique(), key=lambda x: (isinstance(x, str), x))
-                
-                current_ref = meta.get('ref_level')
-                if current_ref is None:
-                    current_ref = unique_vals[0] if unique_vals else None
-                
-                ref_idx = list(unique_vals).index(current_ref) if current_ref in unique_vals else 0
-                custom_ref = st.selectbox(
-                    "Choose reference level:",
-                    options=unique_vals,
-                    index=ref_idx,
-                    help="The 'Risk' group will be compared against this reference"
-                )
-                meta['ref_level'] = custom_ref
-            else:
-                # Clear ref_level if not Simple mode
-                meta.pop('ref_level', None)
-            
-            # Variable labels and mapping
+            # Variable labels and mapping only
             st.markdown("#### 🏷️ Labels & Mapping:")
             map_txt = st.text_area(
                 "Value mapping (optional, one per line):\ne.g. 0=No\n1=Yes",
@@ -461,11 +419,10 @@ if st.session_state.df is not None:
                 if s_var not in st.session_state.var_meta: 
                     st.session_state.var_meta[s_var] = {}
                 
-                st.session_state.var_meta[s_var]['type'] = n_type
                 st.session_state.var_meta[s_var]['map'] = new_map
                 st.session_state.var_meta[s_var].setdefault('label', s_var)
                 
-                logger.info("✅ Variable '%s' configured as %s", s_var, n_type)
+                logger.info("✅ Variable '%s' mapping updated", s_var)
                 st.sidebar.success("✅ Saved!")
                 st.rerun()
 
