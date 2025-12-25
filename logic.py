@@ -184,7 +184,9 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                     if (pd.crosstab(X_num, y) == 0).any().any():
                         has_perfect_separation = True
                         break
-            except: continue
+            except Exception:
+                logger.debug("Perfect separation check failed for column %s", col)
+                continue
     
     preferred_method = 'bfgs'
     if method == 'auto' and HAS_FIRTH and (has_perfect_separation or len(df)<50 or (y==1).sum()<20):
@@ -302,7 +304,8 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                     _, p, _, _ = stats.chi2_contingency(ct) if ct.size > 0 else (0, np.nan, 0, 0)
                     res['p_comp'] = p  # 🟢 ALWAYS store chi-square p-value
                     res['test_name'] = "Chi-square (All Levels)"
-                except: 
+                except (ValueError, TypeError) as e:
+                    logger.debug("Chi-square test failed for %s: %s", col, e)
                     res['p_comp'], res['test_name'] = np.nan, "-"
 
                 # Regression (Dummies): Ref vs Each Level
@@ -426,21 +429,20 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                                 d_name = f"{var}::{lvl}"
                                 if d_name in params:
                                     aor = np.exp(params[d_name])
-                                    l, h = np.exp(conf.loc[d_name][0]), np.exp(conf.loc[d_name][1])
+                                    ci_low, ci_high = np.exp(conf.loc[d_name][0]), np.exp(conf.loc[d_name][1])
                                     pv = pvals[d_name]
-                                    aor_entries.append({'lvl': lvl, 'aor': aor, 'l': l, 'h': h, 'p': pv})
-                                    aor_results[f"{var}: {lvl} vs {levels[0]}"] = {'aor': aor, 'ci_low': l, 'ci_high': h, 'p_value': pv}
+                                    aor_entries.append({'lvl': lvl, 'aor': aor, 'l': ci_low, 'h': ci_high, 'p': pv})
+                                    aor_results[f"{var}: {lvl} vs {levels[0]}"] = {'aor': aor, 'ci_low': ci_low, 'ci_high': ci_high, 'p_value': pv}
                             results_db[var]['multi_res'] = aor_entries
                         
                         # --- Multi: Linear ---
                         else:
                             if var in params:
                                 aor = np.exp(params[var])
-                                l, h = np.exp(conf.loc[var][0]), np.exp(conf.loc[var][1])
+                                ci_low, ci_high = np.exp(conf.loc[var][0]), np.exp(conf.loc[var][1])
                                 pv = pvals[var]
-                                results_db[var]['multi_res'] = {'aor': aor, 'l': l, 'h': h, 'p': pv}
-                                aor_results[var] = {'aor': aor, 'ci_low': l, 'ci_high': h, 'p_value': pv}
-
+                                results_db[var]['multi_res'] = {'aor': aor, 'l': ci_low, 'h': ci_high, 'p': pv}
+                                aor_results[var] = {'aor': aor, 'ci_low': ci_low, 'ci_high': ci_high, 'p_value': pv}
     # --- HTML BUILD ---
     html_rows = []
     current_sheet = ""
@@ -606,6 +608,6 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None, method='au
     plot_html = generate_forest_plot_html(or_res, aor_res)
     
     full_html = f"<!DOCTYPE html><html><head>{css}</head><body><h1>Logistic Regression Report</h1>{html_table}{plot_html}"
-    full_html += f"<div class='report-footer'>&copy; 2025 NTWKKM. Powered by GitHub, Gemini, Streamlit</div></body></html>"
+    full_html += "<div class='report-footer'>&copy; 2025 NTWKKM. Powered by GitHub, Gemini, Streamlit</div></body></html>"
     
     return full_html, or_res, aor_res
