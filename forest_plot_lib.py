@@ -148,9 +148,12 @@ class ForestPlot:
         
         # Parse base color (hex to RGB)
         hex_color = base_color.lstrip('#')
-        if len(hex_color) == 6:
-            rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-        else:
+        try:
+            if len(hex_color) == 6:
+                rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+            else:
+                rgb = (33, 128, 141)  # Default teal
+        except ValueError:
             rgb = (33, 128, 141)  # Default teal
         
         # Generate colors with varying opacity
