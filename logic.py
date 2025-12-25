@@ -137,8 +137,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     - 'Categorical': All levels vs Reference (Ref vs 1, Ref vs 2...)
     - 'Simple': Risk vs Reference (binary comparison, single line)
     - 'Linear': Continuous/Trend (per-unit increase)
-    
-    🟢 IMPROVED: Now reads OR mode configuration directly from tab_logit.py UI via var_meta
     """
     
     logger.log_analysis(analysis_type="Logistic Regression", outcome=outcome_name, n_vars=len(df.columns) - 1, n_samples=len(df))
@@ -215,7 +213,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             unique_vals = X_num.dropna().unique()
             unique_count = len(unique_vals)
             
-            # --- 1. DETERMINE MODE (Auto or User Override from var_meta) ---
+            # --- 1. DETERMINE MODE (Auto or User Override) ---
             mode = 'linear' # Default
             is_binary = set(unique_vals).issubset({0, 1})
             
@@ -230,7 +228,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 if decimals_pct < 0.3:
                     mode = 'categorical'
             
-            # 🟢 IMPROVED: User Override via var_meta (from tab_logit.py UI)
+            # User Override via var_meta
             if var_meta:
                 key = col if col in var_meta else orig_name
                 if key in var_meta:
@@ -240,7 +238,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                         if 'cat' in t: mode = 'categorical'
                         elif 'simp' in t: mode = 'simple'
                         elif 'lin' in t or 'cont' in t: mode = 'linear'
-                        logger.debug(f"Variable '{col}' OR mode: {mode} (from user config)")
 
             mode_map[col] = mode
             
@@ -651,7 +648,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         <b>Method:</b> {preferred_method.capitalize()} Logit. Complete Case Analysis.<br>
         <div style='margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee; font-size: 0.9em; color: #666;'>
             <sup style='color:{COLORS['danger']}; font-weight:bold;'>†</sup> <b>aOR:</b> Calculated for variables with Crude P < 0.20 (n_multi={final_n_multi}).<br>
-            <b>Modes:</b> 📊 Categorical (All Levels vs Reference) | 📈 Simple (Risk vs Reference) | 📉 Linear (Per-unit Trend)
+            <b>Modes:</b> 
+            📊 Categorical (All Levels vs Reference) | 
+            📈 Simple (Risk vs Reference) | 
+            📉 Linear (Per-unit Trend)
         </div>
     </div>
     </div><br>
