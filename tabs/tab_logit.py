@@ -13,7 +13,14 @@ logger = get_logger(__name__)
 
 def check_perfect_separation(df, target_col):
     """
-    Identify predictor columns that may cause perfect separation with the specified target.
+    Identify predictor columns that may cause perfect separation with the specified binary target.
+    
+    Parameters:
+        df (pd.DataFrame): Input dataset containing predictors and the target column.
+        target_col (str): Name of the binary target column in `df`.
+    
+    Returns:
+        List[str]: Column names that exhibit at least one zero cell in their contingency table with the target (indicative of potential perfect separation).
     """
     risky_vars = []
     try:
@@ -34,7 +41,12 @@ def check_perfect_separation(df, target_col):
 # 🟢 NEW: Helper function to select dataset
 def _get_dataset_for_analysis(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     """
-    Choose between the original and a propensity-score matched dataset for analysis.
+    Selects either the original DataFrame or a propensity-score matched DataFrame for analysis and returns the chosen dataset with a descriptive label.
+    
+    If a matched dataset exists in Streamlit session state (key 'is_matched' true and 'df_matched' present), presents a radio control letting the user choose between Original Data and Matched Data (defaults to Matched). Returns the selected DataFrame copy and a label string that includes an emoji and the row count (e.g., "✅ Matched Data (123 rows)" or "📊 Original Data (123 rows)").
+    
+    Returns:
+        tuple[pd.DataFrame, str]: The selected DataFrame and a human-readable label describing the data source and number of rows.
     """
     has_matched = st.session_state.get('is_matched', False) and st.session_state.get('df_matched') is not None
     
@@ -64,7 +76,20 @@ def _get_dataset_for_analysis(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
 
 def _render_logit_subgroup_analysis(df: pd.DataFrame):
     """
-    Render Subgroup Analysis SubTab for Logistic Regression within the Logit Tab.
+    Render the "Subgroup Analysis" subtab UI and workflow for logistic regression.
+    
+    Displays controls to select outcome, treatment, subgroup, and optional adjustment covariates; runs a subgroup interaction analysis using SubgroupAnalysisLogit when invoked; and renders results including a forest plot, summary metrics, detailed results table, interpretation, clinical reporting guidance, and download buttons.
+    
+    Parameters:
+        df (pd.DataFrame): DataFrame containing the variables available for selection. Outcome must be binary; subgroup must have 2–10 categories.
+    
+    Side effects:
+        - Renders Streamlit UI elements and charts.
+        - Writes analysis state to st.session_state keys: 'subgroup_results_logit', 'subgroup_analyzer_logit', and 'edit_forest_title_logit'.
+        - Triggers downloads for HTML/CSV/JSON exports via Streamlit download buttons.
+    
+    Notes:
+        - The function performs input validation through the UI (e.g., outcome and subgroup cardinality) and handles exceptions by showing an error message and logging.
     """
     st.header("🗒️ Subgroup Analysis")
     
@@ -344,7 +369,16 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame):
 
 def render(df, var_meta):
     """
-    Render the "4. Logistic Regression Analysis" section in a Streamlit app.
+    Render the "4. Logistic Regression Analysis" section of the Streamlit app.
+    
+    Renders a multi-tab UI for binary logistic regression, subgroup logistic regression, and reference/interpretation guidance.
+    The Binary Logistic Regression tab includes dataset selection (original vs matched), outcome and exclusion controls, regression method choice (Auto/Standard/Firth),
+    execution of analysis (producing an HTML report and interactive forest plots), and report download. The Subgroup Analysis tab delegates to the dedicated
+    logistic subgroup renderer. The Reference & Interpretation tab provides guidance on OR/aOR interpretation, method selection, perfect separation, and usage examples.
+    
+    Parameters:
+        df (pandas.DataFrame): The input dataset to use for analyses and plotting.
+        var_meta (dict): Variable metadata that controls how variables are treated (e.g., {'age': {'type': 'Linear'}, 'stage': {'type': 'Categorical'}}).
     """
     st.subheader("📰 Logistic Regression Analysis")
     

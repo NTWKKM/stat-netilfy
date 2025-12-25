@@ -28,7 +28,25 @@ try:
         logger.info("🔧 Applying sklearn 1.6+ compatibility patch to FirthLogisticRegression")
         
         def _validate_data_patch(self, X, y=None, reset=True, validate_separately=False, **check_params):
-            """Shim to restore _validate_data for firthlogist compatibility with sklearn 1.6+"""
+            """
+            Compatibility shim that validates input arrays and optionally the target to match sklearn's `_validate_data` behavior.
+            
+            Parameters:
+                X: array-like
+                    Feature matrix to validate.
+                y: array-like, optional
+                    Target array to validate. If omitted, only `X` is validated.
+                reset: bool
+                    Present for signature compatibility; has no effect on validation.
+                validate_separately: bool
+                    Present for signature compatibility; has no effect on validation.
+                **check_params:
+                    Additional keyword arguments forwarded to the underlying sklearn validation routines (e.g., `dtype`, `ensure_2d`).
+            
+            Returns:
+                numpy.ndarray or tuple
+                    The validated `X` if `y` is None, otherwise a tuple `(X_validated, y_validated)`.
+            """
             if y is None:
                 return check_array(X, **check_params)
             else:
@@ -51,7 +69,16 @@ except (AttributeError, TypeError) as e:
 warnings.filterwarnings("ignore")
 
 def clean_numeric_value(val):
-    """Normalize a value into a numeric float suitable for analysis."""
+    """
+    Convert a value into a numeric float usable for analysis.
+    
+    Parameters:
+        val: The input value to convert; may be numeric, a string containing numeric characters,
+             or a sentinel like NaN.
+    
+    Returns:
+        float: The numeric value parsed from `val`, or `numpy.nan` if `val` is missing or cannot be parsed.
+    """
     if pd.isna(val): 
         return np.nan
     s = str(val).strip()
@@ -63,10 +90,12 @@ def clean_numeric_value(val):
 
 def _robust_sort_key(x):
     """
-    🟢 IMPROVED: Robust sorting key for mixed numeric/string levels.
-    Returns (sort_priority, value) tuple:
-    - (0, numeric_value) for numeric values
-    - (1, string_value) for non-numeric values
+    Produce a sorting key that orders numeric values before strings and places missing values last.
+    
+    The returned tuple is used as a sort key: the first element is a priority integer (0 for numeric values, 1 for non-numeric strings, 2 for missing/NaN), and the second element is the comparable key (a float for numeric values, the string representation for non-numeric values, or an empty string for missing values).
+    
+    Returns:
+        tuple: (priority, key) where `priority` is 0, 1, or 2 and `key` is the value to compare within that priority.
     """
     try:
         # Check if it's already a number or can be one
@@ -77,7 +106,23 @@ def _robust_sort_key(x):
         return (1, str(x))    # Then string
 
 def run_binary_logit(y, X, method='default'):
-    """Perform binary logistic regression using the specified estimation method."""
+    """
+    Fit a binary logistic regression model using the requested estimation method.
+    
+    Parameters:
+        y (array-like): Binary outcome vector aligned with rows of X.
+        X (DataFrame or array-like): Predictor matrix; a constant column will be added if missing.
+        method (str): Estimation method to use. Supported values:
+            - 'firth': Firth's penalized likelihood (requires firthlogist); returns an explicit error message if unavailable.
+            - 'bfgs': Maximum likelihood using BFGS optimization.
+            - any other value (default): Maximum likelihood with the statsmodels default optimizer.
+    
+    Returns:
+        params (Series or ndarray or None): Estimated coefficients indexed by predictor names, or None on failure.
+        conf_int (DataFrame or None): Two-column confidence interval DataFrame indexed by predictor names, or None on failure.
+        pvalues (Series or ndarray or None): Two-sided p-values for coefficients, or None on failure.
+        status (str): Status message; "OK" on success or an error description on failure.
+    """
     try:
         X_const = sm.add_constant(X, has_constant='add')
         
@@ -113,7 +158,18 @@ def run_binary_logit(y, X, method='default'):
         return None, None, None, str(e)
 
 def get_label(col_name, var_meta):
-    """Build an HTML label for a column."""
+    """
+    Create an HTML label for a column name, optionally including a secondary human-readable label from variable metadata.
+    
+    If var_meta contains an entry for col_name (or for the suffix after the first underscore), the corresponding 'label' value is appended on a new line in muted styling.
+    
+    Parameters:
+        col_name (str): Column name to display.
+        var_meta (dict | None): Optional mapping of column keys to metadata dictionaries; expected to contain a 'label' key when present.
+    
+    Returns:
+        str: HTML fragment with the column name in bold, optionally followed by a muted secondary label on a new line.
+    """
     display_name = col_name 
     secondary_label = ""
     if var_meta:
@@ -136,9 +192,21 @@ def get_label(col_name, var_meta):
 @st.cache_data(show_spinner=False)
 def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     """
-    Analyze outcome with support for 2 OR modes (Refined):
-    - 'Categorical': 📊 (All Levels vs Ref) - Covers Binary and Categorical
-    - 'Linear': 📉 (Trend) - Continuous per-unit increase
+    Perform univariate and multivariate logistic regression analyses for a binary outcome and produce an HTML results table plus crude and adjusted odds ratio dictionaries.
+    
+    Analyzes the specified binary outcome in df, auto-detects per-variable mode (categorical vs linear) with optional overrides via var_meta, computes descriptive statistics and univariate tests (chi-square or Mann–Whitney), fits crude logistic regressions to produce unadjusted odds ratios (ORs), selects candidate predictors by screening p < 0.20, fits a multivariate logistic model to produce adjusted ORs (aORs), and formats results into an HTML table. The function chooses an estimation method automatically (including Firth correction when appropriate and available) and performs complete-case analysis for multivariate modeling.
+    
+    Parameters:
+        outcome_name (str): Column name of the binary outcome in df.
+        df (pandas.DataFrame): DataFrame containing the outcome and predictor columns.
+        var_meta (dict | None): Optional metadata per variable; may include 'type' to override auto-detected mode and 'map' for categorical label mapping.
+        method (str): Estimation method hint: 'auto', 'firth', 'bfgs', or 'default'. 'auto' selects an appropriate method based on data and availability.
+    
+    Returns:
+        tuple:
+            html_table (str): HTML string containing the formatted results table and summary.
+            or_results (dict): Mapping of variable (or level) to crude OR info: {'or', 'ci_low', 'ci_high', 'p_value'}.
+            aor_results (dict): Mapping of variable (or level) to adjusted OR info: {'aor', 'ci_low', 'ci_high', 'p_value'}.
     """
     
     logger.log_analysis(analysis_type="Logistic Regression", outcome=outcome_name, n_vars=len(df.columns) - 1, n_samples=len(df))
@@ -195,6 +263,15 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     elif method == 'default': preferred_method = 'default'
 
     def fmt_p(val):
+        """
+        Format a p-value (or value convertible to float) for display with clipping and special thresholds.
+        
+        Parameters:
+            val: A numeric value or value convertible to float; may be NaN or non-numeric.
+        
+        Returns:
+            A string representation: `"-"` for NaN or non-convertible inputs, `"<0.001"` if the value is less than 0.001, `">0.999"` if greater than 0.999, or the value formatted with three decimal places (e.g., `"0.123"`).
+        """
         if pd.isna(val): return "-"
         try:
             val = float(val)
@@ -274,6 +351,18 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 desc_tot, desc_neg, desc_pos = [f"<span class='n-badge'>n={n_used}</span>"], [f"<span class='n-badge'>n={len(X_neg.dropna())}</span>"], [f"<span class='n-badge'>n={len(X_pos.dropna())}</span>"]
                 
                 def count_val(series, v_str):
+                      """
+                      Count occurrences of a given string value in a pandas Series after normalizing numeric-like entries.
+                      
+                      Normalizes each element by converting it to a string and, for values that appear numeric, removing a trailing ".0" so that numeric 1 and "1.0" both compare equal to "1".
+                      
+                      Parameters:
+                          series (pandas.Series): Input series whose values will be string-normalized for comparison.
+                          v_str (str): Target string value to count after normalization.
+                      
+                      Returns:
+                          int: Number of elements equal to `v_str` after normalization.
+                      """
                       return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
 
                 for lvl in levels:
@@ -452,6 +541,15 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     
     # ✅ FIX: Grouping logic to prevent sorting error
     def _get_sheet_name(col_name):
+        """
+        Extract the sheet name from a column by taking the substring before the first underscore.
+        
+        Parameters:
+            col_name (str): Column name to extract the sheet from.
+        
+        Returns:
+            sheet_name (str): The substring before the first underscore in `col_name`, or "Variables" if `col_name` contains no underscore.
+        """
         return col_name.split('_')[0] if '_' in col_name else "Variables"
         
     grouped_cols = sorted(valid_cols_for_html, key=lambda x: (_get_sheet_name(x), x))
@@ -561,7 +659,25 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     return html_table, or_results, aor_results
 
 def generate_forest_plot_html(or_results, aor_results, plot_title="Forest Plots: Odds Ratios"):
-    """Generate forest plot HTML."""
+    """
+    Builds HTML containing forest plots for univariable (crude) and multivariable (adjusted) odds ratios.
+    
+    Parameters:
+        or_results (dict): Mapping of variable name -> metrics for univariable results. Each metrics dict is expected to include keys:
+            - 'or' (float): odds ratio
+            - 'ci_low' (float): lower bound of the 95% confidence interval
+            - 'ci_high' (float): upper bound of the 95% confidence interval
+            - 'p_value' (float): p-value for the estimate
+        aor_results (dict): Mapping of variable name -> metrics for multivariable results. Each metrics dict is expected to include keys:
+            - 'aor' (float): adjusted odds ratio
+            - 'ci_low' (float): lower bound of the 95% confidence interval
+            - 'ci_high' (float): upper bound of the 95% confidence interval
+            - 'p_value' (float): p-value for the estimate
+        plot_title (str): Title displayed above the plots.
+    
+    Returns:
+        str: HTML fragment containing embedded forest plot(s) when results are present, or a short message indicating no plots are available. When plots are included, an interpretation note for OR values is appended.
+    """
     html_parts = [f"<h2 style='margin-top:30px; color:{COLORS['primary']};'>{plot_title}</h2>"]
     has_plot = False
 
@@ -590,7 +706,20 @@ def generate_forest_plot_html(or_results, aor_results, plot_title="Forest Plots:
     return "".join(html_parts)
 
 def process_data_and_generate_html(df, target_outcome, var_meta=None, method='auto'):
-    """Generate complete HTML report."""
+    """
+    Assemble a complete HTML report for logistic regression analysis of a specified outcome.
+    
+    Parameters:
+        df (pandas.DataFrame): Dataset containing predictors and the outcome column.
+        target_outcome (str): Name of the outcome column to analyze.
+        var_meta (dict | None): Optional metadata for variables (labels, modes, overrides).
+        method (str): Estimation method hint passed to analysis functions ('auto', 'firth', 'bfgs', etc.).
+    
+    Returns:
+        full_html (str): Complete HTML document containing the result table, forest plots, styles, and footer.
+        or_res (dict): Unadjusted (crude) odds ratio results produced by the univariate analysis.
+        aor_res (dict): Adjusted odds ratio results produced by the multivariate analysis.
+    """
     css = f"""<style>
         body {{ font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; }}
         .table-container {{ background: white; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); overflow-x: auto; }}

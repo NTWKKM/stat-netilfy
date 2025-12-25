@@ -20,16 +20,12 @@ logger = get_logger(__name__)
 
 def render(df: pd.DataFrame, outcome_var: str | None = None, treatment_var: str | None = None):
     """
-    Render Subgroup Analysis SubTab for Logistic Regression.
+    Render the Streamlit Subgroup Analysis subtab for a logistic regression workflow, handling UI, user inputs, analysis execution, result presentation, and export options.
     
     Parameters:
-    -----------
-    df : pd.DataFrame
-        Input data frame
-    outcome_var : str, optional
-        Pre-selected outcome variable
-    treatment_var : str, optional
-        Pre-selected treatment variable
+        df (pd.DataFrame): Input dataset used for variable selection and analysis.
+        outcome_var (str | None): Optional pre-selected binary outcome column name.
+        treatment_var (str | None): Optional pre-selected treatment/exposure column name.
     """
     st.markdown("---")
     st.header("🗒️ Subgroup Analysis")

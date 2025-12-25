@@ -16,7 +16,10 @@ from plotly.subplots import make_subplots
 import streamlit as st
 from logger import get_logger
 from tabs._common import get_color_palette
-from statsmodels.formula.api import logit
+from statsmodels.formula.api import logit, glm
+from statsmodels.genmod.cov_struct import Independence
+from statsmodels.genmod.generalized_estimating_equations import GEE
+from statsmodels.genmod.families import Binomial
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -48,7 +51,27 @@ class ForestPlot:
         pval_col: str = None,
     ):
         """
-        Initialize ForestPlot with data and column specifications.
+        Initialize a ForestPlot instance with validated and prepared data for plotting.
+        
+        Converts the specified estimate and CI columns to numeric (invalid values become NaN), drops rows missing any of those numeric values, reverses the row order for top-down display, and stores column names as instance attributes.
+        
+        Parameters:
+            data (pd.DataFrame): Input dataframe containing effect estimates, confidence bounds, and labels.
+            estimate_col (str): Column name for the point estimates.
+            ci_low_col (str): Column name for the lower bounds of the confidence intervals.
+            ci_high_col (str): Column name for the upper bounds of the confidence intervals.
+            label_col (str): Column name for the display labels (variable names).
+            pval_col (str, optional): Column name for P-values; include only if P-values should be available for plotting.
+        
+        Raises:
+            ValueError: If `data` is empty, if any required columns are missing, or if no valid rows remain after coercing numeric columns and dropping NaNs.
+        
+        Side effects:
+            - Coerces the estimate and CI columns to numeric, converting non-numeric entries to NaN.
+            - Drops rows with NaN in any of the essential numeric columns.
+            - Reverses the DataFrame order and resets the index for top-down plotting.
+            - Stores the provided column names on the instance (estimate_col, ci_low_col, ci_high_col, label_col, pval_col).
+            - Attempts to log the number of variables and the estimate range.
         """
         # Validation
         if data.empty:
@@ -99,7 +122,13 @@ class ForestPlot:
     
     def _add_significance_stars(self, p):
         """
-        Convert p-value to significance stars (* ** ***).
+        Map a p-value to conventional significance star notation.
+        
+        Parameters:
+            p (float | str | None): The p-value to convert; may be numeric, a string (e.g., "<0.001"), or None/NaN.
+        
+        Returns:
+            str: `'***'` if p < 0.001, `**` if p < 0.01, `*` if p < 0.05, or `''` (empty string) if p is missing or cannot be interpreted as a numeric p-value.
         """
         # --- FIX: Handle string p-values (e.g., "<0.001") robustly ---
         try:
@@ -126,10 +155,17 @@ class ForestPlot:
     
     def _get_ci_width_colors(self, base_color: str) -> list:
         """
-        🎨 Generate marker colors based on CI width.
-        CI width = precision indicator
-        - Narrow CI (precise) = darker/more opaque
-        - Wide CI (uncertain) = lighter/more transparent
+        Generate per-row RGBA marker colors based on confidence-interval width and return normalized CI widths.
+        
+        The provided hex `base_color` is converted to RGB (falls back to teal if parsing fails). Each row's CI width is normalized to the range [0, 1] (smaller = more precise). Marker opacities are mapped so that narrower CIs produce higher opacity and wider CIs produce lower opacity.
+        
+        Parameters:
+            base_color (str): Hex color string (e.g. "#1f9e9d" or "1f9e9d") used as the base for generated RGBA colors.
+        
+        Returns:
+            tuple:
+                - marker_colors (list[str]): RGBA color strings for each row, with opacity scaled by CI width.
+                - ci_normalized (numpy.ndarray): Normalized CI widths in [0, 1] for each row (smaller means narrower CI).
         """
         # Ensure values are float for calculation
         ci_high = self.data[self.ci_high_col]
@@ -165,10 +201,20 @@ class ForestPlot:
     
     def get_summary_stats(self, ref_line: float = 1.0):
         """
-        📊 Return summary statistics for forest plot.
+        Compute summary statistics for the plotted effect estimates and their confidence intervals.
+        
+        Parameters:
+        	ref_line (float): Reference value used to assess whether confidence intervals cross the reference (e.g., 1.0 for ratios). When ref_line > 0, an interval is considered "graphically significant" if its lower bound is greater than ref_line or its upper bound is less than ref_line. When ref_line == 0, significance is assessed by the product of CI bounds being greater than 0.
         
         Returns:
-            dict: Contains n_variables, median_est, min/max_est, n_significant, pct_significant
+        	dict: Summary values with keys:
+        		- n_variables (int): Number of rows (variables) in the plot data.
+        		- median_est (float): Median of the estimate column.
+        		- min_est (float): Minimum of the estimate column.
+        		- max_est (float): Maximum of the estimate column.
+        		- n_significant (int or None): Count of rows with p-value < 0.05 if a p-value column was provided, otherwise None.
+        		- pct_significant (float or None): Percentage of rows with p-value < 0.05 (0–100) if a p-value column was provided, otherwise None.
+        		- n_ci_significant (int): Count of rows whose confidence interval does not cross the reference line (graphical significance).
         """
         n_sig = 0
         pct_sig = 0
@@ -220,19 +266,23 @@ class ForestPlot:
         color: str = None,
     ) -> go.Figure:
         """
-        Generate interactive Plotly forest plot (Publication Quality).
-        Optimized for Multivariable Analysis (Logistic/Cox Regression).
+        Create an interactive Plotly forest plot for effect estimates with confidence intervals.
         
-        Features:
-        - Dynamic column layout (adapts to presence of P-value)
-        - Square markers with white border (standard Regression format)
-        - Auto-detected log scale
-        - Clear reference line with annotation
-        - Complete hover information
-        - Significance stars for p-values
-        - 🎨 CI width color coding (narrow=opaque, wide=transparent)
-        - ✂️ Significant/Non-significant split divider
-        - 📊 Summary statistics in subtitle
+        Creates a multi-column, publication-quality forest plot that displays variable labels, formatted estimates with 95% CIs, optional P-values, and a graphical forest plot column with markers and error bars. The layout adapts to the presence of P-values, optionally highlights significance with stars, colors markers by CI width, can draw a reference (no-effect) line, and will use a log x-axis when effect sizes are positive and widely spread.
+        
+        Parameters:
+            title (str): Plot title.
+            x_label (str): Label for the plot's x-axis (effect size).
+            ref_line (float): Reference line position (no-effect value).
+            show_ref_line (bool): If True, draw and annotate the reference line.
+            show_sig_stars (bool): If True and P-values are present, append significance stars to labels.
+            show_ci_width_colors (bool): If True, color markers by CI width (narrow = more opaque).
+            show_sig_divider (bool): If True, add a horizontal divider between significant and non-significant rows when detectable.
+            height (int | None): Figure height in pixels; if None, computed from number of rows.
+            color (str | None): Base hex color for markers; defaults to module primary color if None.
+        
+        Returns:
+            go.Figure: A Plotly Figure containing the composed forest plot.
         """
         if color is None:
             color = COLORS['primary']
@@ -246,6 +296,15 @@ class ForestPlot:
         # 2. Format P-value (if available)
         if self.pval_col:
             def fmt_p(p):
+                """
+                Format a p-value into a concise display string.
+                
+                Parameters:
+                    p: The p-value to format; may be numeric, a numeric string, or a string containing comparison symbols (e.g., "<0.001").
+                
+                Returns:
+                    A string representation suitable for display: "<0.001" when the numeric value is less than 0.001, a three-decimal string like "0.123" for numeric values, or the original value converted to string if it cannot be parsed as a number.
+                """
                 try:
                     # Clean string first if necessary
                     p_str = str(p).replace('<', '').replace('>', '').strip()
@@ -259,6 +318,15 @@ class ForestPlot:
             
             # Helper for color logic
             def get_p_color(p):
+                """
+                Map a p-value to a color label indicating significance.
+                
+                Parameters:
+                    p (str|int|float): P-value or string representation of a p-value (e.g., "0.03", "<0.05").
+                
+                Returns:
+                    str: `"red"` if the numeric p-value is less than 0.05, `"black"` otherwise. If `p` cannot be parsed as a number, returns `"black"`.
+                """
                 try:
                     if isinstance(p, str) and '<' in p: 
                         # Assume <0.05 is red
@@ -393,7 +461,26 @@ def create_forest_plot(
     pval_col: str = None, title: str = "Forest Plot", x_label: str = "Effect Size (95% CI)",
     ref_line: float = 1.0, height: int = None, **kwargs
 ) -> go.Figure:
-    """Convenience function to create forest plot in one call."""
+    """
+    Create a Plotly forest plot from a DataFrame using a one-line convenience call.
+    
+    Parameters:
+        data (pd.DataFrame): DataFrame containing effect estimates and CIs.
+        estimate_col (str): Column name for point estimates.
+        ci_low_col (str): Column name for lower confidence interval bounds.
+        ci_high_col (str): Column name for upper confidence interval bounds.
+        label_col (str): Column name for row labels (variable names).
+        pval_col (str, optional): Column name for p-values to display; omit to exclude p-value column.
+        title (str, optional): Plot title.
+        x_label (str, optional): X-axis label.
+        ref_line (float, optional): Reference line value drawn on the effect axis (e.g., 1.0 for ratios).
+        height (int, optional): Figure height in pixels.
+        **kwargs: Additional keyword arguments forwarded to ForestPlot.create().
+    
+    Returns:
+        go.Figure: A Plotly Figure containing the forest plot. If input validation or plot creation fails,
+        logs the error, shows a Streamlit error message, and returns an empty Figure.
+    """
     try:
         fp = ForestPlot(data, estimate_col, ci_low_col, ci_high_col, label_col, pval_col)
         return fp.create(title=title, x_label=x_label, ref_line=ref_line, height=height, **kwargs)
@@ -405,7 +492,18 @@ def create_forest_plot(
 
 def create_forest_plot_from_logit(aor_dict: dict, title: str = "Adjusted Odds Ratios") -> go.Figure:
     """
-    Convenience function to create forest plot directly from logistic regression aOR results.
+    Create a forest plot from a dictionary of adjusted odds ratio (aOR) results.
+    
+    Each entry in `aor_dict` should map a variable name to a mapping containing at least the effect estimate and its confidence bounds, for example:
+    {"age": {"aor": 1.5, "ci_low": 1.1, "ci_high": 2.0, "p_value": 0.02}}.
+    The function ignores entries missing any of `estimate`, `ci_low`, or `ci_high`.
+    
+    Parameters:
+        aor_dict (dict): Mapping from label to result dict. For each result dict the function looks for keys `'aor'` or `'or'` (estimate), `'ci_low'`, `'ci_high'`, and optionally `'p_value'` or `'p'`.
+        title (str): Plot title. Defaults to "Adjusted Odds Ratios".
+    
+    Returns:
+        go.Figure: A Plotly Figure containing the forest plot. Returns an empty Figure if no valid rows are found.
     """
     data = []
     
@@ -452,7 +550,18 @@ def create_forest_plot_from_logit(aor_dict: dict, title: str = "Adjusted Odds Ra
 
 def create_forest_plot_from_cox(hr_dict: dict, title: str = "Hazard Ratios (Cox Regression)") -> go.Figure:
     """
-    Convenience function for Cox regression hazard ratios.
+    Builds a forest plot figure from a dictionary of Cox regression hazard ratio results.
+    
+    Parameters:
+        hr_dict (dict): Mapping from variable name to a result dict containing hazard ratio and confidence interval.
+            Accepted keys in each result dict: 'hr' or 'HR' for the hazard ratio, 'ci_low' or 'CI Lower' for the lower CI bound,
+            'ci_high' or 'CI Upper' for the upper CI bound, and optionally 'p_value' or 'p' for the p-value. Entries missing
+            any of the HR or CI bounds are ignored.
+        title (str): Title for the resulting plot.
+    
+    Returns:
+        go.Figure: A Plotly Figure containing the forest plot configured with hazard ratios, 95% CIs, and optional p-values.
+            Returns an empty Figure if no valid results are found.
     """
     data = []
     
@@ -502,7 +611,17 @@ def create_forest_plot_from_rr(
     effect_type: str = 'RR'
 ) -> go.Figure:
     """
-    Convenience function for Risk Ratios or Odds Ratios from Chi-Square analysis.
+    Create a forest plot from a dictionary of risk-ratio or odds-ratio results.
+    
+    Converts a mapping of group name -> result dict into a DataFrame and delegates to create_forest_plot. Each result dict should contain the effect estimate (key matching the lowercased `effect_type`, e.g., `'rr'` or `'or'`, or the exact `effect_type` string), lower and upper confidence bounds (keys like `'ci_low'`/`'CI Lower'` and `'ci_high'`/`'CI Upper'`), and optionally a p-value (`'p_value'` or `'p'`). Entries missing the estimate or CI bounds are skipped; if no valid rows remain, an empty Plotly Figure is returned.
+    
+    Parameters:
+        rr_or_dict (dict): Mapping from group label (str) to a result dict containing effect estimate and CIs.
+        title (str): Plot title displayed above the forest plot.
+        effect_type (str): Metric name, either `'RR'` or `'OR'` (case-insensitive); determines which key is used to read the estimate from each result dict.
+    
+    Returns:
+        go.Figure: A Plotly Figure with the forest plot for the provided effects, or an empty Figure if no valid data was found.
     """
     data = []
     metric_key = effect_type.lower()
@@ -562,48 +681,29 @@ def subgroup_analysis_logit(
     return_stats: bool = True,
 ) -> tuple:
     """
-    🔬 Subgroup Analysis for Logistic Regression
+    Perform subgroup logistic regression analysis with interaction testing and generate a forest plot.
     
-    Analyzes treatment effect across subgroups with interaction test.
+    Fits an overall logistic regression and separate models within each level of `subgroup_col` to extract odds ratios, 95% confidence intervals, and p-values; conducts an interaction test between `treatment_col` and `subgroup_col`; builds a Plotly forest plot summarizing overall and subgroup estimates. Subgroups with fewer than 5 observations are skipped. Raises ValueError if required columns are missing or if fewer than 10 rows remain after dropping missing values.
     
     Parameters:
-    -----------
-    df : pd.DataFrame
-        Data frame with all variables
-    outcome_col : str
-        Binary outcome variable name
-    treatment_col : str
-        Treatment/exposure variable name
-    subgroup_col : str
-        Variable to stratify by (e.g., 'sex', 'age_group', 'risk_category')
-    adjustment_cols : list, optional
-        List of adjustment/covariate variable names
-    title : str
-        Title for forest plot
-    x_label : str
-        X-axis label
-    return_stats : bool
-        If True, return statistics dict along with figure
+        df (pd.DataFrame): Input data containing all variables.
+        outcome_col (str): Binary outcome column name.
+        treatment_col (str): Treatment or exposure column name whose effect is estimated.
+        subgroup_col (str): Column name used to define subgroups.
+        adjustment_cols (list, optional): Covariate column names to adjust for (default: None).
+        title (str, optional): Plot title (default: "Subgroup Analysis (Logistic Regression)").
+        x_label (str, optional): X-axis label for the forest plot (default: "Odds Ratio (95% CI)").
+        return_stats (bool, optional): If True, return a statistics dictionary alongside the figure; if False, return the figure and the result DataFrame (default: True).
     
     Returns:
-    --------
-    fig : go.Figure
-        Interactive Plotly forest plot
-    stats_dict : dict (optional, if return_stats=True)
-        Contains overall OR, subgroup ORs, and P for interaction
-    
-    Example:
-    --------
-    >>> fig, stats = subgroup_analysis_logit(
-    ...     df=patient_data,
-    ...     outcome_col='MI',
-    ...     treatment_col='statin_therapy',
-    ...     subgroup_col='sex',
-    ...     adjustment_cols=['age', 'diabetes', 'hypertension'],
-    ...     title='Statin Effect on MI by Sex'
-    ... )
-    >>> st.plotly_chart(fig)
-    >>> print(f"P for interaction: {stats['p_interaction']:.4f}")
+        tuple:
+            - fig (go.Figure): Plotly figure containing the forest plot.
+            - stats_dict (dict) if `return_stats` is True: Dictionary with keys
+                'overall_or', 'overall_ci' (tuple), 'overall_p', 'overall_n',
+                'subgroups' (mapping of subgroup value to subgroup result dict),
+                'p_interaction' (float or NaN), 'heterogeneous' (bool or None),
+                and 'result_df' (pd.DataFrame).
+              If `return_stats` is False, the second element is the result DataFrame with per-row estimates.
     """
     try:
         if adjustment_cols is None:
@@ -763,51 +863,39 @@ def subgroup_analysis_cox(
     return_stats: bool = True,
 ) -> tuple:
     """
-    🔬 Subgroup Analysis for Cox Regression (Survival Analysis)
+    Perform subgroup analysis for Cox proportional hazards models and produce a forest plot of hazard ratios.
     
-    Analyzes treatment effect on survival across subgroups with interaction test.
+    Fits an overall Cox model and separate Cox models for each level of `subgroup_col`, performs a Wald-style interaction test between treatment and subgroup, and returns an interactive Plotly forest plot plus optional summary statistics.
     
     Parameters:
-    -----------
-    df : pd.DataFrame
-        Data frame with all variables
-    time_col : str
-        Time to event variable name (follow-up duration)
-    event_col : str
-        Event indicator (0/1 or False/True)
-    treatment_col : str
-        Treatment/exposure variable name
-    subgroup_col : str
-        Variable to stratify by (e.g., 'sex', 'risk_group')
-    adjustment_cols : list, optional
-        List of adjustment/covariate variable names
-    title : str
-        Title for forest plot
-    x_label : str
-        X-axis label
-    return_stats : bool
-        If True, return statistics dict along with figure
+        df (pd.DataFrame): Input data containing time, event, treatment, subgroup, and adjustment columns.
+        time_col (str): Column name for follow-up duration (duration/time-to-event).
+        event_col (str): Column name for event indicator (0/1 or False/True).
+        treatment_col (str): Column name for the treatment/exposure variable whose effect is estimated.
+        subgroup_col (str): Column name for the categorical subgroup variable to stratify by.
+        adjustment_cols (list, optional): List of covariate column names to adjust for in models. Defaults to None.
+        title (str, optional): Title for the resulting forest plot. Defaults to "Subgroup Analysis (Cox Regression)".
+        x_label (str, optional): X-axis label for the plot. Defaults to "Hazard Ratio (95% CI)".
+        return_stats (bool, optional): If True, return a statistics dictionary alongside the figure; if False, return the result DataFrame. Defaults to True.
     
     Returns:
-    --------
-    fig : go.Figure
-        Interactive Plotly forest plot
-    stats_dict : dict (optional, if return_stats=True)
-        Contains overall HR, subgroup HRs, and P for interaction
+        tuple:
+            fig (go.Figure): Plotly Figure containing the forest plot of hazard ratios and confidence intervals.
+            stats_dict (dict) or result_df (pd.DataFrame):
+                - If `return_stats` is True, a dict with keys including:
+                    - 'overall_hr': overall hazard ratio for `treatment_col`
+                    - 'overall_ci': tuple (ci_low, ci_high) for the overall HR
+                    - 'overall_p': p-value for the treatment effect in the overall model
+                    - 'overall_n': number of observations used in the overall model
+                    - 'subgroups': mapping of subgroup identifiers to subgroup result entries
+                    - 'p_interaction': p-value from the treatment-by-subgroup interaction test (NaN if unavailable)
+                    - 'heterogeneous': True if p_interaction < 0.05, False if >= 0.05, None if p_interaction is NaN
+                    - 'result_df': DataFrame of the assembled results used to build the plot
+                - If `return_stats` is False, the assembled results DataFrame used to build the plot.
     
-    Example:
-    --------
-    >>> from lifelines import CoxPHFitter
-    >>> fig, stats = subgroup_analysis_cox(
-    ...     df=patient_data,
-    ...     time_col='follow_up_months',
-    ...     event_col='death',
-    ...     treatment_col='new_drug',
-    ...     subgroup_col='age_group',
-    ...     adjustment_cols=['comorbidity', 'stage'],
-    ...     title='Drug Effect on Survival by Age Group'
-    ... )
-    >>> st.plotly_chart(fig)
+    Notes:
+        - Requires the `lifelines` package for Cox model fitting; raises an ImportError if lifelines is not available.
+        - The function skips subgroup levels with insufficient sample size or too few events.
     """
     try:
         from lifelines import CoxPHFitter
@@ -978,7 +1066,19 @@ def render_forest_plot_in_streamlit(
     allow_download: bool = True,
 ) -> None:
     """
-    Display forest plot in Streamlit with optional download button.
+    Render a forest plot in a Streamlit app and optionally provide download buttons for the plot HTML and the underlying data CSV.
+    
+    Parameters:
+        data (pd.DataFrame): DataFrame containing effect estimates and confidence intervals.
+        estimate_col (str): Column name with point estimates.
+        ci_low_col (str): Column name with lower confidence interval bounds.
+        ci_high_col (str): Column name with upper confidence interval bounds.
+        label_col (str): Column name with labels to display for each row.
+        pval_col (str, optional): Column name with p-values to display; omit to hide the p-value column.
+        title (str, optional): Plot title used for display and as the download file base name.
+        x_label (str, optional): X-axis label for the plot.
+        ref_line (float, optional): Reference line value drawn on the plot (e.g., 1.0 for ratios).
+        allow_download (bool, optional): If True, show buttons to download the figure as HTML and the input data as CSV.
     """
     try:
         fig = create_forest_plot(
