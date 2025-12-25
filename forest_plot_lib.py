@@ -65,7 +65,18 @@ class ForestPlot:
         if missing:
             raise ValueError(f"Missing required columns: {missing}")
         
-        self.data = data.dropna(subset=[estimate_col, ci_low_col, ci_high_col]).copy()
+        # Create a copy to avoid SettingWithCopyWarning
+        self.data = data.copy()
+
+        # --- FIX: Force numeric conversion to prevent str vs float errors ---
+        # Coerce errors='coerce' turns non-numeric strings into NaN
+        numeric_cols = [estimate_col, ci_low_col, ci_high_col]
+        for col in numeric_cols:
+            self.data[col] = pd.to_numeric(self.data[col], errors='coerce')
+        
+        # Drop rows where essential plotting data is missing (NaN)
+        self.data = self.data.dropna(subset=numeric_cols)
+        
         if self.data.empty:
             raise ValueError("No valid data after removing NaN values")
         
@@ -78,23 +89,42 @@ class ForestPlot:
         self.label_col = label_col
         self.pval_col = pval_col
         
-        logger.info(
-            f"ForestPlot initialized: {len(self.data)} variables, "
-            f"estimate range [{self.data[estimate_col].min():.3f}, {self.data[estimate_col].max():.3f}]"
-        )
+        # Log range safely
+        try:
+            est_min = self.data[estimate_col].min()
+            est_max = self.data[estimate_col].max()
+            logger.info(
+                f"ForestPlot initialized: {len(self.data)} variables, "
+                f"estimate range [{est_min:.3f}, {est_max:.3f}]"
+            )
+        except Exception as e:
+            logger.warning(f"Could not log estimate range: {e}")
     
     def _add_significance_stars(self, p):
         """
         Convert p-value to significance stars (* ** ***).
         """
-        if pd.isna(p) or not isinstance(p, (int, float)):
+        # --- FIX: Handle string p-values (e.g., "<0.001") robustly ---
+        try:
+            if pd.isna(p):
+                return ""
+            
+            p_val = p
+            if isinstance(p, str):
+                # Remove common characters and whitespace
+                clean_p = p.replace('<', '').replace('>', '').strip()
+                p_val = float(clean_p)
+            
+            if p_val < 0.001:
+                return "***"
+            if p_val < 0.01:
+                return "**"
+            if p_val < 0.05:
+                return "*"
+        except (ValueError, TypeError):
+            # If conversion fails, return empty string
             return ""
-        if p < 0.001:
-            return "***"
-        if p < 0.01:
-            return "**"
-        if p < 0.05:
-            return "*"
+            
         return ""
     
     def _get_ci_width_colors(self, base_color: str) -> list:
@@ -104,10 +134,16 @@ class ForestPlot:
         - Narrow CI (precise) = darker/more opaque
         - Wide CI (uncertain) = lighter/more transparent
         """
-        ci_width = self.data[self.ci_high_col] - self.data[self.ci_low_col]
+        # Ensure values are float for calculation
+        ci_high = self.data[self.ci_high_col]
+        ci_low = self.data[self.ci_low_col]
+        
+        ci_width = ci_high - ci_low
         
         # Normalize CI width to [0, 1]
         ci_min, ci_max = ci_width.min(), ci_width.max()
+        
+        # Avoid division by zero
         if ci_max > ci_min:
             ci_normalized = (ci_width - ci_min) / (ci_max - ci_min)
         else:
@@ -137,18 +173,30 @@ class ForestPlot:
         Returns:
             dict: Contains n_variables, median_est, min/max_est, n_significant, pct_significant
         """
-        # Count significant (p < 0.05)
+        n_sig = 0
+        pct_sig = 0
+
+        # --- FIX: Count significant (p < 0.05) safely ---
         if self.pval_col and self.pval_col in self.data.columns:
-            n_sig = (self.data[self.pval_col] < 0.05).sum()
+            # Convert to numeric temporarily for counting, coercing errors
+            p_numeric = pd.to_numeric(
+                self.data[self.pval_col].astype(str).str.replace('<', '').str.replace('>', ''), 
+                errors='coerce'
+            )
+            n_sig = (p_numeric < 0.05).sum()
             pct_sig = 100 * n_sig / len(self.data) if len(self.data) > 0 else 0
         else:
             n_sig = pct_sig = None
         
         # Count CI doesn't cross ref_line (graphical significance)
+        # Data is already forced to numeric in __init__
+        ci_low = self.data[self.ci_low_col]
+        ci_high = self.data[self.ci_high_col]
+
         ci_sig = (
-            ((self.data[self.ci_low_col] > ref_line) | (self.data[self.ci_high_col] < ref_line))
+            ((ci_low > ref_line) | (ci_high < ref_line))
             if ref_line > 0
-            else ((self.data[self.ci_low_col] * self.data[self.ci_high_col]) > 0)
+            else ((ci_low * ci_high) > 0)
         )
         n_ci_sig = ci_sig.sum()
         
@@ -202,14 +250,28 @@ class ForestPlot:
         if self.pval_col:
             def fmt_p(p):
                 try:
-                    p = float(p)
-                    if p < 0.001: return "<0.001"
-                    return f"{p:.3f}"
-                except: return ""
+                    # Clean string first if necessary
+                    p_str = str(p).replace('<', '').replace('>', '').strip()
+                    p_float = float(p_str)
+                    if p_float < 0.001: return "<0.001"
+                    return f"{p_float:.3f}"
+                except: return str(p) # Return original if fail
+            
             self.data['__display_p'] = self.data[self.pval_col].apply(fmt_p)
-            p_text_colors = self.data[self.pval_col].apply(
-                lambda p: "red" if (isinstance(p, (int, float)) and p < 0.05) or (isinstance(p, str) and '<' in p) else "black"
-            ).tolist()
+            
+            # Helper for color logic
+            def get_p_color(p):
+                try:
+                    if isinstance(p, str) and '<' in p: 
+                        # Assume <0.05 is red
+                        val = float(p.replace('<','').strip())
+                        return "red" if val < 0.05 else "black"
+                    
+                    val = float(p)
+                    return "red" if val < 0.05 else "black"
+                except: return "black"
+
+            p_text_colors = self.data[self.pval_col].apply(get_p_color).tolist()
         else:
             self.data['__display_p'] = ""
             p_text_colors = ["black"] * len(self.data)
@@ -227,6 +289,7 @@ class ForestPlot:
         marker_colors, _ = self._get_ci_width_colors(color) if show_ci_width_colors else ([color] * len(self.data), None)
 
         # --- Dynamic Column Layout ---
+        # Check if pval column is present and not all NaN
         has_pval = self.pval_col is not None and not self.data[self.pval_col].isna().all()
         column_widths = [0.25, 0.20, 0.10, 0.45] if has_pval else [0.25, 0.20, 0.55]
         num_cols = 4 if has_pval else 3
@@ -254,15 +317,23 @@ class ForestPlot:
 
         # Column N: Forest Plot
         est_min, est_max = self.data[self.estimate_col].min(), self.data[self.estimate_col].max()
-        use_log_scale = est_min > 0 and (est_max / est_min > 5)
+        # Use log scale if values are positive and spread is large
+        use_log_scale = (est_min > 0) and ((est_max / est_min) > 5)
 
         if show_ref_line:
             fig.add_vline(x=ref_line, line_dash='dash', line_color='rgba(192, 21, 47, 0.6)', line_width=2, annotation_text=f'No Effect ({ref_line})', annotation_position='top', row=1, col=plot_col)
         
         # ✂️ Add horizontal divider between Significant and Non-significant
         if show_sig_divider:
-            ci_sig = ((self.data[self.ci_low_col] > ref_line) | (self.data[self.ci_high_col] < ref_line)) if ref_line > 0 else ((self.data[self.ci_low_col] * self.data[self.ci_high_col]) > 0)
+            # Use numeric comparison (already coerced in __init__)
+            ci_low = self.data[self.ci_low_col]
+            ci_high = self.data[self.ci_high_col]
+            
+            ci_sig = ((ci_low > ref_line) | (ci_high < ref_line)) if ref_line > 0 else ((ci_low * ci_high) > 0)
+            
+            # Simple divider logic: if sorted by significance, find the flip point
             if ci_sig.any() and (~ci_sig).any():
+                # Find index where sign changes (approximation for visualization)
                 divider_y = ci_sig.idxmin() - 0.5
                 fig.add_hline(y=divider_y, line_dash='dot', line_color='rgba(100, 100, 100, 0.3)', line_width=1.5, row=1, col=plot_col)
 
@@ -275,7 +346,7 @@ class ForestPlot:
         customdata = np.stack((
             self.data[self.ci_low_col], 
             self.data[self.ci_high_col], 
-            self.data[self.pval_col] if has_pval else [None]*len(self.data),
+            self.data['__display_p'] if has_pval else [None]*len(self.data), # Use formatted P for hover
             self.data[self.ci_high_col] - self.data[self.ci_low_col]
         ), axis=-1)
 
@@ -356,7 +427,8 @@ def create_forest_plot_from_logit(aor_dict: dict, title: str = "Adjusted Odds Ra
             'ci_high': float(ci_high),
         }
         if p_val is not None:
-            row['p_value'] = float(p_val)
+            # Keep p_val as is, let ForestPlot handle parsing
+            row['p_value'] = p_val
             
         data.append(row)
     
@@ -402,7 +474,7 @@ def create_forest_plot_from_cox(hr_dict: dict, title: str = "Hazard Ratios (Cox 
             'ci_high': float(ci_high),
         }
         if p_val is not None:
-            row['p_value'] = float(p_val)
+            row['p_value'] = p_val
 
         data.append(row)
     
@@ -453,7 +525,7 @@ def create_forest_plot_from_rr(
             'ci_high': float(ci_high),
         }
         if p_val is not None:
-            row['p_value'] = float(p_val)
+            row['p_value'] = p_val
             
         data.append(row)
     
@@ -830,7 +902,7 @@ def subgroup_analysis_cox(
             covariates_with_int = [treatment_col, '__interaction'] + adjustment_cols
             cph_int = CoxPHFitter()
             cph_int.fit(df_clean_copy[[time_col, event_col] + covariates_with_int], 
-                       duration_col=time_col, event_col=event_col, show_progress=False)
+                        duration_col=time_col, event_col=event_col, show_progress=False)
             
             p_interaction = cph_int.summary.loc['__interaction', 'p']
             logger.info(f"Interaction test (Cox): P={p_interaction:.4f}")
