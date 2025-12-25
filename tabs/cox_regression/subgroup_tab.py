@@ -18,7 +18,7 @@ from logger import get_logger
 logger = get_logger(__name__)
 
 
-def render(df: pd.DataFrame, time_col: str = None, event_col: str = None, treatment_var: str = None):
+def render(df: pd.DataFrame, time_col: str | None = None, event_col: str | None = None, treatment_var: str | None = None):
     """
     Render Subgroup Analysis SubTab for Cox Regression.
     
