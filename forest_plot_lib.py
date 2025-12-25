@@ -18,7 +18,9 @@ from logger import get_logger
 from tabs._common import get_color_palette
 from statsmodels.formula.api import logit
 import warnings
-warnings.filterwarnings('ignore')
+# Suppress specific convergence warnings only
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="statsmodels")
+warnings.filterwarnings("ignore", message=".*convergence.*")
 
 logger = get_logger(__name__)
 COLORS = get_color_palette()
