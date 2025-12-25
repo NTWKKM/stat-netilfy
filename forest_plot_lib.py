@@ -267,7 +267,8 @@ class ForestPlot:
                     
                     val = float(p)
                     return "red" if val < 0.05 else "black"
-                except: return "black"
+                except (ValueError, TypeError):
+                    return "black"
 
             p_text_colors = self.data[self.pval_col].apply(get_p_color).tolist()
         else:
@@ -811,7 +812,6 @@ def subgroup_analysis_cox(
     """
     try:
         from lifelines import CoxPHFitter
-        from lifelines.statistics import proportional_hazard_test
         
         if adjustment_cols is None:
             adjustment_cols = []
