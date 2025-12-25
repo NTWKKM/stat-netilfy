@@ -93,7 +93,7 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame):
         outcome_col = st.selectbox(
             "Outcome (Binary)",
             options=[col for col in df.columns if df[col].nunique() == 2],
-            index=0 if len([col for col in df.columns if df[col].nunique() == 2]) > 0 else 0,
+            index=0,
             help="Select binary outcome variable (0/1 or No/Yes)",
             key="logit_sg_outcome"
         )
@@ -335,7 +335,7 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame):
         except Exception as e:
             st.error(f"❌ Error: {str(e)}", icon="💥")
             st.info("**Troubleshooting:**\n- Ensure outcome is binary (2 categories)\n- Check subgroup has 2-10 categories\n- Verify minimum N per subgroup", icon="🗣")
-            logger.error(f"Logit subgroup analysis error: {e}")
+            logger.exception("Logit subgroup analysis error")
     
     # Display previous results if available
     elif 'subgroup_results_logit' in st.session_state and st.session_state.get('show_previous_results', True):
