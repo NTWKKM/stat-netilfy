@@ -371,7 +371,7 @@ def render(df: pd.DataFrame, time_col: str | None = None, event_col: str | None 
         results = st.session_state['subgroup_results_cox']
         analyzer = st.session_state.get('subgroup_analyzer_cox')
         
-            if results and analyzer:
+        if results and analyzer:
                 # ========== RESULTS DISPLAY ==========
                 st.markdown("---")
                 st.header("📈 Results")
