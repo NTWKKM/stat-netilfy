@@ -208,7 +208,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             return "-"
 
     or_results = {}
-    
+
+    def count_val(series, v_str):
+        return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
+        
     # --- UNIVARIATE ANALYSIS LOOP ---
     with logger.track_time("univariate_analysis", log_level="debug"):
         for col in sorted_cols:
@@ -256,9 +259,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             levels = []
             if mode == 'categorical':
                 try:
-                    # 🟢 IMPROVED: Use robust_sort_key for mixed numeric/string
-                    levels = sorted(X_raw.dropna().unique(), key=_robust_sort_key)
-                try:
                     levels = sorted(X_raw.dropna().unique(), key=_robust_sort_key)
                 except (TypeError, ValueError) as e:
                     logger.warning("Failed to sort levels for %s: %s", col, e)
@@ -277,9 +277,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
 
                 desc_tot, desc_neg, desc_pos = [f"<span class='n-badge'>n={n_used}</span>"], [f"<span class='n-badge'>n={len(X_neg.dropna())}</span>"], [f"<span class='n-badge'>n={len(X_pos.dropna())}</span>"]
                 
-                def count_val(series, v_str):
-                      return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
-
                 for lvl in levels:
                     lbl_txt = str(lvl)
                     if str(lvl).endswith('.0'): lbl_txt = str(int(float(lvl)))
