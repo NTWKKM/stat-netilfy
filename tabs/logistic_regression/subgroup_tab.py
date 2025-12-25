@@ -18,7 +18,7 @@ from logger import get_logger
 logger = get_logger(__name__)
 
 
-def render(df: pd.DataFrame, outcome_var: str = None, treatment_var: str = None):
+def render(df: pd.DataFrame, outcome_var: str | None = None, treatment_var: str | None = None):
     """
     Render Subgroup Analysis SubTab for Logistic Regression.
     
@@ -295,7 +295,7 @@ def render(df: pd.DataFrame, outcome_var: str = None, treatment_var: str = None)
         except Exception as e:
             st.error(f"❌ Error: {str(e)}", icon="💥")
             st.info("**Troubleshooting:**\n- Ensure outcome is binary (2 categories)\n- Check subgroup has 2-10 categories\n- Verify minimum N per subgroup", icon="💭")
-            logger.error(f"Logit subgroup analysis error: {e}")
+            logger.exception("Logit subgroup analysis error")
     
     # Display previous results if available
     elif 'subgroup_results_logit' in st.session_state and st.session_state.get('show_previous_results', True):
