@@ -311,7 +311,7 @@ def _render_cox_subgroup_analysis(df: pd.DataFrame):
                 - Result: {"Evidence of significant heterogeneity" if results['interaction']['significant'] else "No significant heterogeneity"}
                 
                 **Reporting Recommendations:**
-                {"- Report Kaplan-Meier curves by subgroup\n- Discuss differential survival benefits\n- Consider stratified analyses in future trials" if results['interaction']['significant'] else "- Overall HR applies to all subgroups\n- No need for separate reporting by subgroup"}
+                { "- Report Kaplan-Meier curves by subgroup\n- Discuss differential survival benefits\n- Consider stratified analyses in future trials" if results['interaction']['significant'] else "- Overall HR applies to all subgroups\n- No need for separate reporting by subgroup"}
                 """)
             
             st.markdown("---")
@@ -567,7 +567,8 @@ def render(df, _var_meta):
                             st.session_state.cox_res = None
                             st.session_state.cox_html = None
                         else:
-                            txt_report, fig_images = survival_lib.check_cph_assumptions(cph, model_data)
+                            # 🟢 UPDATED: Receive list of figures instead of image bytes
+                            txt_report, fig_objects = survival_lib.check_cph_assumptions(cph, model_data)
                             
                             st.session_state.cox_res = res
                             st.success("✅ Analysis Complete!")
@@ -590,22 +591,21 @@ def render(df, _var_meta):
                                 with st.expander("View Assumption Advice (Text)", expanded=False):
                                     st.text(txt_report)
                             
-                            if fig_images:
+                            # 🟢 UPDATED: Render Plotly figures directly
+                            if fig_objects:
                                 st.write("**Schoenfeld Residuals Plots:**")
-                                for img_bytes in fig_images:
-                                    st.image(img_bytes, caption="Assumption Check Plot", use_container_width=True)
+                                for fig in fig_objects:
+                                    st.plotly_chart(fig, use_container_width=True)
                             else:
                                 st.info("No assumption plots generated.")
                             
-                            # 🟢 NEW: Show forest plot in web UI (Interactive)
                             st.markdown("---")
                             st.subheader("🌳 Forest Plot: Hazard Ratios")
                             try:
-                                # เรียกใช้ฟังก์ชันที่ปรับปรุงใหม่ใน survival_lib (ซึ่งจะเรียก forest_plot_lib อีกที)
+                                # Call updated function
                                 fig_forest = survival_lib.create_forest_plot_cox(res)
                                 st.plotly_chart(fig_forest, use_container_width=True)
                                 
-                                # 🟢 OPTIONAL: ซ่อนตาราง Raw Data ไว้ใน Expander เพราะกราฟมีตารางอยู่แล้ว
                                 with st.expander("📄 View Raw Data Table"):
                                     st.dataframe(res[['HR', '95% CI Lower', '95% CI Upper', 'P-value']].reset_index())
                                 
@@ -620,9 +620,10 @@ def render(df, _var_meta):
                                 {'type':'preformatted','data':txt_report} 
                             ]
                             
-                            if fig_images:
-                                for img_bytes in fig_images:
-                                    elements.append({'type':'image','data':img_bytes})
+                            # 🟢 UPDATED: Append Plotly figures to report elements
+                            if fig_objects:
+                                for fig in fig_objects:
+                                    elements.append({'type':'plot','data':fig})
                             
                             # Add forest plot to HTML report
                             forest_plot_html = survival_lib.generate_forest_plot_cox_html(res)
