@@ -318,8 +318,8 @@ class SubgroupAnalysisLogit:
             return self._format_output()
         
         except Exception as e:
-            st.error(f"❌ Analysis failed: {e}")
-            logger.error(f"Subgroup analysis error: {e}")
+            st.error(f"❌ Analysis failed: {e!s}")
+            logger.exception("Subgroup analysis error")
             raise
     
     def _compute_summary_statistics(self) -> dict:
@@ -713,8 +713,8 @@ class SubgroupAnalysisCox:
             st.error("❌ Lifelines library required. Install: pip install lifelines")
             raise
         except Exception as e:
-            st.error(f"❌ Cox analysis failed: {e}")
-            logger.error(f"Cox subgroup analysis error: {e}")
+            st.error(f"❌ Cox analysis failed: {e!s}")
+            logger.exception("Cox subgroup analysis error")
             raise
     
     def _compute_summary_statistics(self) -> dict:
