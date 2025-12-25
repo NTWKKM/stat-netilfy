@@ -581,15 +581,14 @@ def render(df, var_meta):
         st.markdown("---")
         
         st.markdown("""
-        ### 💡 Three OR Modes: When to Use Each
+        ### 💡 Two OR Modes: When to Use Each
         
-        The system supports **3 different modes** for handling categorical/continuous variables:
+        The system supports **2 different modes** for handling categorical/continuous variables:
         """)
         
-        # 🟢 IMPROVED: Add mode guide with examples
-        tab_cat, tab_simple, tab_linear = st.tabs([
+        # 🟢 IMPROVED: Mode guide with examples (Removed Simple Mode)
+        tab_cat, tab_linear = st.tabs([
             "📊 Categorical (All Levels)",
-            "📈 Simple (Risk vs Ref)",
             "📉 Linear (Trend)"
         ])
         
@@ -617,9 +616,7 @@ def render(df, var_meta):
             ```
             
             **When NOT to use:**
-            - Only interested in binary comparison (e.g., High vs Low)
-            - Many categories (>5) with sparse cells
-            - Ordinal variable (consider Linear mode)
+            - Continuous variable (consider Linear mode)
             
             **How to Specify:**
             ```python
@@ -627,43 +624,6 @@ def render(df, var_meta):
                 'stage': {'type': 'Categorical'}  # All levels
             }
             ```
-            """)
-        
-        with tab_simple:
-            st.markdown("""
-            ### 📈 Simple Mode: Risk vs Reference
-            
-            **When to Use:**
-            - Binary comparison: Risk vs Reference
-            - Collapse multiple non-Ref levels into one "Risk" group
-            - Example: Urban vs Rural (binary location)
-            
-            **What You Get:**
-            - Single OR: (Others vs Ref)
-            - **Output: Single line**
-            - All non-reference levels grouped together
-            
-            **Example:**
-            ```
-            Location (Reference = Rural):
-            - Urban vs Rural: OR = 1.5 (95% CI: 1.1-1.9)
-            ```
-            
-            **When NOT to use:**
-            - Want separate comparisons per level (use Categorical)
-            - Continuous variable (use Linear)
-            
-            **Allowed Custom Reference:**
-            ```python
-            var_meta = {
-                'location': {
-                    'type': 'Simple',
-                    'ref_level': 'Rural'  # Specify which is Ref
-                }
-            }
-            ```
-            
-            **Note:** First level alphabetically is Ref by default if not specified.
             """)
         
         with tab_linear:
@@ -705,7 +665,7 @@ def render(df, var_meta):
             **How to Specify:**
             ```python
             var_meta = {
-                'age': {'type': 'Linear'},      # Continuous
+                'age': {'type': 'Linear'},       # Continuous
                 'bmi': {'type': 'Linear'}       # Continuous
             }
             ```
