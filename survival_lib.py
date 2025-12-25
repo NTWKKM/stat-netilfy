@@ -552,7 +552,7 @@ def generate_forest_plot_cox_html(res_df):
     
     # Interpretation guide (matching logistic regression style)
     interp_html = f"""
-    <div style='margin-top:20px; padding:15px; background:#f8f9fa; border-left:4px solid {COLORS.get('primary', '#2180841')}; border-radius:4px;'>
+    <div style='margin-top:20px; padding:15px; background:#f8f9fa; border-left:4px solid {COLORS.get('primary', '#218084')}; border-radius:4px;'>
         <h4 style='color:{COLORS.get('primary_dark', '#1f8085')}; margin-top:0;'>💡 Interpretation Guide</h4>
         <ul style='margin:10px 0; padding-left:20px;'>
             <li><b>HR > 1:</b> Increased hazard (Risk Factor) 🔴</li>
