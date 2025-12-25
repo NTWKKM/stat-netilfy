@@ -6,7 +6,7 @@ Supports Logistic Regression (binary outcomes) and Cox Regression (survival data
 
 Standard: ICMJE, CONSORT, and Cochrane guidelines
 Author: NTWKKM (Adapted by Gemini)
-Version: 1.3 (Auto-encode Treatment Fix)
+Version: 1.4 (Robust Type Checking Fix)
 License: MIT
 """
 
@@ -161,18 +161,26 @@ class SubgroupAnalysisLogit:
             try:
                 model_overall = logit(formula_base, data=df_clean).fit(disp=0)
                 
-                or_overall = np.exp(model_overall.params[treatment_col])
-                se_logit = model_overall.bse[treatment_col]
-                ci_overall = np.exp(model_overall.conf_int().loc[treatment_col])
-                p_overall = model_overall.pvalues[treatment_col]
-                z_overall = model_overall.tvalues[treatment_col]
+                # ✅ Robust Parameter Access
+                if treatment_col not in model_overall.params:
+                    # Fallback for formula-renamed variables (e.g. if column starts with number)
+                    matched_col = [c for c in model_overall.params.index if treatment_col in c]
+                    target_var = matched_col[0] if matched_col else treatment_col
+                else:
+                    target_var = treatment_col
+
+                or_overall = np.exp(model_overall.params[target_var])
+                se_logit = model_overall.bse[target_var]
+                ci_overall = np.exp(model_overall.conf_int().loc[target_var])
+                p_overall = model_overall.pvalues[target_var]
+                z_overall = model_overall.tvalues[target_var]
                 
                 results_list.append({
                     'group': f'Overall (N={len(df_clean)})',
                     'n': len(df_clean),
                     'events': int(df_clean[outcome_col].sum()),
                     'or': or_overall,
-                    'log_or': model_overall.params[treatment_col],
+                    'log_or': model_overall.params[target_var],
                     'se': se_logit,
                     'ci_low': ci_overall[0],
                     'ci_high': ci_overall[1],
@@ -193,8 +201,6 @@ class SubgroupAnalysisLogit:
             st.info(f"📊 Computing {len(subgroups)} Subgroup Models...")
             
             for i, subgroup_val in enumerate(subgroups, 1):
-                # st.write(f"  Processing: {subgroup_col} = {subgroup_val}")
-                
                 df_sub = df_clean[df_clean[subgroup_col] == subgroup_val]
                 
                 # Check N and Treatment variation
@@ -213,11 +219,18 @@ class SubgroupAnalysisLogit:
                 try:
                     model_sub = logit(formula_base, data=df_sub).fit(disp=0)
                     
-                    or_sub = np.exp(model_sub.params[treatment_col])
-                    se_logit_sub = model_sub.bse[treatment_col]
-                    ci_sub = np.exp(model_sub.conf_int().loc[treatment_col])
-                    p_sub = model_sub.pvalues[treatment_col]
-                    z_sub = model_sub.tvalues[treatment_col]
+                    # ✅ Robust Parameter Access
+                    if treatment_col not in model_sub.params:
+                        matched_col = [c for c in model_sub.params.index if treatment_col in c]
+                        target_var = matched_col[0] if matched_col else treatment_col
+                    else:
+                        target_var = treatment_col
+
+                    or_sub = np.exp(model_sub.params[target_var])
+                    se_logit_sub = model_sub.bse[target_var]
+                    ci_sub = np.exp(model_sub.conf_int().loc[target_var])
+                    p_sub = model_sub.pvalues[target_var]
+                    z_sub = model_sub.tvalues[target_var]
                     
                     results_list.append({
                         'group': f'{subgroup_col}={subgroup_val} (N={len(df_sub)})',
@@ -225,7 +238,7 @@ class SubgroupAnalysisLogit:
                         'n': len(df_sub),
                         'events': int(df_sub[outcome_col].sum()),
                         'or': or_sub,
-                        'log_or': model_sub.params[treatment_col],
+                        'log_or': model_sub.params[target_var],
                         'se': se_logit_sub,
                         'ci_low': ci_sub[0],
                         'ci_high': ci_sub[1],
@@ -244,7 +257,6 @@ class SubgroupAnalysisLogit:
             # === INTERACTION TEST (Likelihood Ratio Test - LRT) ===
             st.info("📊 Computing Interaction Test (LRT)...")
             try:
-                # Use C() to ensure categorical treatment for correct DoF if needed
                 # Model WITHOUT interaction (Reduced)
                 formula_reduced = f'{outcome_col} ~ {treatment_col} + C({subgroup_col})'
                 if adjustment_cols:
@@ -259,20 +271,24 @@ class SubgroupAnalysisLogit:
                 model_full = logit(formula_full, data=df_clean).fit(disp=0)
                 
                 # Calculate LRT
-                # LR Statistic = -2 * (LL_reduced - LL_full)
                 lr_stat = -2 * (model_reduced.llf - model_full.llf)
                 df_diff = model_full.df_model - model_reduced.df_model
                 
                 if df_diff > 0:
                     p_interaction = stats.chi2.sf(lr_stat, df_diff)
                 else:
-                    p_interaction = np.nan # Should not happen if interaction exists
+                    p_interaction = np.nan
                 
+                # ✅ FIX: Type Check for significance comparison
+                is_sig = False
+                if isinstance(p_interaction, (int, float)) and pd.notna(p_interaction):
+                    is_sig = p_interaction < 0.05
+
                 self.interaction_result = {
                     'p_value': p_interaction,
-                    'coefficient': None, # Not single coef for >2 groups
+                    'coefficient': None,
                     'se': None,
-                    'significant': p_interaction < 0.05 if not np.isnan(p_interaction) else False
+                    'significant': is_sig
                 }
                 
                 logger.info(f"Interaction (LRT) P={p_interaction:.4f}")
@@ -310,7 +326,7 @@ class SubgroupAnalysisLogit:
         subgroups = self.results[self.results['type'] == 'subgroup']
         
         # Heterogeneity assessment
-        het_significant = self.interaction_result['significant']
+        het_significant = self.interaction_result.get('significant', False)
         
         return {
             'n_overall': int(overall['n']),
@@ -329,8 +345,19 @@ class SubgroupAnalysisLogit:
         """
         Format output for reporting.
         """
-        overall = self.results[self.results['type'] == 'overall'].iloc[0]
+        if self.results is None or self.results.empty:
+            return {}
+
+        overall_rows = self.results[self.results['type'] == 'overall']
+        if overall_rows.empty:
+            return {}
+            
+        overall = overall_rows.iloc[0]
         
+        # ✅ FIX: Handle NaN P-value for JSON serialization
+        p_int = self.interaction_result['p_value']
+        p_int_val = float(p_int) if isinstance(p_int, (int, float)) and pd.notna(p_int) else None
+
         return {
             'overall': {
                 'or': float(overall['or']),
@@ -341,7 +368,7 @@ class SubgroupAnalysisLogit:
             },
             'subgroups': self.results[self.results['type'] == 'subgroup'].to_dict('records'),
             'interaction': {
-                'p_value': float(self.interaction_result['p_value']) if not np.isnan(self.interaction_result['p_value']) else None,
+                'p_value': p_int_val,
                 'significant': bool(self.interaction_result['significant'])
             },
             'summary': self.stats,
@@ -365,9 +392,11 @@ class SubgroupAnalysisLogit:
         
         # Add interaction info to title
         p_int = self.interaction_result['p_value']
-        het_text = "Heterogeneous ⚠️" if self.interaction_result['significant'] else "Homogeneous ✓"
+        # ✅ FIX: Robust type check
+        is_het = self.interaction_result.get('significant', False)
+        het_text = "Heterogeneous ⚠️" if is_het else "Homogeneous ✓"
         
-        if not np.isnan(p_int):
+        if isinstance(p_int, (int, float)) and pd.notna(p_int):
             title_final = f"{title}<br><span style='font-size: 12px; color: #666;'>P for Interaction = {p_int:.4f} ({het_text})</span>"
         else:
             title_final = title
@@ -393,9 +422,9 @@ class SubgroupAnalysisLogit:
         Generate clinical interpretation.
         """
         p_int = self.interaction_result['p_value']
-        het = self.interaction_result['significant']
+        het = self.interaction_result.get('significant', False)
         
-        if np.isnan(p_int):
+        if not isinstance(p_int, (int, float)) or pd.isna(p_int):
             return "❓ Interaction test could not be performed."
         
         if het:
@@ -523,7 +552,6 @@ class SubgroupAnalysisCox:
                 raise ValueError(f"Insufficient data: {len(df_clean)} rows")
             
             # 🟢 NEW: Auto-encode Treatment to 0/1 for Cox
-            # Essential for lifelines correct parameter naming
             if not pd.api.types.is_numeric_dtype(df_clean[treatment_col]) or df_clean[treatment_col].nunique() == 2:
                  unique_treats = sorted(df_clean[treatment_col].unique())
                  if len(unique_treats) == 2:
@@ -541,8 +569,6 @@ class SubgroupAnalysisCox:
             st.info("📊 Computing Overall Cox Model...")
             try:
                 cph_overall = CoxPHFitter()
-                # Use formula if possible, or standard fit
-                # Here standard fit is fine as we don't have interaction terms yet
                 cph_overall.fit(
                     df_clean[[time_col, event_col, treatment_col] + adjustment_cols],
                     duration_col=time_col,
@@ -578,8 +604,6 @@ class SubgroupAnalysisCox:
             st.info(f"📊 Computing {len(subgroups)} Subgroup Cox Models...")
             
             for i, subgroup_val in enumerate(subgroups, 1):
-                # st.write(f"  Processing: {subgroup_col} = {subgroup_val}")
-                
                 df_sub = df_clean[df_clean[subgroup_col] == subgroup_val]
                 n_events = int(df_sub[event_col].sum())
                 
@@ -589,7 +613,6 @@ class SubgroupAnalysisCox:
                     st.warning(f"  ⚠️ Subgroup {subgroup_val}: {msg}, skipping")
                     continue
                 
-                # FIX: Check if treatment has variation within subgroup
                 if df_sub[treatment_col].nunique() < 2:
                     st.warning(f"  ⚠️ Subgroup {subgroup_val}: No variation in treatment (all same value), skipping")
                     continue
@@ -632,42 +655,19 @@ class SubgroupAnalysisCox:
             # === INTERACTION TEST (Likelihood Ratio Test) ===
             st.info("📊 Computing Interaction Test (LRT)...")
             try:
-                # Use formula string with C() to handle categorical variables correctly
-                # Logic: Compare model WITH interaction vs model WITHOUT interaction
-                
                 base_formula_parts = [treatment_col, f"C({subgroup_col})"] + adjustment_cols
                 formula_reduced = " + ".join(base_formula_parts)
-                
-                # Full formula includes interaction
                 formula_full = f"{treatment_col} * C({subgroup_col})"
                 if adjustment_cols:
                     formula_full += " + " + " + ".join(adjustment_cols)
 
-                # Fit Reduced Model
                 cph_reduced = CoxPHFitter()
-                cph_reduced.fit(
-                    df_clean,
-                    duration_col=time_col,
-                    event_col=event_col,
-                    formula=formula_reduced,
-                    show_progress=False
-                )
+                cph_reduced.fit(df_clean, duration_col=time_col, event_col=event_col, formula=formula_reduced, show_progress=False)
                 
-                # Fit Full Model
                 cph_full = CoxPHFitter()
-                cph_full.fit(
-                    df_clean,
-                    duration_col=time_col,
-                    event_col=event_col,
-                    formula=formula_full,
-                    show_progress=False
-                )
+                cph_full.fit(df_clean, duration_col=time_col, event_col=event_col, formula=formula_full, show_progress=False)
                 
-                # Calculate LRT
-                # LR Statistic = 2 * (LogLikelihood_full - LogLikelihood_reduced)
                 lr_stat = 2 * (cph_full.log_likelihood_ - cph_reduced.log_likelihood_)
-                
-                # Degrees of freedom diff
                 df_diff = len(cph_full.params_) - len(cph_reduced.params_)
                 
                 if df_diff > 0:
@@ -675,9 +675,14 @@ class SubgroupAnalysisCox:
                 else:
                     p_interaction = np.nan
                 
+                # ✅ FIX: Robust type checking
+                is_sig = False
+                if isinstance(p_interaction, (int, float)) and pd.notna(p_interaction):
+                    is_sig = p_interaction < 0.05
+
                 self.interaction_result = {
                     'p_value': p_interaction,
-                    'significant': p_interaction < 0.05 if not np.isnan(p_interaction) else False
+                    'significant': is_sig
                 }
                 
                 logger.info(f"Cox Interaction (LRT) P={p_interaction:.4f}")
@@ -712,7 +717,11 @@ class SubgroupAnalysisCox:
         if self.results is None or self.results.empty:
             return {}
 
-        overall = self.results[self.results['type'] == 'overall'].iloc[0]
+        overall_rows = self.results[self.results['type'] == 'overall']
+        if overall_rows.empty:
+            return {}
+
+        overall = overall_rows.iloc[0]
         subgroups = self.results[self.results['type'] == 'subgroup']
         
         return {
@@ -723,7 +732,7 @@ class SubgroupAnalysisCox:
             'ci_overall': (overall['ci_low'], overall['ci_high']),
             'p_overall': overall['p_value'],
             'p_interaction': self.interaction_result['p_value'],
-            'heterogeneous': self.interaction_result['significant'],
+            'heterogeneous': self.interaction_result.get('significant', False),
             'hr_range': (subgroups['hr'].min(), subgroups['hr'].max()) if not subgroups.empty else (0,0)
         }
     
@@ -731,8 +740,19 @@ class SubgroupAnalysisCox:
         """
         Format output for reporting.
         """
-        overall = self.results[self.results['type'] == 'overall'].iloc[0]
+        if self.results is None or self.results.empty:
+            return {}
+
+        overall_rows = self.results[self.results['type'] == 'overall']
+        if overall_rows.empty:
+            return {}
+            
+        overall = overall_rows.iloc[0]
         
+        # ✅ FIX: Handle NaN for JSON serialization
+        p_int = self.interaction_result['p_value']
+        p_int_val = float(p_int) if isinstance(p_int, (int, float)) and pd.notna(p_int) else None
+
         return {
             'overall': {
                 'hr': float(overall['hr']),
@@ -743,7 +763,7 @@ class SubgroupAnalysisCox:
             },
             'subgroups': self.results[self.results['type'] == 'subgroup'].to_dict('records'),
             'interaction': {
-                'p_value': float(self.interaction_result['p_value']) if not np.isnan(self.interaction_result['p_value']) else None,
+                'p_value': p_int_val,
                 'significant': bool(self.interaction_result['significant'])
             },
             'summary': self.stats,
@@ -767,9 +787,10 @@ class SubgroupAnalysisCox:
         
         # Add interaction info
         p_int = self.interaction_result['p_value']
-        het_text = "Heterogeneous ⚠️" if self.interaction_result['significant'] else "Homogeneous ✓"
+        is_het = self.interaction_result.get('significant', False)
+        het_text = "Heterogeneous ⚠️" if is_het else "Homogeneous ✓"
         
-        if not np.isnan(p_int):
+        if isinstance(p_int, (int, float)) and pd.notna(p_int):
             title_final = f"{title}<br><span style='font-size: 12px; color: #666;'>P for Interaction = {p_int:.4f} ({het_text})</span>"
         else:
             title_final = title
@@ -795,9 +816,9 @@ class SubgroupAnalysisCox:
         Generate clinical interpretation.
         """
         p_int = self.interaction_result['p_value']
-        het = self.interaction_result['significant']
+        het = self.interaction_result.get('significant', False)
         
-        if np.isnan(p_int):
+        if not isinstance(p_int, (int, float)) or pd.isna(p_int):
             return "❓ Interaction test could not be performed."
         
         if het:
