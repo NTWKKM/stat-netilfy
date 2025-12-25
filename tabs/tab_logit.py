@@ -90,9 +90,13 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame) -> None:
     
     # Outcome variable
     with col1:
+        binary_cols = [col for col in df.columns if df[col].nunique() == 2]
+        if not binary_cols:
+            st.error("No binary outcome columns found.")
+            return
         outcome_col = st.selectbox(
             "Outcome (Binary)",
-            options=[col for col in df.columns if df[col].nunique() == 2],
+            options=binary_cols,
             index=0,
             help="Select binary outcome variable (0/1 or No/Yes)",
             key="logit_sg_outcome"
@@ -110,12 +114,17 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame) -> None:
     
     # Subgroup variable
     with col3:
+        subgroup_options = [
+            col for col in df.columns
+            if col not in [outcome_col, treatment_col]
+            and 2 <= df[col].nunique() <= 10
+        ]
+        if not subgroup_options:
+            st.error("No suitable subgroup variable found (need 2–10 categories).")
+            return
         subgroup_col = st.selectbox(
             "Stratify By",
-            options=[col for col in df.columns 
-                    if col not in [outcome_col, treatment_col] 
-                    and df[col].nunique() >= 2 
-                    and df[col].nunique() <= 10],
+            options=subgroup_options,
             help="Categorical variable with 2-10 categories",
             key="logit_sg_subgroup"
         )
@@ -522,7 +531,7 @@ def render(df, var_meta):
         | **Binary** | 2 categories (Yes/No) | Any | Disease/No Disease |
         | **Multinomial** | 3+ unordered categories | Any | Stage (I/II/III/IV) |
         | **Ordinal** | 3+ ordered categories | Any | Severity (Low/Med/High) |
-        | **Subgroup Analysis** | Binary + treatment × subgroup | Treatment variable | Drug effectiveness varies by age/sex? |
+        | **Subgroup Analysis** | Binary + treatment x subgroup | Treatment variable | Drug effectiveness varies by age/sex? |
         """)
         
         col1, col2 = st.columns(2)
@@ -763,7 +772,7 @@ def render(df, var_meta):
         ### 📄 Subgroup Analysis
         
         **When to Use:**
-        - Testing for treatment × subgroup interactions
+        - Testing for treatment x subgroup interactions
         - Examining differential treatment effects
         - Identifying patient populations with greater benefit
         
