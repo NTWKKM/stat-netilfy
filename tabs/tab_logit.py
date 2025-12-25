@@ -5,7 +5,9 @@ from logic import process_data_and_generate_html # Import from root
 from logger import get_logger
 from forest_plot_lib import create_forest_plot  # 🟢 IMPORT NEW LIBRARY
 import json
-from tabs.logistic_regression.subgroup_tab import SubgroupAnalysisLogit # Correct import path
+
+# ✅ FIX IMPORT: Use the updated module from root
+from subgroup_analysis_module import SubgroupAnalysisLogit 
 
 logger = get_logger(__name__)
 
