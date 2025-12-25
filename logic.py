@@ -256,8 +256,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 try:
                     # 🟢 IMPROVED: Use robust_sort_key for mixed numeric/string
                     levels = sorted(X_raw.dropna().unique(), key=_robust_sort_key)
-                except Exception as e:
-                    logger.warning(f"Failed to sort levels for {col}: {e}")
+                try:
+                    levels = sorted(X_raw.dropna().unique(), key=_robust_sort_key)
+                except (TypeError, ValueError) as e:
+                    logger.warning("Failed to sort levels for %s: %s", col, e)
                     levels = sorted(X_raw.astype(str).unique())
                 cat_levels_map[col] = levels
 
