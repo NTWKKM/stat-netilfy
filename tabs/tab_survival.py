@@ -364,11 +364,12 @@ def _render_cox_subgroup_analysis(df: pd.DataFrame) -> None:
             - Minimum 5 observations per subgroup
             - Minimum 2 events per subgroup
             """, icon="💭")
-            logger.exception("Cox subgroup analysis error: %s", e)
+            logger.exception("Cox subgroup analysis error")
     
-    # Display previous results if available
-    elif 'subgroup_results_cox' in st.session_state and st.session_state.get('show_previous_results_cox', True):
-        st.info("💻 Showing previous results. Click 'Run Subgroup Analysis' to refresh.")
+    # Display previous results if available (separate check)
+    else:
+        if 'subgroup_results_cox' in st.session_state and st.session_state.get('show_previous_results_cox', True):
+            st.info("💻 Showing previous results. Click 'Run Subgroup Analysis' to refresh.")
 
 
 def render(df, _var_meta):
