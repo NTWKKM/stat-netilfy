@@ -4,7 +4,7 @@ from lifelines import KaplanMeierFitter, CoxPHFitter, NelsonAalenFitter
 from lifelines.statistics import logrank_test, multivariate_logrank_test, proportional_hazard_test
 import plotly.graph_objects as go
 import plotly.express as px
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt  <-- REMOVED: No longer needed
 import warnings
 import io, base64
 import html as _html
@@ -421,13 +421,16 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     return cph, res_df, data, None
 
 def check_cph_assumptions(cph, data):
+    """
+    Check Cox PH assumptions using Schoenfeld Residuals and return Plotly figures.
+    """
     try:
         # 1. Statistical Test
         results = proportional_hazard_test(cph, data, time_transform='rank')
         text_report = "Proportional Hazards Test Results:\n" + results.summary.to_string()
         
-        # 2. Schoenfeld Residual Plots
-        img_bytes_list = []
+        # 2. Schoenfeld Residual Plots (Plotly Version)
+        figs_list = []
         
         # Compute residuals
         scaled_schoenfeld = cph.compute_residuals(data, 'scaled_schoenfeld')
@@ -437,32 +440,54 @@ def check_cph_assumptions(cph, data):
         times = data.loc[scaled_schoenfeld.index, cph.duration_col]
         
         for col in scaled_schoenfeld.columns:
-            fig, ax = plt.subplots(figsize=(6, 4))
+            fig = go.Figure()
             
-            # Use the aligned 'times'
-            ax.scatter(times, scaled_schoenfeld[col], alpha=0.5)
+            # Scatter plot of residuals
+            fig.add_trace(go.Scatter(
+                x=times, 
+                y=scaled_schoenfeld[col],
+                mode='markers',
+                name='Residuals',
+                marker=dict(color=COLORS['primary'], opacity=0.6, size=6)
+            ))
             
-            # Trend line (optional)
+            # Trend line (Linear) - Replicating original logic
             try:
+                # Fit linear trend
                 z = np.polyfit(times, scaled_schoenfeld[col], 1)
                 p = np.poly1d(z)
+                
+                # Generate line points
                 sorted_times = np.sort(times)
-                ax.plot(sorted_times, p(sorted_times), "r--", alpha=0.8)
+                trend_y = p(sorted_times)
+                
+                fig.add_trace(go.Scatter(
+                    x=sorted_times,
+                    y=trend_y,
+                    mode='lines',
+                    name='Trend (Linear)',
+                    line=dict(color=COLORS['danger'], dash='dash', width=2)
+                ))
             except Exception as e:
                 warnings.warn(f"Could not fit trend line for {col}: {e}", stacklevel=2)
-                
-            ax.set_title(f"Schoenfeld Residuals: {col}")
-            ax.set_xlabel("Time")
-            ax.set_ylabel("Scaled Residuals")
-            ax.axhline(0, color='black', linestyle='--', alpha=0.5)
             
-            buf = io.BytesIO()
-            fig.savefig(buf, format='png', bbox_inches='tight')
-            buf.seek(0)
-            img_bytes_list.append(buf.getvalue())
-            plt.close(fig)
+            # Zero Line
+            fig.add_hline(y=0, line_dash="solid", line_color="black", opacity=0.3, line_width=1)
+            
+            # Update Layout
+            fig.update_layout(
+                title=f"Schoenfeld Residuals: {col}",
+                xaxis_title="Time",
+                yaxis_title="Scaled Residuals",
+                template='plotly_white',
+                height=450,
+                showlegend=True,
+                hovermode="closest"
+            )
+            
+            figs_list.append(fig)
 
-        return text_report, img_bytes_list
+        return text_report, figs_list
 
     except Exception as e:
         return f"Assumption check failed: {e}", []
