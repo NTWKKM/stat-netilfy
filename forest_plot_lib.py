@@ -874,7 +874,7 @@ def subgroup_analysis_cox(
             
             try:
                 cph_sub = CoxPHFitter()
-                cph_sub.fit(df_sub, duration_col=time_col, event_col=event_col, show_progress=False)
+                cph_sub.fit(df_sub[model_cols], duration_col=time_col, event_col=event_col, show_progress=False)
                 
                 hr_sub = np.exp(cph_sub.params_[treatment_col])
                 ci_sub = np.exp(cph_sub.confidence_intervals_.loc[treatment_col])
