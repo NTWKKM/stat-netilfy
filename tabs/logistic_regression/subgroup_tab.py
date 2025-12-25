@@ -55,6 +55,9 @@ def render(df: pd.DataFrame, outcome_var: str | None = None, treatment_var: str 
     col1, col2, col3 = st.columns(3)
 
     binary_cols = [col for col in df.columns if df[col].nunique() == 2]
+    if not binary_cols:
+       st.error("No binary columns found for outcome.")
+       return
     default_idx = 0
     if outcome_var and outcome_var in binary_cols:
         default_idx = binary_cols.index(outcome_var)
@@ -79,12 +82,17 @@ def render(df: pd.DataFrame, outcome_var: str | None = None, treatment_var: str 
     
     # Subgroup variable
     with col3:
+        subgroup_options = [
+            col for col in df.columns
+            if col not in [outcome_col, treatment_col]
+            and 2 <= df[col].nunique() <= 10
+        ]
+        if not subgroup_options:
+            st.error("No suitable subgroup variable found (need 2–10 categories).")
+            return
         subgroup_col = st.selectbox(
             "Stratify By",
-            options=[col for col in df.columns 
-                    if col not in [outcome_col, treatment_col] 
-                    and df[col].nunique() >= 2 
-                    and df[col].nunique() <= 10],
+            options=subgroup_options,
             help="Categorical variable with 2-10 categories"
         )
     
@@ -249,7 +257,7 @@ def render(df: pd.DataFrame, outcome_var: str | None = None, treatment_var: str 
                 - Effect range: {summary['or_range'][0]:.3f} to {summary['or_range'][1]:.3f}
                 
                 **Interaction Test:**
-                - Test: Wald test of {treatment_col} × {subgroup_col} interaction
+                - Test: Wald test of {treatment_col} x {subgroup_col} interaction
                 - P-value: {results['interaction']['p_value']:.4f}
                 - Conclusion: {"Evidence of significant heterogeneity" if results['interaction']['significant'] else "No significant heterogeneity detected"}
                 
