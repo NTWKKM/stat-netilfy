@@ -4,12 +4,13 @@ from lifelines import KaplanMeierFitter, CoxPHFitter, NelsonAalenFitter
 from lifelines.statistics import logrank_test, multivariate_logrank_test, proportional_hazard_test
 import plotly.graph_objects as go
 import plotly.express as px
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt  <-- REMOVED: No longer needed
 import warnings
 import io, base64
 import html as _html
 import logging
 from tabs._common import get_color_palette
+from forest_plot_lib import create_forest_plot  # 🟢 IMPORT NEW LIBRARY
 
 # Get unified color palette
 COLORS = get_color_palette()
@@ -42,7 +43,7 @@ def _standardize_numeric_cols(data, cols) -> None:
             else:
                 data[col] = (data[col] - data[col].mean()) / std
 
-# 🟢 NEW HELPER: Convert Hex to RGBA string for Plotly fillcolor
+# 🟢 HELPER: Convert Hex to RGBA string for Plotly fillcolor
 def _hex_to_rgba(hex_color, alpha) -> str:
     """Convert hex color to RGBA string. Expects 6-digit hex format (e.g., '#RRGGBB')."""
     hex_color = hex_color.lstrip('#')
@@ -168,21 +169,6 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
     """
     Fit Nelson-Aalen cumulative hazard curves optionally stratified by a grouping column and return a Plotly figure plus group-level statistics.
     Uses unified teal color palette from _common.py.
-    
-    Drops rows with missing duration or event values. If a group column is provided, rows with missing group values are dropped and curves are plotted per group; otherwise a single overall curve is plotted. When the fitter provides a confidence interval with at least two columns, a shaded 95% CI is added for each group.
-    
-    Parameters:
-        df (pandas.DataFrame): Input dataset containing duration, event, and optional group columns.
-        duration_col (str): Name of the column with follow-up time or duration.
-        event_col (str): Name of the column with event indicator (1 for event, 0 for censored).
-        group_col (str or None): Name of the column to stratify by, or None to compute an overall curve.
-    
-    Returns:
-        fig (plotly.graph_objs.Figure): Plotly figure showing cumulative hazard curves and shaded 95% CIs when available.
-        stats_df (pandas.DataFrame): DataFrame with one row per plotted group containing columns `Group`, `N`, and `Events`.
-    
-    Raises:
-        ValueError: If no valid rows remain after dropping missing duration/event values, or if a specified group column is not present in `df`.
     """
     data = df.dropna(subset=[duration_col, event_col])
     if len(data) == 0:
@@ -262,7 +248,7 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
 # --- 3. Cox Proportional Hazards (Robust with Progressive L2 Penalization & Data Validation) ---
 def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     """
-    Fit a Cox Proportional Hazards model after validating and preprocessing covariates.         
+    Fit a Cox Proportional Hazards model after validating and preprocessing covariates.          
     
     Validates input columns and rows, performs automatic one-hot encoding for categorical covariates (drop_first=True), checks numeric covariates for infinite or extreme values, zero variance, potential perfect separation, and high multicollinearity, standardizes numeric covariates (skipping binary 0/1), and attempts a progressive fitting strategy (standard CoxPH then increasing L2 penalization) until a successful fit is obtained or all attempts fail.
     
@@ -435,13 +421,16 @@ def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     return cph, res_df, data, None
 
 def check_cph_assumptions(cph, data):
+    """
+    Check Cox PH assumptions using Schoenfeld Residuals and return Plotly figures.
+    """
     try:
         # 1. Statistical Test
         results = proportional_hazard_test(cph, data, time_transform='rank')
         text_report = "Proportional Hazards Test Results:\n" + results.summary.to_string()
         
-        # 2. Schoenfeld Residual Plots
-        img_bytes_list = []
+        # 2. Schoenfeld Residual Plots (Plotly Version)
+        figs_list = []
         
         # Compute residuals
         scaled_schoenfeld = cph.compute_residuals(data, 'scaled_schoenfeld')
@@ -451,36 +440,132 @@ def check_cph_assumptions(cph, data):
         times = data.loc[scaled_schoenfeld.index, cph.duration_col]
         
         for col in scaled_schoenfeld.columns:
-            fig, ax = plt.subplots(figsize=(6, 4))
+            fig = go.Figure()
             
-            # Use the aligned 'times'
-            ax.scatter(times, scaled_schoenfeld[col], alpha=0.5)
+            # Scatter plot of residuals
+            fig.add_trace(go.Scatter(
+                x=times, 
+                y=scaled_schoenfeld[col],
+                mode='markers',
+                name='Residuals',
+                marker=dict(color=COLORS['primary'], opacity=0.6, size=6)
+            ))
             
-            # Trend line (optional)
+            # Trend line (Linear) - Replicating original logic
             try:
+                # Fit linear trend
                 z = np.polyfit(times, scaled_schoenfeld[col], 1)
                 p = np.poly1d(z)
+                
+                # Generate line points
                 sorted_times = np.sort(times)
-                ax.plot(sorted_times, p(sorted_times), "r--", alpha=0.8)
+                trend_y = p(sorted_times)
+                
+                fig.add_trace(go.Scatter(
+                    x=sorted_times,
+                    y=trend_y,
+                    mode='lines',
+                    name='Trend (Linear)',
+                    line=dict(color=COLORS['danger'], dash='dash', width=2)
+                ))
             except Exception as e:
                 warnings.warn(f"Could not fit trend line for {col}: {e}", stacklevel=2)
-                
-            ax.set_title(f"Schoenfeld Residuals: {col}")
-            ax.set_xlabel("Time")
-            ax.set_ylabel("Scaled Residuals")
-            ax.axhline(0, color='black', linestyle='--', alpha=0.5)
             
-            buf = io.BytesIO()
-            fig.savefig(buf, format='png', bbox_inches='tight')
-            buf.seek(0)
-            img_bytes_list.append(buf.getvalue())
-            plt.close(fig)
+            # Zero Line
+            fig.add_hline(y=0, line_dash="solid", line_color="black", opacity=0.3, line_width=1)
+            
+            # Update Layout
+            fig.update_layout(
+                title=f"Schoenfeld Residuals: {col}",
+                xaxis_title="Time",
+                yaxis_title="Scaled Residuals",
+                template='plotly_white',
+                height=450,
+                showlegend=True,
+                hovermode="closest"
+            )
+            
+            figs_list.append(fig)
 
-        return text_report, img_bytes_list
+        return text_report, figs_list
 
     except Exception as e:
         return f"Assumption check failed: {e}", []
 
+
+# --- 🟢 UPDATED: Create interactive Plotly forest plot for Cox Regression (Using shared lib) ---
+def create_forest_plot_cox(res_df):
+    """
+    Create an interactive Plotly forest plot for Cox regression hazard ratios.
+    Uses the shared `forest_plot_lib` to ensure identical styling with logistic regression.
+    
+    Parameters:
+        res_df (pandas.DataFrame): Results DataFrame with columns 'HR', '95% CI Lower', '95% CI Upper', 'P-value'.
+    
+    Returns:
+        fig (plotly.graph_objects.Figure): Plotly figure object.
+    """
+    if res_df is None or res_df.empty:
+        raise ValueError("No Cox regression results available for forest plot.")
+    
+    # Prepare data for the shared library
+    df_plot = res_df.copy()
+    df_plot['variable'] = df_plot.index
+    
+    # Call shared library to generate publication-quality plot (Table + Graph)
+    fig = create_forest_plot(
+        data=df_plot,
+        estimate_col='HR',
+        ci_low_col='95% CI Lower',
+        ci_high_col='95% CI Upper',
+        pval_col='P-value',
+        label_col='variable',
+        title="<b>Multivariable Cox Regression: Forest Plot (HR & 95% CI)</b>",
+        x_label="Hazard Ratio (HR)",
+        ref_line=1.0
+    )
+    
+    return fig
+
+
+# --- 🟢 UPDATED: Generate Forest Plot HTML for Cox Regression (HTML Report) ---
+def generate_forest_plot_cox_html(res_df):
+    """
+    Generate an HTML forest plot for Cox regression hazard ratios using Plotly.
+    Embeds Plotly JS directly in the plot for offline-friendly reports.
+    
+    Parameters:
+        res_df (pandas.DataFrame): Results DataFrame with columns 'HR', '95% CI Lower', '95% CI Upper', 'P-value'.
+    
+    Returns:
+        html_str (str): HTML string containing the forest plot as Plotly embed + interpretation.
+    """
+    if res_df is None or res_df.empty:
+        return "<p>No Cox regression results available for forest plot.</p>"
+    
+    # Create interactive forest plot (same function as web UI)
+    fig = create_forest_plot_cox(res_df)
+    
+    # 🟢 OFFLINE SUPPORT: Embed Plotly JS directly in the plot
+    # The figure now contains the Data Table inside it (via subplots), so no need for separate HTML table.
+    plot_html = fig.to_html(include_plotlyjs=True, div_id='cox_forest_plot')
+    
+    # Interpretation guide (matching logistic regression style)
+    interp_html = f"""
+    <div style='margin-top:20px; padding:15px; background:#f8f9fa; border-left:4px solid {COLORS.get('primary', '#218084')}; border-radius:4px;'>
+        <h4 style='color:{COLORS.get('primary_dark', '#1f8085')}; margin-top:0;'>💡 Interpretation Guide</h4>
+        <ul style='margin:10px 0; padding-left:20px;'>
+            <li><b>HR > 1:</b> Increased hazard (Risk Factor) 🔴</li>
+            <li><b>HR < 1:</b> Decreased hazard (Protective Factor) 🟢</li>
+            <li><b>HR = 1:</b> No effect (null)</li>
+            <li><b>CI crosses 1.0:</b> Not statistically significant ⚠️</li>
+            <li><b>CI doesn't cross 1.0:</b> Statistically significant ✅</li>
+            <li><b>P < 0.05:</b> Statistically significant ✅</li>
+        </ul>
+    </div>
+    """
+    
+    return f"<div style='margin:20px 0;'>{plot_html}{interp_html}</div>"
 
 # --- 4. Landmark Analysis (KM) 🟢 FIX LM CI ---
 def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
@@ -619,19 +704,20 @@ def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
 
     return fig, pd.DataFrame([stats_data]), n_pre_filter, n_post_filter, None
 
-# --- 5. Report Generation 🟢 FIX: Include Plotly JS in HTML & Unified Colors ---
+# --- 5. Report Generation 🟢 OFFLINE SUPPORT: Embed Plotly JS in Report ---
 def generate_report_survival(title, elements):
     """
     Assemble a complete HTML report from a sequence of content elements, embedding tables, figures, and images for offline-friendly consumption.
     Uses unified teal color palette from _common.py.
     
-    Builds an HTML document with the given title and iterates over `elements` to render supported content types. For Plotly figures, the Plotly JS library is embedded only once with the first Plotly plot and omitted for subsequent Plotly plots so later plots reuse the already-loaded script. Supported element types and expected `data` values:
+    Builds an HTML document with the given title and iterates over `elements` to render supported content types. For Plotly figures, all JS is embedded in each plot for offline viewing. Supported element types and expected `data` values:
     - "header": a string rendered as an H2 section header.
     - "text": a plain string rendered as a paragraph.
     - "preformatted": a string rendered inside a <pre> block.
     - "table": a pandas DataFrame (or DataFrame-like) rendered via DataFrame.to_html().
     - "plot": a Plotly Figure-like object (with to_html) or a Matplotlib Figure-like object (with savefig).
     - "image": raw image bytes (PNG) which will be embedded as a base64 data URL.
+    - "html": raw HTML string to embed directly (used for forest plots).
     
     Parameters:
         title: The report title; will be HTML-escaped.
@@ -639,19 +725,19 @@ def generate_report_survival(title, elements):
             'type' (one of the supported types above) and 'data' (the corresponding content).
     
     Returns:
-        html_doc (str): A self-contained HTML string representing the assembled report.
+        html_doc (str): A self-contained, offline-friendly HTML string with all resources embedded.
     """
     
-    # 🟢 FIX: Use 'text' instead of 'text_primary' (key exists in color palette)
     primary_color = COLORS['primary']
     primary_dark = COLORS['primary_dark']
     text_color = COLORS['text']
+    danger = COLORS['danger']
     
     css_style = f"""<style>
         body{{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
             margin: 20px;
-            background-color: #f8f9fa;
+            background-color: #f4f6f8;
             color: {text_color};
             line-height: 1.6;
         }}
@@ -668,12 +754,21 @@ def generate_report_survival(title, elements):
             padding-left: 12px;
             margin: 25px 0 15px 0;
         }}
+        h3{{
+            color: {primary_dark};
+            margin: 15px 0 10px 0;
+        }}
+        h4{{
+            color: {primary_dark};
+            margin: 10px 0 8px 0;
+        }}
         table{{
             border-collapse: collapse;
             width: 100%;
             margin: 10px 0;
             background-color: white;
             border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }}
         th, td{{
             border: 1px solid #ddd;
@@ -681,7 +776,7 @@ def generate_report_survival(title, elements):
             text-align: left;
         }}
         th{{
-            background-color: {primary_color};
+            background-color: {primary_dark};
             color: white;
             font-weight: 600;
         }}
@@ -690,6 +785,13 @@ def generate_report_survival(title, elements):
         }}
         tr:nth-child(even){{
             background-color: #fcfcfc;
+        }}
+        .sig-p {{
+            color: {danger};
+            font-weight: bold;
+            background-color: #ffebee;
+            padding: 2px 4px;
+            border-radius: 4px;
         }}
         p{{
             margin: 12px 0;
@@ -701,6 +803,13 @@ def generate_report_survival(title, elements):
             border-radius: 5px;
             overflow-x: auto;
             border-left: 4px solid {primary_color};
+        }}
+        ul, ol {{
+            margin: 12px 0;
+            padding-left: 20px;
+        }}
+        li {{
+            margin: 8px 0;
         }}
         .report-footer {{
             text-align: center;
@@ -721,11 +830,8 @@ def generate_report_survival(title, elements):
     </style>"""
     
     safe_title = _html.escape(str(title))
-    # 🟢 NEW: Don't include Plotly JS in head - will include with first plot
-    html_doc = f"<!DOCTYPE html><html><head><meta charset='utf-8'>{css_style}</head><body><h1>{safe_title}</h1>"
-    
-    # 🟢 NEW: Track if Plotly JS already included
-    plotly_js_included = False
+    # 🟢 OFFLINE SUPPORT: No CDN, each Plotly figure will embed its own JS
+    html_doc = f"""<!DOCTYPE html><html><head><meta charset='utf-8'>{css_style}</head><body><h1>{safe_title}</h1>"""
     
     for el in elements:
         t = el.get('type')
@@ -741,22 +847,19 @@ def generate_report_survival(title, elements):
             html_doc += d.to_html()
         elif t == 'plot':
             if hasattr(d, 'to_html'):
-                # 🟢 SOLUTION: Include Plotly JS with first plot only
-                if not plotly_js_included:
-                    # First plot: include 'cdn' to embed Plotly JS in HTML
-                    html_doc += d.to_html(full_html=False, include_plotlyjs='cdn')
-                    plotly_js_included = True
-                else:
-                    # Subsequent plots: don't include JS (already loaded from first plot)
-                    html_doc += d.to_html(full_html=False, include_plotlyjs=False)
+                # 🟢 OFFLINE: include_plotlyjs=True embeds JS in EACH plot
+                html_doc += d.to_html(full_html=False, include_plotlyjs=True)
             elif hasattr(d, 'savefig'):
                 buf = io.BytesIO()
                 d.savefig(buf, format='png', bbox_inches='tight')
                 b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-                html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'  
+                html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
         elif t == 'image':
             b64 = base64.b64encode(d).decode('utf-8')
             html_doc += f'<img src="data:image/png;base64,{b64}" style="max-width:100%"/>'
+        elif t == 'html':
+            # 🟢 OFFLINE: Raw HTML (forest plot) already has JS embedded via include_plotlyjs=True
+            html_doc += str(d)
     
     html_doc += """<div class='report-footer'>
     &copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank">NTWKKM n Donate</a> | All Rights Reserved. | Powered by GitHub, Gemini, Streamlit

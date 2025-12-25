@@ -394,7 +394,7 @@ if st.session_state.df is not None:
             allowed_types,
             index=allowed_types.index(current_type),
         )
-                                  
+                                    
         st.sidebar.markdown("Labels (0=No):")
         map_txt = st.sidebar.text_area("Map", value="\n".join([f"{k}={v}" for k,v in meta.get('map',{}).items()]), height=80)
         
