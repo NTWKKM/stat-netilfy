@@ -69,7 +69,10 @@ def _robust_sort_key(x):
     - (1, string_value) for non-numeric values
     """
     try:
-        return (0, float(x))  # Numeric first
+        # Check if it's already a number or can be one
+        if pd.isna(x): return (2, "")
+        val = float(x)
+        return (0, val)  # Numeric first
     except (ValueError, TypeError):
         return (1, str(x))    # Then string
 
@@ -356,10 +359,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
 
                 data_uni = pd.DataFrame({'y': y, 'x': X_num}).dropna()
                 if not data_uni.empty and data_uni['x'].nunique() > 1:
-                    params, conf, pvals, status = run_binary_logit(data_uni['y'], data_uni[['x']], method=preferred_method)
+                    params, Hex_conf, pvals, status = run_binary_logit(data_uni['y'], data_uni[['x']], method=preferred_method)
                     if status == "OK" and 'x' in params:
                         odd = np.exp(params['x'])
-                        ci_l, ci_h = np.exp(conf.loc['x'][0]), np.exp(conf.loc['x'][1])
+                        ci_l, ci_h = np.exp(Hex_conf.loc['x'][0]), np.exp(Hex_conf.loc['x'][1])
                         pv = pvals['x']
                         res['or'] = f"{odd:.2f} ({ci_l:.2f}-{ci_h:.2f})"
                         res['p_or'] = pv
@@ -373,13 +376,12 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             # 🟢 FIX: VARIABLE SCREENING FOR MULTIVARIATE
             # =========================================================
             # Always use p_comp (chi-square or Mann-Whitney) for screening
-            # p_or is for display only and may be HTML string for categorical
             p_screen = res.get('p_comp', np.nan)
             
-            # Defensive check: ensure p_screen is numeric before comparison
-            # If p_comp not available, never use p_or (which could be HTML string)
-            if isinstance(p_screen, (int, float)) and pd.notna(p_screen) and p_screen < 0.20:
-                candidates.append(col)
+            # ✅ FIX: Defensive check: ensure p_screen is numeric before comparison
+            if isinstance(p_screen, (int, float)) and pd.notna(p_screen):
+                if p_screen < 0.20:
+                    candidates.append(col)
 
     # --- MULTIVARIATE ANALYSIS ---
     with logger.track_time("multivariate_analysis"):
@@ -443,14 +445,19 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     html_rows = []
     current_sheet = ""
     valid_cols_for_html = [c for c in sorted_cols if c in results_db]
-    grouped_cols = sorted(valid_cols_for_html, key=lambda x: (x.split('_')[0] if '_' in x else "Variables", x))
+    
+    # ✅ FIX: Grouping logic to prevent sorting error
+    def _get_sheet_name(col_name):
+        return col_name.split('_')[0] if '_' in col_name else "Variables"
+        
+    grouped_cols = sorted(valid_cols_for_html, key=lambda x: (_get_sheet_name(x), x))
     
     for col in grouped_cols:
         if col == outcome_name: continue
         res = results_db[col]
         mode = mode_map.get(col, 'linear')
         
-        sheet = col.split('_')[0] if '_' in col else "Variables"
+        sheet = _get_sheet_name(col)
         if sheet != current_sheet:
             html_rows.append(f"<tr class='sheet-header'><td colspan='9'>{sheet}</td></tr>")
             current_sheet = sheet
@@ -468,11 +475,12 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         or_s = res.get('or', '-')
         
         # P-value display
-        if mode == 'categorical': p_col_display = res.get('p_or', '-') # Multiline
+        if mode == 'categorical': 
+            p_col_display = res.get('p_or', '-') # Multiline
         else:
             p_val = res.get('p_comp', np.nan) # Chi2/Mann-Whitney for single line
             p_s = fmt_p(p_val)
-            # 🟢 FIX: Type check before comparison (Line 326)
+            # ✅ FIX: Type check before comparison
             if isinstance(p_val, (int, float)) and pd.notna(p_val) and p_val < 0.05: 
                 p_s = f"<span class='sig-p'>{p_s}*</span>"
             p_col_display = p_s
@@ -486,7 +494,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 aor_lines, ap_lines = ["Ref."], ["-"]
                 for item in multi_res:
                     p_txt = fmt_p(item['p'])
-                    # 🟢 FIX: Type check before comparison (Line 335)
+                    # ✅ FIX: Type check before comparison
                     if isinstance(item['p'], (int, float)) and pd.notna(item['p']) and item['p'] < 0.05: 
                         p_txt = f"<span class='sig-p'>{p_txt}*</span>"
                     aor_lines.append(f"{item['aor']:.2f} ({item['l']:.2f}-{item['h']:.2f})")
@@ -496,7 +504,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 aor_s = f"{multi_res['aor']:.2f} ({multi_res['l']:.2f}-{multi_res['h']:.2f})"
                 ap_val = multi_res['p']
                 ap_txt = fmt_p(ap_val)
-                # 🟢 FIX: Type check before comparison (Line 345)
+                # ✅ FIX: Type check before comparison
                 if isinstance(ap_val, (int, float)) and pd.notna(ap_val) and ap_val < 0.05: 
                     ap_txt = f"<span class='sig-p'>{ap_txt}*</span>"
                 ap_s = ap_txt
