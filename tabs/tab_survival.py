@@ -6,8 +6,10 @@ import time
 from pandas.api.types import is_numeric_dtype
 import logging
 import json
-from subgroup_analysis_module import SubgroupAnalysisCox
 from logger import get_logger
+
+# ✅ FIX IMPORT: Use the unified module from root
+from subgroup_analysis_module import SubgroupAnalysisCox 
 
 logger = get_logger(__name__)
 
