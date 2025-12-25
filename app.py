@@ -104,7 +104,7 @@ try:
 except (KeyboardInterrupt, SystemExit):
     raise
 except Exception as e:
-    logger.exception("Failed to import tabs")
+    logger.exception("Failed to import tabs")  # ✅ LOG ERROR
     st.exception(e)
     st.stop()
 
@@ -252,7 +252,7 @@ if st.sidebar.button("📄 Load Example Data"):
         # Set Metadata (Correctly Mapped)
         st.session_state.var_meta = {
             'Treatment_Group': {'type':'Categorical', 'map':{0:'Standard Care', 1:'New Drug'}, 'label': 'Treatment Group'},
-            'Sex_Male': {'type':'Simple', 'map':{0:'Female', 1:'Male'}, 'label': 'Sex', 'ref_level': 0},
+            'Sex_Male': {'type':'Categorical', 'map':{0:'Female', 1:'Male'}, 'label': 'Sex'},
             'Comorb_Diabetes': {'type':'Categorical', 'map':{0:'No', 1:'Yes'}, 'label': 'Diabetes'},
             'Comorb_Hypertension': {'type':'Categorical', 'map':{0:'No', 1:'Yes'}, 'label': 'Hypertension'},
             'Outcome_Cured': {'type':'Categorical', 'map':{0:'Not Cured', 1:'Cured'}, 'label': 'Outcome (Cured)'},
@@ -261,14 +261,14 @@ if st.sidebar.button("📄 Load Example Data"):
             'Diagnosis_Dr_A': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}, 'label': 'Diagnosis (Dr. A)'},
             'Diagnosis_Dr_B': {'type':'Categorical', 'map':{0:'Normal', 1:'Abnormal'}, 'label': 'Diagnosis (Dr. B)'},
             
-            'Age_Years': {'type': 'Linear', 'label': 'Age (Years)', 'map': {}},
-            'BMI_kgm2': {'type': 'Linear', 'label': 'BMI (kg/m²)', 'map': {}},
-            'Time_Months': {'type': 'Linear', 'label': 'Time (Months)', 'map': {}},
-            'Test_Score_Rapid': {'type': 'Linear', 'label': 'Rapid Test Score (0-100)', 'map': {}},
-            'Lab_HbA1c': {'type': 'Linear', 'label': 'HbA1c (%)', 'map': {}},
-            'Lab_Glucose': {'type': 'Linear', 'label': 'Fasting Glucose (mg/dL)', 'map': {}},
-            'ICC_SysBP_Rater1': {'type': 'Linear', 'label': 'Sys BP (Rater 1)', 'map': {}},
-            'ICC_SysBP_Rater2': {'type': 'Linear', 'label': 'Sys BP (Rater 2)', 'map': {}},
+            'Age_Years': {'type': 'Continuous', 'label': 'Age (Years)', 'map': {}},
+            'BMI_kgm2': {'type': 'Continuous', 'label': 'BMI (kg/m²)', 'map': {}},
+            'Time_Months': {'type': 'Continuous', 'label': 'Time (Months)', 'map': {}},
+            'Test_Score_Rapid': {'type': 'Continuous', 'label': 'Rapid Test Score (0-100)', 'map': {}},
+            'Lab_HbA1c': {'type': 'Continuous', 'label': 'HbA1c (%)', 'map': {}},
+            'Lab_Glucose': {'type': 'Continuous', 'label': 'Fasting Glucose (mg/dL)', 'map': {}},
+            'ICC_SysBP_Rater1': {'type': 'Continuous', 'label': 'Sys BP (Rater 1)', 'map': {}},
+            'ICC_SysBP_Rater2': {'type': 'Continuous', 'label': 'Sys BP (Rater 2)', 'map': {}},
         }
         st.session_state.uploaded_file_name = "Example Clinical Data"
         
@@ -287,7 +287,7 @@ upl = st.sidebar.file_uploader("Upload CSV/Excel", type=['csv', 'xlsx'])
 if upl:
     data_bytes = upl.getvalue()
     file_size_mb = len(data_bytes) / 1e6
-    logger.log_operation("file_upload", "started",
+    logger.log_operation("file_upload", "started",   # ✅ LOG START
                        filename=upl.name, 
                        size=f"{file_size_mb:.1f}MB")
     
@@ -295,7 +295,7 @@ if upl:
         file_sig = (upl.name, hashlib.sha256(data_bytes).hexdigest())
         
         if st.session_state.get('uploaded_file_sig') != file_sig:
-            with logger.track_time("file_parse", log_level="debug"):
+            with logger.track_time("file_parse", log_level="debug"):  # ✅ TRACK TIMING
                 if upl.name.lower().endswith('.csv'):
                     new_df = pd.read_csv(io.BytesIO(data_bytes))
                 else:
@@ -325,15 +325,15 @@ if upl:
                             if decimals_pct < 0.3:
                                 current_meta[col] = {'type': 'Categorical', 'label': col, 'map': {}, 'confidence': 'auto'}
                             else:
-                                current_meta[col] = {'type': 'Linear', 'label': col, 'map': {}, 'confidence': 'auto'}
+                                current_meta[col] = {'type': 'Continuous', 'label': col, 'map': {}, 'confidence': 'auto'}
                         else:
-                            current_meta[col] = {'type': 'Linear', 'label': col, 'map': {}, 'confidence': 'auto'}
+                            current_meta[col] = {'type': 'Continuous', 'label': col, 'map': {}, 'confidence': 'auto'}
                     else:
                         current_meta[col] = {'type': 'Categorical', 'label': col, 'map': {}, 'confidence': 'auto'}
 
             st.session_state.var_meta = current_meta
             
-            logger.log_operation("file_upload", "completed",
+            logger.log_operation("file_upload", "completed",  # ✅ LOG COMPLETION
                                rows=len(new_df), columns=len(new_df.columns))
             st.sidebar.success("File Uploaded and Metadata Initialized!")
             st.rerun()
@@ -342,7 +342,8 @@ if upl:
             st.sidebar.info("File already loaded.")
             
     except (ValueError, UnicodeDecodeError, pd.errors.ParserError, ImportError, Exception) as e:
-        logger.log_operation("file_upload", "failed", error=str(e))
+        # Broad catch for unpredictable file format errors
+        logger.log_operation("file_upload", "failed", error=str(e))  # ✅ LOG ERROR
         st.sidebar.error(f"Error: {e}")
         st.session_state.df = None
         st.session_state.uploaded_file_name = None
@@ -359,7 +360,7 @@ if st.session_state.is_matched:
         st.rerun()
 
 if st.sidebar.button("⚠️ Reset All Data", type="primary"):
-    logger.info("🔄 User reset all data")
+    logger.info("🔄 User reset all data")  # ✅ LOG RESET
     st.session_state.clear()
     st.rerun()
 
@@ -374,7 +375,7 @@ if st.session_state.df is not None:
     if s_var != "Select...":
         if s_var not in st.session_state.var_meta:
             is_numeric = pd.api.types.is_numeric_dtype(st.session_state.df[s_var]) if s_var in st.session_state.df.columns else False
-            initial_type = 'Linear' if is_numeric else 'Categorical'
+            initial_type = 'Continuous' if is_numeric else 'Categorical'
             st.session_state.var_meta[s_var] = {'type': initial_type, 'label': s_var, 'map': {}}
 
         meta = st.session_state.var_meta.get(s_var, {})
@@ -382,49 +383,47 @@ if st.session_state.df is not None:
         current_type = meta.get('type', 'Auto-detect')
         if current_type == 'Auto-detect':
             is_numeric = pd.api.types.is_numeric_dtype(st.session_state.df[s_var]) if s_var in st.session_state.df.columns else False
-            current_type = 'Linear' if is_numeric else 'Categorical'
+            current_type = 'Continuous' if is_numeric else 'Categorical'
 
-        allowed_types = ['Categorical', 'Simple', 'Linear']
+        allowed_types = ['Categorical', 'Continuous']
         if current_type not in allowed_types:
             current_type = 'Categorical'
 
-        with st.sidebar.expander("⚙️ Variable Settings", expanded=True):
-            st.markdown(f"**Variable:** `{s_var}`")
-            st.markdown("**ℹ️ Configure this variable in the Logistic tab for better UX.**")
-            
-            # Variable labels and mapping only
-            st.markdown("#### 🏷️ Labels & Mapping:")
-            map_txt = st.text_area(
-                "Value mapping (optional, one per line):\ne.g. 0=No\n1=Yes",
-                value="\n".join([f"{k}={v}" for k,v in meta.get('map',{}).items()]),
-                height=80
-            )
-            
-            if st.button("💾 Save", use_container_width=True):
-                new_map = {}
-                for line in map_txt.split('\n'):
-                    if '=' in line:
-                        k, v = line.split('=', 1)
+        n_type = st.sidebar.radio(
+            "Type:",
+            allowed_types,
+            index=allowed_types.index(current_type),
+        )
+                                  
+        st.sidebar.markdown("Labels (0=No):")
+        map_txt = st.sidebar.text_area("Map", value="\n".join([f"{k}={v}" for k,v in meta.get('map',{}).items()]), height=80)
+        
+        if st.sidebar.button("💾 Save"):
+            new_map = {}
+            for line in map_txt.split('\n'):
+                if '=' in line:
+                    k, v = line.split('=', 1)
+                    try:
+                        k = k.strip()
                         try:
-                            k = k.strip()
-                            try:
-                                k_num = float(k)
-                                k = int(k_num) if k_num.is_integer() else k_num
-                            except ValueError:
-                                pass
-                            new_map[k] = v.strip()
-                        except (TypeError, ValueError) as e:
-                            st.warning(f"Skipping invalid map line '{line}': {e}")
-                
-                if s_var not in st.session_state.var_meta: 
-                    st.session_state.var_meta[s_var] = {}
-                
-                st.session_state.var_meta[s_var]['map'] = new_map
-                st.session_state.var_meta[s_var].setdefault('label', s_var)
-                
-                logger.info("✅ Variable '%s' mapping updated", s_var)
-                st.sidebar.success("✅ Saved!")
-                st.rerun()
+                            k_num = float(k)
+                            k = int(k_num) if k_num.is_integer() else k_num
+                        except ValueError:
+                            pass
+                        new_map[k] = v.strip()
+                    except (TypeError, ValueError) as e:
+                        st.sidebar.warning(f"Skipping invalid map line '{line}': {e}")
+            
+            if s_var not in st.session_state.var_meta: 
+                st.session_state.var_meta[s_var] = {}
+            
+            st.session_state.var_meta[s_var]['type'] = n_type
+            st.session_state.var_meta[s_var]['map'] = new_map
+            st.session_state.var_meta[s_var].setdefault('label', s_var)
+            
+            logger.info("✅ Variable '%s' configured as %s", s_var, n_type)  # ✅ LOG CONFIG
+            st.sidebar.success("Saved!")
+            st.rerun()
 
 # ==========================================
 # MAIN AREA - TABS (6 TOTAL - MERGED)
@@ -451,11 +450,10 @@ if st.session_state.df is not None:
         - Treatment: {st.session_state.matched_treatment_col}
         - Use dropdown in each tab to select **"✅ Matched Data"** for analysis
         """)
-    
     # 🟢 FINAL TAB LAYOUT (6 tabs total, merged Table 1 + PSM)
     t0, t1, t2, t3, t4, t5 = st.tabs([
         "📁 Data Management", 
-        "📋 Table 1 & Matching",
+        "📋 Table 1 & Matching",  # ← MERGED (has 2 subtabs)
         "🧪 Diagnostic Tests (ROC)",
         "📈 Correlation & ICC",
         "📊 Risk Factors (Logistic)",
@@ -468,7 +466,7 @@ if st.session_state.df is not None:
         df_clean = tab_data.get_clean_data(st.session_state.df, custom_na)
 
     with t1:
-        tab_baseline_matching.render(df_clean, st.session_state.var_meta)
+        tab_baseline_matching.render(df_clean, st.session_state.var_meta)  # ← HAS INTERNAL SUBTABS
         
     with t2:
         tab_diag.render(df_clean, st.session_state.var_meta)
@@ -491,7 +489,7 @@ else:
 2. **📋 Table 1 & Matching** - Baseline characteristics + Propensity Score Matching
 3. **🧪 Diagnostic Tests (ROC)** - Chi-Square, ROC, Kappa, RR/OR/NNT
 4. **📈 Correlation & ICC** - Pearson, Spearman, ICC reliability
-5. **📊 Risk Factors (Logistic)** - Binary logistic regression with 3 analysis modes
+5. **📊 Risk Factors (Logistic)** - Binary logistic regression
 6. **⏳ Survival Analysis** - Kaplan-Meier & Cox regression
     """)
     
