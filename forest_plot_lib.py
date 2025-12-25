@@ -904,7 +904,10 @@ def subgroup_analysis_cox(
             if not pd.api.types.is_numeric_dtype(subgroup_values):
                 # Convert to numeric codes for interaction
                 subgroup_values = pd.Categorical(subgroup_values).codes
-                df_clean_copy['__interaction'] = df_clean_copy[treatment_col] * subgroup_values
+            else:
+                subgroup_values = df_clean_copy[subgroup_col]
+
+            df_clean_copy['__interaction'] = df_clean_copy[treatment_col] * subgroup_values
             
             # Fit model with interaction
             covariates_with_int = [treatment_col, '__interaction'] + adjustment_cols
