@@ -62,7 +62,7 @@ def _get_dataset_for_analysis(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     return selected_df, label
 
 
-def _render_logit_subgroup_analysis(df: pd.DataFrame):
+def _render_logit_subgroup_analysis(df: pd.DataFrame) -> None:
     """
     Render Subgroup Analysis SubTab for Logistic Regression within the Logit Tab.
     """
@@ -444,8 +444,10 @@ def render(df, var_meta):
                             fp_tabs = []
                             fp_titles = []
                             
-                            if aor_results: fp_titles.append("Adjusted OR (Multivariable)")
-                            if or_results: fp_titles.append("Crude OR (Univariable)")
+                            if aor_results:
+                                fp_titles.append("Adjusted OR (Multivariable)")
+                            if or_results: 
+                                fp_titles.append("Crude OR (Univariable)")
                             
                             if fp_titles:
                                 fp_tabs = st.tabs(fp_titles)
