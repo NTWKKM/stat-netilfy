@@ -569,14 +569,14 @@ def generate_forest_plot_html(or_results, aor_results, plot_title="Forest Plots:
     if or_results:
         df_crude = pd.DataFrame([{'variable': k, **v} for k, v in or_results.items()])
         if not df_crude.empty:
-            fig = create_forest_plot(df_crude, 'or', 'ci_low', 'ci_high', 'p_value', 'variable', "<b>Univariable: Crude OR</b>", "Odds Ratio", 1.0)
+            fig = create_forest_plot(df_crude, 'or', 'ci_low', 'ci_high', 'variable', 'p_value', "<b>Univariable: Crude OR</b>", "Odds Ratio", 1.0)
             html_parts.append(fig.to_html(full_html=False, include_plotlyjs=True))
             has_plot = True
 
     if aor_results:
         df_adj = pd.DataFrame([{'variable': k, **v} for k, v in aor_results.items()])
         if not df_adj.empty:
-            fig = create_forest_plot(df_adj, 'aor', 'ci_low', 'ci_high', 'p_value', 'variable', "<b>Multivariable: Adjusted OR</b>", "Adjusted OR", 1.0)
+            fig = create_forest_plot(df_adj, 'aor', 'ci_low', 'ci_high', 'variable', 'p_value', "<b>Multivariable: Adjusted OR</b>", "Adjusted OR", 1.0)
             html_parts.append(fig.to_html(full_html=False, include_plotlyjs=False))
             has_plot = True
 
