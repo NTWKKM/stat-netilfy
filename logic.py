@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 # Get unified color palette
 COLORS = get_color_palette()
 
-# ✅ TRY IMPORT FIRTHLOGIST
+# ✅ TRY IMPORT FIRTHLOGIST WITH SKLEARN PATCH
 try:
     from firthlogist import FirthLogisticRegression
     
