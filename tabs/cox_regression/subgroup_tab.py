@@ -58,6 +58,13 @@ def render(df: pd.DataFrame, time_col: str | None = None, event_col: str | None 
     
     numeric_cols = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
     binary_cols = [col for col in df.columns if df[col].nunique() == 2]
+
+    if not numeric_cols:
+        st.error("No numeric columns found for time variable.")
+        return
+    if not binary_cols:
+        st.error("No binary columns found for event indicator.")
+        return
     
     # Time variable
     with col1:
@@ -353,9 +360,9 @@ def render(df: pd.DataFrame, time_col: str | None = None, event_col: str | None 
             """, icon="💭")
             logger.exception("Cox subgroup analysis error")
     
-        # Display previous results if available
-        elif 'subgroup_results_cox' in st.session_state and st.session_state.get('show_previous_results_cox', True):
-            st.info("💻 Showing previous results. Click 'Run Subgroup Analysis' to refresh.")
+    # Display previous results if available
+    elif 'subgroup_results_cox' in st.session_state and st.session_state.get('show_previous_results_cox', True):
+        st.info("💻 Showing previous results. Click 'Run Subgroup Analysis' to refresh.")
         
             # Retrieve cached data
             results = st.session_state['subgroup_results_cox']
@@ -526,6 +533,4 @@ def render(df: pd.DataFrame, time_col: str | None = None, event_col: str | None 
                         use_container_width=True,
                         key="download_json_cached"
                     )
-        # Display previous results if available
-        elif 'subgroup_results_cox' in st.session_state and st.session_state.get('show_previous_results_cox', True):
-            st.info("💻 Showing previous results. Click 'Run Subgroup Analysis' to refresh.")
+        
