@@ -255,7 +255,8 @@ class ForestPlot:
                     p_float = float(p_str)
                     if p_float < 0.001: return "<0.001"
                     return f"{p_float:.3f}"
-                except: return str(p) # Return original if fail
+                except (ValueError, TypeError): 
+                    return str(p) # Return original if conversion fails
             
             self.data['__display_p'] = self.data[self.pval_col].apply(fmt_p)
             
@@ -618,7 +619,7 @@ def subgroup_analysis_logit(
             raise ValueError(f"Missing columns in DataFrame: {missing}")
         
         # Remove missing values
-        df_clean = df[list(required_cols) + [outcome_col]].dropna()
+        df_clean = df[list(required_cols)].dropna()
         if len(df_clean) < 10:
             raise ValueError(f"Insufficient data after removing NaN: only {len(df_clean)} rows")
         
@@ -836,7 +837,9 @@ def subgroup_analysis_cox(
         # === OVERALL MODEL ===
         try:
             covariates = [treatment_col] + adjustment_cols
-            cph.fit(df_clean, duration_col=time_col, event_col=event_col, show_progress=False)
+            # Select only the columns needed for the model
+            model_cols = [time_col, event_col] + covariates
+            cph.fit(df_clean[model_cols], duration_col=time_col, event_col=event_col, show_progress=False)
             
             hr_overall = np.exp(cph.params_[treatment_col])
             ci_overall = np.exp(cph.confidence_intervals_.loc[treatment_col])
@@ -896,7 +899,12 @@ def subgroup_analysis_cox(
         try:
             # Create interaction term manually
             df_clean_copy = df_clean.copy()
-            df_clean_copy['__interaction'] = df_clean_copy[treatment_col] * df_clean_copy[subgroup_col].astype(int)
+            # Handle categorical subgroups properly
+            subgroup_values = df_clean_copy[subgroup_col]
+            if not pd.api.types.is_numeric_dtype(subgroup_values):
+                # Convert to numeric codes for interaction
+                subgroup_values = pd.Categorical(subgroup_values).codes
+                df_clean_copy['__interaction'] = df_clean_copy[treatment_col] * subgroup_values
             
             # Fit model with interaction
             covariates_with_int = [treatment_col, '__interaction'] + adjustment_cols
