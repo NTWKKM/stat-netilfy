@@ -6,7 +6,7 @@ Supports Logistic Regression (binary outcomes) and Cox Regression (survival data
 
 Standard: ICMJE, CONSORT, and Cochrane guidelines
 Author: NTWKKM (Adapted by Gemini)
-Version: 1.2 (Enhanced Interaction Tests & Stability)
+Version: 1.3 (Auto-encode Treatment Fix)
 License: MIT
 """
 
@@ -129,10 +129,26 @@ class SubgroupAnalysisLogit:
                 adjustment_cols = []
             
             # Clean data
-            df_clean = self.df[[outcome_col, treatment_col, subgroup_col] + adjustment_cols].dropna()
+            cols_to_use = [outcome_col, treatment_col, subgroup_col] + adjustment_cols
+            df_clean = self.df[cols_to_use].dropna().copy()
+            
             if len(df_clean) < 10:
                 raise ValueError(f"Insufficient data after removing NaN: {len(df_clean)} rows")
             
+            # 🟢 NEW: Auto-encode Treatment to 0/1 if it's categorical
+            # This prevents KeyError when accessing model.params[treatment_col]
+            if not pd.api.types.is_numeric_dtype(df_clean[treatment_col]) or df_clean[treatment_col].nunique() == 2:
+                 unique_treats = sorted(df_clean[treatment_col].unique())
+                 if len(unique_treats) == 2:
+                     ref_val, risk_val = unique_treats[0], unique_treats[1]
+                     # Check if it needs mapping (not already 0/1)
+                     if not (ref_val == 0 and risk_val == 1):
+                         df_clean[treatment_col] = df_clean[treatment_col].map({ref_val: 0, risk_val: 1})
+                         st.info(f"ℹ️ **Treatment Encoding:** {ref_val} (Ref) vs {risk_val} (Risk)")
+                 elif len(unique_treats) > 2:
+                     if not pd.api.types.is_numeric_dtype(df_clean[treatment_col]):
+                        raise ValueError(f"Treatment variable '{treatment_col}' has >2 levels. Subgroup analysis requires binary treatment.")
+
             # Build formula
             formula_base = f'{outcome_col} ~ {treatment_col}'
             if adjustment_cols:
@@ -177,7 +193,7 @@ class SubgroupAnalysisLogit:
             st.info(f"📊 Computing {len(subgroups)} Subgroup Models...")
             
             for i, subgroup_val in enumerate(subgroups, 1):
-                st.write(f"  Processing: {subgroup_col} = {subgroup_val}")
+                # st.write(f"  Processing: {subgroup_col} = {subgroup_val}")
                 
                 df_sub = df_clean[df_clean[subgroup_col] == subgroup_val]
                 
@@ -287,6 +303,9 @@ class SubgroupAnalysisLogit:
         """
         Compute summary statistics from results.
         """
+        if self.results is None or self.results.empty:
+            return {}
+
         overall = self.results[self.results['type'] == 'overall'].iloc[0]
         subgroups = self.results[self.results['type'] == 'subgroup']
         
@@ -302,8 +321,8 @@ class SubgroupAnalysisLogit:
             'p_overall': overall['p_value'],
             'p_interaction': self.interaction_result['p_value'],
             'heterogeneous': het_significant,
-            'or_range': (subgroups['or'].min(), subgroups['or'].max()),
-            'or_range_ratio': subgroups['or'].max() / subgroups['or'].min() if subgroups['or'].min() > 0 else np.inf
+            'or_range': (subgroups['or'].min(), subgroups['or'].max()) if not subgroups.empty else (0,0),
+            'or_range_ratio': (subgroups['or'].max() / subgroups['or'].min()) if not subgroups.empty and subgroups['or'].min() > 0 else np.inf
         }
     
     def _format_output(self) -> dict:
@@ -367,7 +386,6 @@ class SubgroupAnalysisLogit:
             color=color,
             height=max(400, len(plot_data) * 60 + 150)
         )
-        
         return self.figure
     
     def get_interpretation(self) -> str:
@@ -498,11 +516,24 @@ class SubgroupAnalysisCox:
                 adjustment_cols = []
             
             # Clean data
-            cols_for_clean = {time_col, event_col, treatment_col, subgroup_col} | set(adjustment_cols)
-            df_clean = self.df[list(cols_for_clean)].dropna()
+            cols_for_clean = [time_col, event_col, treatment_col, subgroup_col] + adjustment_cols
+            df_clean = self.df[cols_for_clean].dropna().copy()
             
             if len(df_clean) < 10:
                 raise ValueError(f"Insufficient data: {len(df_clean)} rows")
+            
+            # 🟢 NEW: Auto-encode Treatment to 0/1 for Cox
+            # Essential for lifelines correct parameter naming
+            if not pd.api.types.is_numeric_dtype(df_clean[treatment_col]) or df_clean[treatment_col].nunique() == 2:
+                 unique_treats = sorted(df_clean[treatment_col].unique())
+                 if len(unique_treats) == 2:
+                     ref_val, risk_val = unique_treats[0], unique_treats[1]
+                     if not (ref_val == 0 and risk_val == 1):
+                         df_clean[treatment_col] = df_clean[treatment_col].map({ref_val: 0, risk_val: 1})
+                         st.info(f"ℹ️ **Treatment Encoding (Cox):** {ref_val} (Ref) vs {risk_val} (Risk)")
+                 elif len(unique_treats) > 2:
+                     if not pd.api.types.is_numeric_dtype(df_clean[treatment_col]):
+                        raise ValueError(f"Treatment variable '{treatment_col}' has >2 levels. Subgroup analysis requires binary treatment.")
             
             results_list = []
             
@@ -547,7 +578,7 @@ class SubgroupAnalysisCox:
             st.info(f"📊 Computing {len(subgroups)} Subgroup Cox Models...")
             
             for i, subgroup_val in enumerate(subgroups, 1):
-                st.write(f"  Processing: {subgroup_col} = {subgroup_val}")
+                # st.write(f"  Processing: {subgroup_col} = {subgroup_val}")
                 
                 df_sub = df_clean[df_clean[subgroup_col] == subgroup_val]
                 n_events = int(df_sub[event_col].sum())
@@ -678,6 +709,9 @@ class SubgroupAnalysisCox:
         """
         Compute summary statistics.
         """
+        if self.results is None or self.results.empty:
+            return {}
+
         overall = self.results[self.results['type'] == 'overall'].iloc[0]
         subgroups = self.results[self.results['type'] == 'subgroup']
         
@@ -690,7 +724,7 @@ class SubgroupAnalysisCox:
             'p_overall': overall['p_value'],
             'p_interaction': self.interaction_result['p_value'],
             'heterogeneous': self.interaction_result['significant'],
-            'hr_range': (subgroups['hr'].min(), subgroups['hr'].max())
+            'hr_range': (subgroups['hr'].min(), subgroups['hr'].max()) if not subgroups.empty else (0,0)
         }
     
     def _format_output(self) -> dict:
@@ -754,7 +788,6 @@ class SubgroupAnalysisCox:
             color=color,
             height=max(400, len(plot_data) * 60 + 150)
         )
-        
         return self.figure
     
     def get_interpretation(self) -> str:
