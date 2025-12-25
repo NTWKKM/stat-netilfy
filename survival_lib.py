@@ -448,7 +448,7 @@ def check_cph_assumptions(cph, data):
                 y=scaled_schoenfeld[col],
                 mode='markers',
                 name='Residuals',
-                marker=dict(color=COLORS['primary'], opacity=0.6, size=6)
+                marker={'color': COLORS['primary'], 'opacity': 0.6, 'size': 6}
             ))
             
             # Trend line (Linear) - Replicating original logic
@@ -466,7 +466,7 @@ def check_cph_assumptions(cph, data):
                     y=trend_y,
                     mode='lines',
                     name='Trend (Linear)',
-                    line=dict(color=COLORS['danger'], dash='dash', width=2)
+                    line={'color': COLORS['danger'], 'dash': 'dash', 'width': 2}
                 ))
             except Exception as e:
                 warnings.warn(f"Could not fit trend line for {col}: {e}", stacklevel=2)
