@@ -76,15 +76,22 @@ def render(df: pd.DataFrame, time_col: str | None = None, event_col: str | None 
             index=0 if event_col is None else binary_cols.index(event_col) if event_col in binary_cols else 0,
             help="1/Yes = event occurred, 0/No = censored"
         )
-    
-    # Treatment variable
-    with col3:
-        treatment_col_selected = st.selectbox(
-            "Treatment/Exposure",
-            options=[col for col in df.columns if col not in [time_col_selected, event_col_selected]],
-            index=0 if treatment_var is None else [col for col in df.columns if col not in [time_col_selected, event_col_selected]].index(treatment_var) if treatment_var in [col for col in df.columns if col not in [time_col_selected, event_col_selected]] else 0,
-            help="Main variable of interest"
-        )
+
+    # Before selectboxes
+    available_treatment_cols = [col for col in df.columns if col not in [time_col_selected, event_col_selected]]
+
+    def get_default_index(options: list, preselected: str | None) -> int:
+        if preselected and preselected in options:
+            return options.index(preselected)
+        return 0
+
+    # In selectbox
+    treatment_col_selected = st.selectbox(
+        "Treatment/Exposure",
+        options=available_treatment_cols,
+        index=get_default_index(available_treatment_cols, treatment_var),
+        help="Main variable of interest"
+    )
     
     st.markdown("---")
     
@@ -165,7 +172,12 @@ def render(df: pd.DataFrame, time_col: str | None = None, event_col: str | None 
                     min_subgroup_n=min_subgroup_n,
                     min_events=min_events
                 )
-            
+            # Store variable names for cached display
+            st.session_state['last_treatment_col'] = treatment_col_selected
+            st.session_state['last_subgroup_col'] = subgroup_col_selected
+            st.session_state['last_time_col'] = time_col_selected
+            st.session_state['last_event_col'] = event_col_selected
+            st.session_state['last_analysis_title'] = analysis_title
             # Store in session state
             st.session_state['subgroup_results_cox'] = results
             st.session_state['subgroup_analyzer_cox'] = analyzer
@@ -339,8 +351,181 @@ def render(df: pd.DataFrame, time_col: str | None = None, event_col: str | None 
             - Minimum 5 observations per subgroup
             - Minimum 2 events per subgroup
             """, icon="💭")
-            logger.error(f"Cox subgroup analysis error: {e}")
+            logger.exception("Cox subgroup analysis error")
     
-    # Display previous results if available
-    elif 'subgroup_results_cox' in st.session_state and st.session_state.get('show_previous_results_cox', True):
-        st.info("💻 Showing previous results. Click 'Run Subgroup Analysis' to refresh.")
+        # Display previous results if available
+        elif 'subgroup_results_cox' in st.session_state and st.session_state.get('show_previous_results_cox', True):
+            st.info("💻 Showing previous results. Click 'Run Subgroup Analysis' to refresh.")
+        
+            # Retrieve cached data
+            results = st.session_state['subgroup_results_cox']
+            analyzer = st.session_state.get('subgroup_analyzer_cox')
+        
+            if results and analyzer:
+                # ========== RESULTS DISPLAY ==========
+                st.markdown("---")
+                st.header("📈 Results")
+            
+                # Forest Plot
+                with st.container():
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.subheader("Forest Plot - Hazard Ratios")
+                    with col2:
+                        if st.button("🗐️ Edit", key="edit_forest_title_cox_cached"):
+                            st.session_state['edit_forest_title_cox'] = True
+                
+                    if st.session_state.get('edit_forest_title_cox', False):
+                        forest_title = st.text_input(
+                            "Plot title:",
+                            value=st.session_state.get('last_analysis_title', "Survival Subgroup Analysis"),
+                            key="forest_title_input_cox_cached"
+                        )
+                    else:
+                        forest_title = st.session_state.get('last_analysis_title', "Survival Subgroup Analysis")
+                
+                    fig = analyzer.create_forest_plot(title=forest_title)
+                    st.plotly_chart(fig, use_container_width=True, key="cox_forest_plot_cached")
+            
+                # Summary Statistics
+                st.subheader("📊 Summary Statistics")
+            
+                col1, col2, col3, col4 = st.columns(4)
+            
+                summary = results['summary']
+                overall = results['overall']
+            
+                with col1:
+                    st.metric(
+                        label="Overall N",
+                        value=f"{summary['n_overall']:,}",
+                        delta=f"{overall['events']} events"
+                    )
+            
+                with col2:
+                    st.metric(
+                        label="Overall HR",
+                        value=f"{overall['hr']:.3f}",
+                        delta=f"[{overall['ci'][0]:.3f}-{overall['ci'][1]:.3f}]"
+                    )
+            
+                with col3:
+                    st.metric(
+                        label="Overall P-value",
+                        value=f"{overall['p_value']:.4f}",
+                        delta="Significant" if overall['p_value'] < 0.05 else "Not Sig"
+                    )
+            
+                with col4:
+                    p_int = results['interaction']['p_value']
+                    het_status = "⚠️ Het" if results['interaction']['significant'] else "✅ Hom"
+                    st.metric(
+                        label="P for Interaction",
+                        value=f"{p_int:.4f}" if p_int is not None else "N/A",
+                        delta=het_status
+                    )
+            
+                st.markdown("---")
+            
+                # Detailed Results Table
+                st.subheader("📄 Detailed Results")
+            
+                results_df = results['results_df'].copy()
+                display_cols = ['group', 'n', 'events', 'hr', 'ci_low', 'ci_high', 'p_value']
+            
+                # Format for display
+                display_table = results_df[display_cols].copy()
+                display_table.columns = ['Group', 'N', 'Events', 'HR', 'CI Lower', 'CI Upper', 'P-value']
+                display_table['HR'] = display_table['HR'].apply(lambda x: f"{x:.3f}")
+                display_table['CI Lower'] = display_table['CI Lower'].apply(lambda x: f"{x:.3f}")
+                display_table['CI Upper'] = display_table['CI Upper'].apply(lambda x: f"{x:.3f}")
+                display_table['P-value'] = display_table['P-value'].apply(lambda x: f"{x:.4f}")
+            
+                st.dataframe(display_table, use_container_width=True, hide_index=True)
+            
+                st.markdown("---")
+            
+                # Interpretation
+                st.subheader("💡 Interpretation")
+            
+                interpretation = analyzer.get_interpretation()
+                if results['interaction']['significant']:
+                    st.warning(interpretation, icon="⚠️")
+                else:
+                    st.success(interpretation, icon="✅")
+            
+                # Clinical Guidelines
+                with st.expander("📚 Clinical Reporting Guidelines (CONSORT Extension)", expanded=False):
+                    treatment_col = st.session_state.get('last_treatment_col', 'treatment')
+                    subgroup_col = st.session_state.get('last_subgroup_col', 'subgroup')
+                    time_col = st.session_state.get('last_time_col', 'time')
+                    event_col = st.session_state.get('last_event_col', 'event')
+                
+                    st.markdown(f"""
+                    ### Subgroup Analysis in Survival Studies
+                
+                    **Study Population:**
+                    - Total sample: {summary['n_overall']:,} participants
+                    - Total events: {overall['events']}
+                    - Follow-up variable: {time_col}
+                    - Event variable: {event_col}
+                
+                    **Subgroup Analysis:**
+                    - Stratification variable: {subgroup_col}
+                    - Number of subgroups: {summary['n_subgroups']}
+                    - HR range: {summary['hr_range'][0]:.3f} to {summary['hr_range'][1]:.3f}
+                
+                    **Interaction Test:**
+                    - Method: Wald test of {treatment_col} × {subgroup_col} interaction
+                    - P-value: {results['interaction']['p_value']:.4f}
+                    - Result: {"Evidence of significant heterogeneity" if results['interaction']['significant'] else "No significant heterogeneity"}
+                
+                    **Reporting Recommendations:**
+                    {"- Report Kaplan-Meier curves by subgroup\n- Discuss differential survival benefits\n- Consider stratified analyses in future trials" if results['interaction']['significant'] else "- Overall HR applies to all subgroups\n- No need for separate reporting by subgroup"}
+                    """)
+            
+                st.markdown("---")
+            
+                # Export Options
+                st.subheader("📥 Export Results")
+            
+                col1, col2, col3 = st.columns(3)
+            
+                # HTML Export
+                with col1:
+                    html_plot = analyzer.figure.to_html(include_plotlyjs='cdn')
+                    st.download_button(
+                        label="📿 HTML Plot",
+                        data=html_plot,
+                        file_name=f"subgroup_cox_cached.html",
+                        mime="text/html",
+                        use_container_width=True,
+                        key="download_html_cached"
+                    )
+            
+                # CSV Export
+                with col2:
+                    csv_data = display_table.to_csv(index=False)
+                    st.download_button(
+                        label="📋 CSV Results",
+                        data=csv_data,
+                        file_name=f"subgroup_cox_cached.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                        key="download_csv_cached"
+                    )
+            
+                # JSON Export
+                with col3:
+                    json_data = json.dumps(results, indent=2, default=str)
+                    st.download_button(
+                        label="📝 JSON Data",
+                        data=json_data,
+                        file_name=f"subgroup_cox_cached.json",
+                        mime="application/json",
+                        use_container_width=True,
+                        key="download_json_cached"
+                    )
+        # Display previous results if available
+        elif 'subgroup_results_cox' in st.session_state and st.session_state.get('show_previous_results_cox', True):
+            st.info("💻 Showing previous results. Click 'Run Subgroup Analysis' to refresh.")
