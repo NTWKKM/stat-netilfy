@@ -75,7 +75,14 @@ def _render_cox_subgroup_analysis(df: pd.DataFrame) -> None:
     
     numeric_cols = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
     binary_cols = [col for col in df.columns if df[col].nunique() == 2]
-    
+
+    if not numeric_cols:
+       st.error("No numeric columns found for follow-up time.")
+       return
+    if not binary_cols:
+       st.error("No binary columns found for event indicator.")
+       return
+        
     # Time variable
     with col1:
         time_col_selected = st.selectbox(
@@ -323,14 +330,17 @@ def _render_cox_subgroup_analysis(df: pd.DataFrame) -> None:
             
             # HTML Export
             with col1:
-                html_plot = analyzer.figure.to_html(include_plotlyjs='cdn')
-                st.download_button(
-                    label="📿 HTML Plot",
-                    data=html_plot,
-                    file_name=f"subgroup_cox_{treatment_col_selected}_{subgroup_col_selected}.html",
-                    mime="text/html",
-                    use_container_width=True
-                )
+                if analyzer.figure is None:
+                    st.warning("Forest plot not available for export")
+                else:
+                    html_plot = analyzer.figure.to_html(include_plotlyjs='cdn')
+                    st.download_button(
+                        label="📿 HTML Plot",
+                        data=html_plot,
+                        file_name=f"subgroup_cox_{treatment_col_selected}_{subgroup_col_selected}.html",
+                        mime="text/html",
+                        use_container_width=True
+                    )
             
             # CSV Export
             with col2:
@@ -355,7 +365,7 @@ def _render_cox_subgroup_analysis(df: pd.DataFrame) -> None:
                 )
         
         except Exception as e:
-            st.error(f"❌ Error: {str(e)}", icon="💥")
+            st.error(f"❌ Error: {e!s}", icon="💥")
             st.info("""
             **Troubleshooting:**
             - Time variable must be numeric and > 0
