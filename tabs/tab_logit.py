@@ -163,7 +163,7 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame):
             analyzer = SubgroupAnalysisLogit(df)
             
             # Run analysis with progress tracking
-            with st.spinner("🚧 Running analysis..."):
+            with st.spinner("🧰 Running analysis..."):
                 results = analyzer.analyze(
                     outcome_col=outcome_col,
                     treatment_col=treatment_col,
@@ -293,7 +293,7 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame):
             st.markdown("---")
             
             # Export Options
-            st.subheader("📛 Export Results")
+            st.subheader("📥 Export Results")
             
             col1, col2, col3 = st.columns(3)
             
@@ -301,7 +301,7 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame):
             with col1:
                 html_plot = analyzer.figure.to_html(include_plotlyjs='cdn')
                 st.download_button(
-                    label="💿 HTML Plot",
+                    label="🗐️ HTML Plot",
                     data=html_plot,
                     file_name=f"subgroup_{treatment_col}_{subgroup_col}.html",
                     mime="text/html",
@@ -332,19 +332,34 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame):
         
         except Exception as e:
             st.error(f"❌ Error: {str(e)}", icon="💥")
-            st.info("**Troubleshooting:**\n- Ensure outcome is binary (2 categories)\n- Check subgroup has 2-10 categories\n- Verify minimum N per subgroup", icon="🗣")
+            st.info("**Troubleshooting:**\n- Ensure outcome is binary (2 categories)\n- Check subgroup has 2-10 categories\n- Verify minimum N per subgroup", icon="💭")
             logger.error(f"Logit subgroup analysis error: {e}")
     
     # Display previous results if available
     elif 'subgroup_results_logit' in st.session_state and st.session_state.get('show_previous_results', True):
-        st.info("📋 Showing previous results. Click 'Run Subgroup Analysis' to refresh.")
+        st.info("💻 Showing previous results. Click 'Run Subgroup Analysis' to refresh.")
+
+
+def _build_or_mode_config(var_meta, col):
+    """
+    🟢 NEW: Build OR mode configuration for a variable from var_meta.
+    Returns: dict with 'type' and 'ref_level' (if applicable).
+    """
+    if col not in var_meta:
+        return {'type': 'Categorical', 'ref_level': None}
+    
+    meta = var_meta[col]
+    or_mode = meta.get('type', 'Categorical')
+    ref_level = meta.get('ref_level', None)
+    
+    return {'type': or_mode, 'ref_level': ref_level}
 
 
 def render(df, var_meta):
     """
     Render the "4. Logistic Regression Analysis" section in a Streamlit app.
     """
-    st.subheader("📰 Logistic Regression Analysis")
+    st.subheader("📏 Logistic Regression Analysis")
     
     if st.session_state.get('is_matched', False):
         st.info("✅ **Matched Dataset Available** - You can select it below for analysis")
@@ -394,6 +409,40 @@ def render(df, var_meta):
                 exclude_cols = st.multiselect("Exclude Variables:", all_cols, default=risky_vars, key='logit_exclude')
             else:
                 exclude_cols = st.multiselect("Exclude Variables (Optional):", all_cols, key='logit_exclude_opt')
+
+        # 🟢 NEW: OR Mode Configuration Section
+        st.markdown("---")
+        st.subheader("⚙️ OR Analysis Mode Configuration")
+        st.info("""
+        🎯 **Choose how each variable should be analyzed in logistic regression:**
+        - **📊 Categorical**: All levels vs Reference (Ref vs 1, Ref vs 2...)
+        - **📈 Simple**: Risk vs Reference (single line, collapse multiple levels)
+        - **📉 Linear**: Continuous trend (per-unit increase)
+        """)
+        
+        # Display mode for each variable
+        with st.expander("🔧 Variable Analysis Modes", expanded=True):
+            # Create 2 columns for better layout
+            mode_config = {}
+            for col in all_cols:
+                if col == target or col in exclude_cols:
+                    continue
+                
+                col_config = _build_or_mode_config(var_meta, col)
+                mode_config[col] = col_config
+                
+                # Display current mode
+                current_mode = col_config['type']
+                ref_level = col_config['ref_level']
+                
+                mode_symbol = {
+                    'Categorical': '📊',
+                    'Simple': '📈',
+                    'Linear': '📉'
+                }.get(current_mode, '❓')
+                
+                ref_text = f" (Ref: {ref_level})" if ref_level and current_mode == 'Simple' else ""
+                st.caption(f"{mode_symbol} **{col}**: {current_mode}{ref_text}")
 
         # Method Selection
         method_options = {
@@ -511,7 +560,7 @@ def render(df, var_meta):
         st.markdown("##### 📚 Quick Reference: Logistic Regression")
         
         st.info("""
-        **🌲 When to Use Logistic Regression:**
+        **🎲 When to Use Logistic Regression:**
         
         | Type | Outcome | Predictors | Example |
         |------|---------|-----------|----------|
@@ -581,9 +630,9 @@ def render(df, var_meta):
         st.markdown("---")
         
         st.markdown("""
-        ### 💡 Three OR Modes: When to Use Each
+        ### 🎯 Three OR Analysis Modes
         
-        The system supports **3 different modes** for handling categorical/continuous variables:
+        For each variable, you can choose **how** it's analyzed in logistic regression:
         """)
         
         # 🟢 IMPROVED: Add mode guide with examples
@@ -622,11 +671,8 @@ def render(df, var_meta):
             - Ordinal variable (consider Linear mode)
             
             **How to Specify:**
-            ```python
-            var_meta = {
-                'stage': {'type': 'Categorical'}  # All levels
-            }
-            ```
+            In sidebar "2. Settings" → Edit Variable:
+            - Type: **Categorical**
             """)
         
         with tab_simple:
@@ -653,17 +699,10 @@ def render(df, var_meta):
             - Want separate comparisons per level (use Categorical)
             - Continuous variable (use Linear)
             
-            **Allowed Custom Reference:**
-            ```python
-            var_meta = {
-                'location': {
-                    'type': 'Simple',
-                    'ref_level': 'Rural'  # Specify which is Ref
-                }
-            }
-            ```
-            
-            **Note:** First level alphabetically is Ref by default if not specified.
+            **How to Specify:**
+            In sidebar "2. Settings" → Edit Variable:
+            - Type: **Simple**
+            - Ref Level: Choose which is Reference ✅
             """)
         
         with tab_linear:
@@ -703,122 +742,29 @@ def render(df, var_meta):
             - Categorical with few distinct levels (use Categorical)
             
             **How to Specify:**
-            ```python
-            var_meta = {
-                'age': {'type': 'Linear'},      # Continuous
-                'bmi': {'type': 'Linear'}       # Continuous
-            }
-            ```
+            In sidebar "2. Settings" → Edit Variable:
+            - Type: **Linear**
             """)
         
         st.markdown("---")
         
         st.markdown("""
-        ### 🛠️ Auto-Detection Logic
+        ### ⚖️ How Modes are Configured
         
-        If you **don't specify** a mode in `var_meta`, the system auto-detects:
+        **In Sidebar ("2. Settings"):**
+        1. Select variable to edit
+        2. Choose analysis mode (Categorical/Simple/Linear)
+        3. For Simple mode: select reference level
+        4. Click Save
         
-        1. **Binary (0/1)?** → Categorical
-        2. **Few levels (<10) with mostly integers?** → Categorical
-        3. **Otherwise** → Linear
-        
-        **Example Auto-Detection:**
-        - `stage` = [1, 2, 3, 4] → Categorical 📊
-        - `age` = [23.4, 45.2, 67.8...] → Linear 📉
-        - `location` = [0, 1] → Categorical 📊
-        - `treatment` = [0, 1] → Categorical 📊
+        **Display in Logistic Tab:**
+        - All configured modes shown before running analysis
+        - Review and confirm before proceeding
+        - Run logistic regression with current configuration
         """)
         
         st.markdown("---")
         
-        st.markdown("""
-        ### ⚠️ Perfect Separation & Method Selection
-        
-        **What is Perfect Separation?**
-        
-        A predictor perfectly predicts the outcome. Example:
-        
-        | High Risk | Survived | Died |
-        |-----------|----------|------|
-        | No        | 100      | 0    |
-        | Yes       | 0        | 100  |
-        
-        → Perfect separation! (diagonal pattern)
-        
-        **Why is it a Problem?**
-        
-        Standard logistic regression (MLE):
-        - ❌ Cannot estimate coefficients reliably
-        - ❌ Returns infinite or missing values
-        - ❌ Model doesn't converge
-        - ❌ P-values are undefined
-        - ❌ Results are invalid
-        
-        **How to Detect:**
-        - 🔍 App shows warning: "⚠️ Risk of Perfect Separation: var_name"
-        - 📊 Contingency table has a zero cell (entire row/column = 0)
-        
-        **4 Solutions (Ranked by Recommendation):**
-        
-        **Option 1: Auto Method** 🟢 (BEST - RECOMMENDED)
-        - ✅ Automatically detects perfect separation
-        - ✅ Automatically switches to Firth's method
-        - ✅ No manual action required
-        - ✅ Most reliable
-        - ✅ **Just select "Auto (Recommended)" and run!**
-        
-        **Option 2: Firth's Method** 🟢 (GOOD)
-        - ✅ Handles separation via penalized likelihood
-        - ✅ Produces reliable coefficients & CI
-        - ✅ Reduces coefficient bias
-        - ⚠️ Requires manual method selection
-        
-        **Option 3: Exclude Variable** 🟢 (ACCEPTABLE)
-        - ✅ Removes problematic variable
-        - ✅ Simplifies model
-        - ⚠️ Loses information from that variable
-        - ⚠️ Requires manual exclusion
-        
-        **Option 4: Standard (MLE)** 🔴 (NOT RECOMMENDED)
-        - ❌ May not converge
-        - ❌ Infinite coefficients
-        - ❌ Missing p-values
-        - ❌ Invalid results
-        - ❌ **DO NOT USE with perfect separation!**
-        
-        **Best Practice Summary:**
-        1. Load your data
-        2. Select "Auto (Recommended)" method
-        3. Click "Run Logistic Regression"
-        4. Download HTML report to view forest plots
-        5. Done! App handles everything automatically
-        """)
-        
-        st.markdown("---")
-        st.markdown("""
-        ### 📄 Subgroup Analysis
-        
-        **When to Use:**
-        - Testing for treatment × subgroup interactions
-        - Examining differential treatment effects
-        - Identifying patient populations with greater benefit
-        
-        **Key Concepts:**
-        - **Homogeneous effect** → One OR applies to all (no interaction)
-        - **Heterogeneous effect** → Different OR by subgroup (interaction exists)
-        - **Interaction p-value** → p < 0.05 = significant heterogeneity
-        
-        **Interpretation:**
-        - If p_interaction < 0.05: Report results separately by subgroup
-        - If p_interaction ≥ 0.05: Overall estimate applies to all
-        
-        **Forest Plot in Subgroup Tab:**
-        - Shows OR with 95% CI by subgroup
-        - Horizontal line at OR=1 (null effect)
-        - Interactive plot for data exploration
-        """)
-        
-        st.markdown("---")
         st.markdown("""
         ### 💡 Interpretation Example
         
