@@ -317,14 +317,17 @@ def render(df: pd.DataFrame, time_col: str | None = None, event_col: str | None 
             
             # HTML Export
             with col1:
-                html_plot = analyzer.figure.to_html(include_plotlyjs='cdn')
-                st.download_button(
-                    label="📿 HTML Plot",
-                    data=html_plot,
-                    file_name=f"subgroup_cox_{treatment_col_selected}_{subgroup_col_selected}.html",
-                    mime="text/html",
-                    use_container_width=True
-                )
+                if analyzer.figure is None:
+                    st.warning("Forest plot not available for export")
+                else:
+                    html_plot = analyzer.figure.to_html(include_plotlyjs='cdn')
+                    st.download_button(
+                        label="📿 HTML Plot",
+                        data=html_plot,
+                        file_name=f"subgroup_cox_{treatment_col_selected}_{subgroup_col_selected}.html",
+                        mime="text/html",
+                        use_container_width=True
+                    )
             
             # CSV Export
             with col2:
@@ -349,7 +352,7 @@ def render(df: pd.DataFrame, time_col: str | None = None, event_col: str | None 
                 )
         
         except Exception as e:
-            st.error(f"❌ Error: {str(e)}", icon="💥")
+            st.error(f"❌ Error: {e!s}", icon="💥")
             st.info("""
             **Troubleshooting:**
             - Time variable must be numeric and > 0
@@ -364,9 +367,9 @@ def render(df: pd.DataFrame, time_col: str | None = None, event_col: str | None 
     elif 'subgroup_results_cox' in st.session_state and st.session_state.get('show_previous_results_cox', True):
         st.info("💻 Showing previous results. Click 'Run Subgroup Analysis' to refresh.")
         
-            # Retrieve cached data
-            results = st.session_state['subgroup_results_cox']
-            analyzer = st.session_state.get('subgroup_analyzer_cox')
+        # Retrieve cached data
+        results = st.session_state['subgroup_results_cox']
+        analyzer = st.session_state.get('subgroup_analyzer_cox')
         
             if results and analyzer:
                 # ========== RESULTS DISPLAY ==========
@@ -500,15 +503,18 @@ def render(df: pd.DataFrame, time_col: str | None = None, event_col: str | None 
             
                 # HTML Export
                 with col1:
-                    html_plot = analyzer.figure.to_html(include_plotlyjs='cdn')
-                    st.download_button(
-                        label="📿 HTML Plot",
-                        data=html_plot,
-                        file_name=f"subgroup_cox_cached.html",
-                        mime="text/html",
-                        use_container_width=True,
-                        key="download_html_cached"
-                    )
+                    if analyzer.figure is None:
+                        st.warning("Forest plot not available for export")
+                    else:
+                        html_plot = analyzer.figure.to_html(include_plotlyjs='cdn')
+                        st.download_button(
+                            label="📿 HTML Plot",
+                            data=html_plot,
+                            file_name=f"subgroup_cox_cached.html",
+                            mime="text/html",
+                            use_container_width=True,
+                            key="download_html_cached"
+                        )
             
                 # CSV Export
                 with col2:
