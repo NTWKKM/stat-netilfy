@@ -48,7 +48,9 @@ except (AttributeError, TypeError) as e:
     logger.exception("❌ Error patching firthlogist")
     HAS_FIRTH = False
 
-warnings.filterwarnings("ignore")
+# Suppress specific convergence warnings from statsmodels
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="statsmodels")
+warnings.filterwarnings("ignore", message=".*convergence.*")
 
 def clean_numeric_value(val):
     """Normalize a value into a numeric float suitable for analysis."""
