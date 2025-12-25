@@ -16,10 +16,7 @@ from plotly.subplots import make_subplots
 import streamlit as st
 from logger import get_logger
 from tabs._common import get_color_palette
-from statsmodels.formula.api import logit, glm
-from statsmodels.genmod.cov_struct import Independence
-from statsmodels.genmod.generalized_estimating_equations import GEE
-from statsmodels.genmod.families import Binomial
+from statsmodels.formula.api import logit
 import warnings
 warnings.filterwarnings('ignore')
 
