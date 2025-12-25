@@ -1022,7 +1022,7 @@ def render_forest_plot_in_streamlit(
                 st.download_button(
                     label='📥 Download (CSV)',
                     data=csv,
-                    file_name=f'{title.lower().replace(" ", "_")}_data.csv',
+                    file_name=f'{_sanitize_filename(title)}_data.csv',
                     mime='text/csv',
                 )
     
