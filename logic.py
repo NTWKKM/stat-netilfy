@@ -358,8 +358,10 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                     _, p = stats.mannwhitneyu(pd.to_numeric(X_neg, errors='coerce').dropna(), pd.to_numeric(X_pos, errors='coerce').dropna())
                     res['p_comp'] = p
                     res['test_name'] = "Mann-Whitney U"
-                except: res['p_comp'], res['test_name'] = np.nan, "-"
-
+                except (ValueError, TypeError) as e:
+                    logger.debug("Mann-Whitney test failed for %s: %s", col, e)
+                    res['p_comp'], res['test_name'] = np.nan, "-"
+                    
                 data_uni = pd.DataFrame({'y': y, 'x': X_num}).dropna()
                 if not data_uni.empty and data_uni['x'].nunique() > 1:
                     params, Hex_conf, pvals, status = run_binary_logit(data_uni['y'], data_uni[['x']], method=preferred_method)
