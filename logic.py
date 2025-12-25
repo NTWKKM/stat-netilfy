@@ -161,7 +161,9 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     
     candidates = [] 
     results_db = {} 
-    sorted_cols = sorted(df.columns)
+    
+    # 🟢 FIX: Ensure all columns are strings before sorting to prevent TypeError
+    sorted_cols = sorted(df.columns.astype(str))
 
     # 🟢 TRACKING MODES & METADATA FOR MULTIVARIATE
     mode_map = {} 
@@ -172,6 +174,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     if method == 'auto':
         for col in sorted_cols:
             if col == outcome_name: continue
+            if col not in df_aligned.columns: continue
             try:
                 X_num = df_aligned[col].apply(clean_numeric_value)
                 if X_num.nunique() > 1:
@@ -188,10 +191,14 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
 
     def fmt_p(val):
         if pd.isna(val): return "-"
-        val = max(0, min(1, val))
-        if val < 0.001: return "<0.001"
-        if val > 0.999: return ">0.999"
-        return f"{val:.3f}"
+        try:
+            val = float(val)
+            val = max(0, min(1, val))
+            if val < 0.001: return "<0.001"
+            if val > 0.999: return ">0.999"
+            return f"{val:.3f}"
+        except (ValueError, TypeError):
+            return "-"
 
     or_results = {}
     
@@ -199,6 +206,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     with logger.track_time("univariate_analysis", log_level="debug"):
         for col in sorted_cols:
             if col == outcome_name: continue
+            if col not in df_aligned.columns: continue
             if df_aligned[col].isnull().all(): continue
 
             res = {'var': col}
@@ -366,7 +374,8 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 pv_chk = res.get('p_or', np.nan)
                 if isinstance(pv_chk, (int, float)): p_screen = pv_chk
             
-            if pd.notna(p_screen) and p_screen < 0.20:
+            # 🟢 Check strict float type before comparison
+            if pd.notna(p_screen) and isinstance(p_screen, (int, float)) and p_screen < 0.20:
                 candidates.append(col)
 
     # --- MULTIVARIATE ANALYSIS ---
@@ -460,7 +469,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         else:
             p_val = res.get('p_comp', np.nan) # Chi2/Mann-Whitney for single line
             p_s = fmt_p(p_val)
-            if pd.notna(p_val) and p_val < 0.05: p_s = f"<span class='sig-p'>{p_s}*</span>"
+            if pd.notna(p_val) and isinstance(p_val, (int, float)) and p_val < 0.05: p_s = f"<span class='sig-p'>{p_s}*</span>"
             p_col_display = p_s
 
         # Adjusted OR
@@ -480,7 +489,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 aor_s = f"{multi_res['aor']:.2f} ({multi_res['l']:.2f}-{multi_res['h']:.2f})"
                 ap_val = multi_res['p']
                 ap_txt = fmt_p(ap_val)
-                if pd.notna(ap_val) and ap_val < 0.05: ap_txt = f"<span class='sig-p'>{ap_txt}*</span>"
+                if pd.notna(ap_val) and isinstance(ap_val, (int, float)) and ap_val < 0.05: ap_txt = f"<span class='sig-p'>{ap_txt}*</span>"
                 ap_s = ap_txt
             
         html_rows.append(f"""
