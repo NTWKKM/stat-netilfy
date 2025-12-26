@@ -6,7 +6,7 @@ import re
 def check_data_quality(df, container):
     """
     Data Quality Checker: 
-    1. Numeric Column -> หา Text แปลกปลอม (รวมถึงค่าที่ติด <, >)
+    1. Numeric Column -> หา Text แปลกปลอม (รวมถึงค่าที่ติด <, >) และแจ้งเตือนแบบ Strict
     2. Text Column    -> หาตัวเลขหลงมา และหากลุ่มประชากรน้อยผิดปกติ (Rare Category)
     
     Format: แสดงผล 1 บรรทัดต่อ 1 Column เพื่อความเป็นระเบียบ
@@ -20,18 +20,19 @@ def check_data_quality(df, container):
         # เตรียมข้อมูลสำหรับเช็ค 2 แบบ
         original_vals = df[col].astype(str).str.strip()
         
-        # 1. Strict Check: แปลงตรงๆ (ใช้สำหรับหา Error แจ้งเตือน)
+        # 1. Strict Check: แปลงตรงๆ (ใช้สำหรับหา Error แจ้งเตือน User)
+        # ตัวนี้จะไม่ยอมรับ symbol ใดๆ เลย เพื่อให้ User เห็นความผิดปกติของข้อมูล
         numeric_strict = pd.to_numeric(df[col], errors='coerce')
         is_strict_nan = numeric_strict.isna() & (original_vals != '') & \
                         (~original_vals.str.lower().isin(['nan', 'none', '']))
         strict_nan_count = is_strict_nan.sum()
 
-        # 2. Relaxed Check: ลองลบสัญลักษณ์พิเศษออกก่อน (ใช้สำหรับตัดสิน Type)
-        # ลบ <, >, ,, % ออก (เพิ่ม % เข้ามาด้วย)
+        # 2. Relaxed Check: ลองลบสัญลักษณ์พิเศษออกก่อน (ใช้สำหรับตัดสินว่าคอลัมน์นี้เป็น Numeric ไหม)
+        # ลบ <, >, ,, % ออก เพื่อดูเนื้อในว่าเป็นตัวเลขหรือไม่
         clean_vals_for_check = original_vals.str.replace(r'[<>,%]', '', regex=True)
         numeric_relaxed = pd.to_numeric(clean_vals_for_check, errors='coerce')
         
-        # นับจำนวนข้อมูลที่ 'น่าจะเป็นตัวเลข'
+        # นับจำนวนข้อมูลที่ 'น่าจะเป็นตัวเลข' (Relaxed)
         is_relaxed_numeric = (~numeric_relaxed.isna()) & (original_vals != '') & \
                              (~original_vals.str.lower().isin(['nan', 'none', '']))
         relaxed_numeric_count = is_relaxed_numeric.sum()
@@ -44,30 +45,31 @@ def check_data_quality(df, container):
         has_inequality = original_vals.str.contains(r'[<>]', regex=True).any()
 
         # ======================================================
-        # DECISION LOGIC: เป็น Numeric หรือไม่?
+        # DECISION LOGIC: ตัดสินว่าเป็น Numeric หรือไม่?
         # ======================================================
         is_numeric_col = False
         if total_data_count > 0:
             ratio = relaxed_numeric_count / total_data_count
             
-            # เกณฑ์ใหม่:
-            # 1. ถ้ามีข้อมูล > 60% เป็นตัวเลข (ลดจาก 80%) -> Numeric
-            # 2. หรือถ้ามีเครื่องหมาย <, > (Lab Value) และมีตัวเลข > 40% -> Numeric (ช่วยเคส Lab สกปรก)
+            # ปรับเกณฑ์ (Threshold) ให้ยอมรับข้อมูลปนเปื้อนได้มากขึ้น
+            # 1. ถ้ามีข้อมูล > 60% เป็นตัวเลข (จากเดิม 80%) -> นับเป็น Numeric
+            # 2. หรือถ้ามีเครื่องหมาย <, > (Lab Value) และมีตัวเลข > 40% -> นับเป็น Numeric (ช่วยเคส Lab สกปรกมากๆ)
             if ratio > 0.6:
                 is_numeric_col = True
             elif has_inequality and ratio > 0.4:
                 is_numeric_col = True
                 
         else:
-            # Fallback เดิม (ถ้าข้อมูลว่างเยอะๆ)
+            # Fallback เดิม (ถ้าข้อมูลว่างเยอะๆ หรือไม่มีข้อมูลเลย)
             if strict_nan_count < (total_rows * 0.9):
                 is_numeric_col = True
 
         # ======================================================
-        # CASE 1: คอลัมน์นี้ควรเป็น "ตัวเลข" (Numeric)
+        # CASE 1: คอลัมน์นี้ถูกตัดสินว่าเป็น "ตัวเลข" (Numeric)
         # ======================================================
         if is_numeric_col:
-            # ใช้ Strict Check เพื่อแจ้งเตือนค่าที่ผิดปกติ (เช่น >100, 1,000)
+            # ใช้ Strict Check เพื่อแจ้งเตือนค่าที่ผิดปกติ (เช่น >100, 1,000, Cancel, Error)
+            # เราต้องการให้ User รู้ตัวว่าข้อมูลไม่สะอาด แม้เราจะแก้ให้ทีหลังก็ตาม
             if strict_nan_count > 0:
                 error_rows = df.index[is_strict_nan].tolist()
                 bad_values = df.loc[is_strict_nan, col].unique()
@@ -75,14 +77,14 @@ def check_data_quality(df, container):
                 row_str = ",".join(map(str, error_rows[:5])) + ("..." if len(error_rows) > 5 else "")
                 val_str = ",".join(map(str, bad_values[:3])) + ("..." if len(bad_values) > 3 else "")
 
-                # เพิ่มเข้า list ย่อย (แจ้งเตือนแต่ไม่แก้)
-                col_issues.append(f"Found {strict_nan_count} non-standard numeric values (e.g. with symbols <,>) at rows `{row_str}` (Values: `{val_str}`). Stats analysis will try to clean these.")
+                # แจ้งเตือน User (Strict Report)
+                col_issues.append(f"Found {strict_nan_count} non-standard values (e.g. symbols <,>, text) at rows `{row_str}` (Values: `{val_str}`). Analysis tabs will attempt to clean these automatically.")
 
         # ======================================================
         # CASE 2: คอลัมน์นี้เป็น "ข้อความ" (Categorical/Text)
         # ======================================================
         else:
-            # 2.1: เช็คว่ามี "ตัวเลข" หลงมาไหม?
+            # 2.1: เช็คว่ามี "ตัวเลข" หลงมาใน Text ไหม?
             is_numeric_in_text = (~numeric_strict.isna()) & (original_vals != '')
             numeric_in_text_count = is_numeric_in_text.sum()
             
@@ -92,9 +94,9 @@ def check_data_quality(df, container):
                 row_str = ",".join(map(str, error_rows[:5])) + ("..." if len(error_rows) > 5 else "")
                 val_str = ",".join(map(str, bad_values[:3])) + ("..." if len(bad_values) > 3 else "")
                 
-                col_issues.append(f"Found {numeric_in_text_count} numeric values at rows `{row_str}` (Values: `{val_str}`).")
+                col_issues.append(f"Found {numeric_in_text_count} numeric values inside categorical column at rows `{row_str}` (Values: `{val_str}`).")
 
-            # 2.2: เช็ค Rare Category (คำที่โผล่มาน้อยๆ)
+            # 2.2: เช็ค Rare Category (คำที่โผล่มาน้อยๆ อาจเป็น Typos)
             unique_ratio = df[col].nunique() / total_rows
             if unique_ratio < 0.8: 
                 val_counts = df[col].value_counts()
@@ -110,35 +112,34 @@ def check_data_quality(df, container):
             full_msg = " ".join(col_issues)
             warnings.append(f"**Column '{col}':** {full_msg}")
 
-    # แสดงผล
+    # แสดงผล Warning รวม
     if warnings:
-        container.warning("Data Quality Issues Detected\n\n" + "\n\n".join([f"- {w}" for w in warnings]), icon="🧐")
+        container.warning("Data Quality Issues Detected (Raw Data)\n\n" + "\n\n".join([f"- {w}" for w in warnings]), icon="🧐")
 
 def get_clean_data(df, custom_na_list=None):
     """
-    สร้างสำเนาข้อมูลที่ 'Clean' แล้วสำหรับนำไปคำนวณ
-    ปรับปรุง: พยายามแปลงเป็น Numeric ให้ฉลาดขึ้น (รองรับ <, >) เพื่อให้ Stat มองเป็น Continuous
+    สร้างสำเนาข้อมูลที่ 'Clean' แล้วสำหรับนำไปคำนวณ (Analysis Tabs จะเรียกใช้ function นี้)
+    หน้าที่: พยายามแปลง Text ปนเปื้อนให้เป็น Numeric จริงๆ เพื่อให้คำนวณ Stat ได้
     """
     df_clean = df.copy()
     total_rows = len(df_clean)
 
     for col in df_clean.columns:
-        # 1. Custom Missing
+        # 1. Handle Custom Missing Values (User defined)
         if custom_na_list:
              df_clean[col] = df_clean[col].replace(custom_na_list, np.nan)
 
-        # 2. Trim
+        # 2. Trim whitespace
         if df_clean[col].dtype == 'object':
              df_clean[col] = df_clean[col].astype(str).str.strip()
 
-        # 3. Numeric Conversion Logic (Improved)
-        # ใช้ Logic เดียวกับ check_data_quality ในการตัดสินใจเปลี่ยน Type
+        # 3. Numeric Conversion Logic (ใช้ Logic เดียวกับ check_data_quality)
         
         # ลองแปลงแบบ Clean (ลบ <, >, %)
         clean_vals = df_clean[col].astype(str).str.replace(r'[<>,%]', '', regex=True)
         numeric_relaxed = pd.to_numeric(clean_vals, errors='coerce')
         
-        # เช็คว่าควรเป็น Numeric หรือไม่
+        # เช็คว่าควรเป็น Numeric หรือไม่ (Decision Logic)
         original_vals = df_clean[col].astype(str)
         non_empty_mask = (original_vals != '') & (~original_vals.str.lower().isin(['nan', 'none']))
         total_data_count = non_empty_mask.sum()
@@ -148,7 +149,7 @@ def get_clean_data(df, custom_na_list=None):
         is_numeric_col = False
         if total_data_count > 0:
              ratio = relaxed_numeric_count / total_data_count
-             # ใช้เกณฑ์เดียวกับ check_data_quality (0.6 หรือ 0.4+symbol)
+             # ใช้เกณฑ์ 0.6 หรือ 0.4+symbol เหมือนกับ check_data_quality
              if ratio > 0.6: 
                  is_numeric_col = True
              elif has_inequality and ratio > 0.4:
@@ -160,7 +161,7 @@ def get_clean_data(df, custom_na_list=None):
 
         if is_numeric_col:
              # ถ้าตัดสินว่าเป็น Numeric -> ใช้ค่าที่ Clean แล้ว (แปลง >100 เป็น 100.0)
-             # ค่าที่แปลงไม่ได้จะเป็น NaN
+             # ค่าที่แปลงไม่ได้ (เช่น 'Cancel', 'Error') จะกลายเป็น NaN โดยอัตโนมัติ (Missing)
              df_clean[col] = numeric_relaxed
         
     return df_clean
@@ -184,7 +185,7 @@ def render(df):
     st.write("") 
     st.write("") 
     
-    # Editor
+    # Editor แสดงข้อมูลดิบ (User แก้ไขได้ แต่ Auto-correct จะไม่ทำงานที่นี่)
     df_display = df.astype(str).replace('nan', '')
     edited_df = st.data_editor(
         df_display, 
@@ -194,7 +195,7 @@ def render(df):
         key='editor_raw'
     )
 
-    # Check Quality
+    # ตรวจสอบคุณภาพข้อมูลและแจ้งเตือน (Strict Report)
     check_data_quality(edited_df, warning_container)
     
     # Save State
