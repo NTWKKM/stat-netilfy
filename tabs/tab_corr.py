@@ -8,14 +8,6 @@ from typing import List, Tuple
 def _get_dataset_for_correlation(df: pd.DataFrame):
     """
     Choose and return the dataset to use for correlation analysis (original or matched).
-    
-    If a matched dataset is present in Streamlit's session_state, presents a radio control allowing the user to select either the original DataFrame or the matched DataFrame; otherwise selects the original DataFrame. The returned label describes which dataset was chosen and includes the row count.
-    
-    Parameters:
-        df (pd.DataFrame): The original input DataFrame.
-    
-    Returns:
-        tuple: (selected_df, label_str) where `selected_df` is the DataFrame chosen for analysis and `label_str` is a short human-readable label (e.g., "✅ Matched Data (123 rows)" or "📊 Original Data (100 rows)").
     """
     has_matched = (
         st.session_state.get("is_matched", False)
@@ -46,18 +38,19 @@ def _get_dataset_for_correlation(df: pd.DataFrame):
     return selected_df, label
 
 
-def render(df):
+def render(df, var_meta=None):
     """
     Render the Correlation & ICC section UI in Streamlit.
-    
-    Displays three subtabs for continuous-variable analyses: (1) Pearson/Spearman correlation between two selected variables with a scatter plot and statistics, (2) Intraclass Correlation Coefficient (ICC) reliability analysis for 2+ numeric columns, and (3) a reference & interpretation guide. Generated HTML reports are stored in st.session_state under 'html_output_corr_cont' and 'html_output_icc'.
-    
-    Parameters:
-        df (pandas.DataFrame): Input dataset whose columns populate selectors and whose data are used for the analyses.
-    
-    Side effects:
-        Renders Streamlit controls, informational text, analysis results, and plots; writes HTML reports to st.session_state keys 'html_output_corr_cont' and 'html_output_icc'.
+    Modified to accept var_meta to fix TypeError.
     """
+    # Handle var_meta if None
+    if var_meta is None:
+        var_meta = {}
+
+    # Helper to get label
+    def get_label(col):
+        return var_meta.get(col, {}).get('label', col)
+
     st.subheader("🎯 Correlation & ICC")
     
     # 🟢 NEW: Display matched data status
@@ -69,7 +62,7 @@ def render(df):
     st.write(f"**Using:** {corr_label}")
     st.write(f"**Rows:** {len(corr_df)} | **Columns:** {len(corr_df.columns)}")
     
-    # 🟢 REORGANIZED: 3 subtabs (removed Chi-Square, added ICC)
+    # 🟢 REORGANIZED: 3 subtabs
     sub_tab1, sub_tab2, sub_tab3 = st.tabs([
         "📉 Pearson/Spearman (Continuous Correlation)", 
         "📏 Reliability (ICC)",
@@ -77,8 +70,11 @@ def render(df):
     ])
     
     all_cols = corr_df.columns.tolist()
-    if not all_cols:
-        st.warning("No columns available for correlation analysis.")
+    # Filter only numeric for correlation to avoid errors
+    numeric_cols = corr_df.select_dtypes(include=[float, int, np.number]).columns.tolist()
+    
+    if not numeric_cols:
+        st.warning("No numeric columns available for correlation analysis.")
         return
 
     # ==================================================
@@ -91,29 +87,22 @@ def render(df):
 
     * **Pearson (r):** Assesses **linear** correlation; best for normally distributed data.
     * **Spearman (rho):** Assesses **monotonic** (directional) correlation; best for non-normal data or ranks/outliers.
-    
-    **Interpretation of Coefficient (r/rho):**
-    * **Close to +1:** Strong positive association (Both variables increase together).
-    * **Close to -1:** Strong negative association (One increases as the other decreases).
-    * **Close to 0:** Weak or no association.
-    
-    **X/Y Axis (for Plotting):**
-    * The coefficient (r/rho) is **symmetrical** (X,Y is the same as Y,X).
-    * For visual clarity, the **Predictor (Independent)** should be on the **X-axis** and the **Outcome (Dependent)** on the **Y-axis**.
         """)
         
         c1, c2, c3 = st.columns(3)
         cm = c1.selectbox("Correlation Coefficient:", ["Pearson", "Spearman"], key='coeff_type_tab')
         
-        # 🟢 UPDATE: Auto-select default continuous variables
+        # Auto-select default continuous variables
         cv1_default_name = 'Lab_HbA1c'
         cv2_default_name = 'Lab_Glucose'
         
-        cv1_idx = next((i for i, c in enumerate(all_cols) if c == cv1_default_name), 0)
-        cv2_idx = next((i for i, c in enumerate(all_cols) if c == cv2_default_name), min(1, len(all_cols)-1))
+        # Use numeric_cols instead of all_cols for safety
+        cv1_idx = next((i for i, c in enumerate(numeric_cols) if c == cv1_default_name), 0)
+        cv2_idx = next((i for i, c in enumerate(numeric_cols) if c == cv2_default_name), min(1, len(numeric_cols)-1))
         
-        cv1 = c2.selectbox("Variable 1 (X-axis):", all_cols, index=cv1_idx, key='cv1_corr_tab')
-        cv2 = c3.selectbox("Variable 2 (Y-axis):", all_cols, index=cv2_idx, key='cv2_corr_tab')
+        # Added format_func=get_label to show readable names
+        cv1 = c2.selectbox("Variable 1 (X-axis):", numeric_cols, index=cv1_idx, key='cv1_corr_tab', format_func=get_label)
+        cv2 = c3.selectbox("Variable 2 (Y-axis):", numeric_cols, index=cv2_idx, key='cv2_corr_tab', format_func=get_label)
         
         run_col_cont, dl_col_cont = st.columns([1, 1])
         if 'html_output_corr_cont' not in st.session_state: st.session_state.html_output_corr_cont = None
@@ -123,21 +112,18 @@ def render(df):
                 st.error("Please select different variables.")
             else:
                 m_key = 'pearson' if cm == 'Pearson' else 'spearman'
-                # res: dict with keys (Method, Coefficient, P-value, N), err: str, fig: Plotly Figure
-                # 🟢 UPDATED: Use corr_df (selected dataset) instead of df
                 res, err, fig = correlation.calculate_correlation(corr_df, cv1, cv2, method=m_key)
         
                 if err: 
                     st.error(err)
                 else:
-                    # 🟢 FIX: res is dict, convert to DataFrame for table display
                     rep = [
                         {'type':'text', 'data':f"Method: {res['Method']}"},
-                        {'type':'text', 'data':f"Variables: {cv1} vs {cv2}"},
+                        {'type':'text', 'data':f"Variables: {get_label(cv1)} vs {get_label(cv2)}"},
                         {'type':'table', 'header':'Statistics', 'data':pd.DataFrame([res])}, 
                         {'type':'plot', 'header':'Scatter Plot', 'data':fig}
                     ]
-                    html = correlation.generate_report(f"Corr: {cv1} vs {cv2}", rep)
+                    html = correlation.generate_report(f"Corr: {get_label(cv1)} vs {get_label(cv2)}", rep)
                     st.session_state.html_output_corr_cont = html
                     st.components.v1.html(html, height=600, scrolling=True)
 
@@ -148,26 +134,13 @@ def render(df):
                 st.button("📥 Download Report", disabled=True, key='ph_btn_corr_cont')
 
     # ==================================================
-    # SUB-TAB 2: Reliability (ICC) - MOVED FROM Tab 4
+    # SUB-TAB 2: Reliability (ICC)
     # ==================================================
     with sub_tab2:
         st.markdown("##### Reliability Analysis (Intraclass Correlation Coefficient - ICC)")
         st.info("""
             **💡 Guide:** Evaluates the reliability/agreement between 2 or more raters/methods for **Numeric/Continuous** variables.
-            
-            **ICC Types (Most Common):**
-            * **ICC(2,1) Absolute Agreement:** Use when you care if the absolute scores are the same (e.g., Method A vs Method B must produce same values).
-            * **ICC(3,1) Consistency:** Use when you care if the ranking is consistent, even if absolute scores differ (e.g., systematic bias OK, just need same ranking).
-            
-            **Interpretation of ICC:**
-            * **< 0.5:** Poor reliability
-            * **0.5 - 0.75:** Moderate reliability
-            * **0.75 - 0.9:** Good reliability
-            * **> 0.9:** Excellent reliability
         """)
-        
-        # 🟢 Auto-select numeric columns only (from corr_df)
-        numeric_cols = corr_df.select_dtypes(include="number").columns.tolist()
         
         # Auto-select columns with 'measurement', 'rater', 'machine', 'score', 'read' in name
         default_icc_cols = [c for c in numeric_cols if any(k in c.lower() for k in ['measure', 'machine', 'rater', 'read', 'icc'])]
@@ -179,6 +152,7 @@ def render(df):
             numeric_cols, 
             default=default_icc_cols, 
             key='icc_vars_corr',
+            format_func=get_label, # Use var_meta labels
             help="Select 2 or more numeric columns representing different raters/methods measuring the same construct."
         )
         
@@ -190,14 +164,14 @@ def render(df):
             if len(icc_cols) < 2:
                 st.error("❌ Please select at least 2 numeric columns for ICC calculation.")
                 st.stop()
-            # 🟢 UPDATED: Use corr_df (selected dataset) instead of df
+
             res_df, err, anova_df = diag_test.calculate_icc(corr_df, icc_cols)
             
             if err:
                 st.error(err)
             else:
                 rep_elements = [
-                    {'type': 'text', 'data': f"ICC Analysis: {', '.join(icc_cols)}"},
+                    {'type': 'text', 'data': f"ICC Analysis: {', '.join([get_label(c) for c in icc_cols])}"},
                     {'type': 'table', 'header': 'ICC Results (Single Measures)', 'data': res_df},
                     {'type': 'table', 'header': 'ANOVA Table (Reference)', 'data': anova_df}
                 ]
@@ -225,13 +199,7 @@ def render(df):
         | **Pearson** | 2 continuous | Linear relationship | Age vs Blood Pressure |
         | **Spearman** | 2 continuous | Monotonic relationship (rank-based) | Severity score vs Hospital Stay |
         | **ICC** | 2+ continuous | Reliability/agreement between raters/methods | Agreement between 2 doctors rating images |
-        
-        **Key Differences:**
-        - **Correlation (r/rho)** = Association strength between TWO variables
-        - **ICC** = Agreement strength between 2+ RATERS/METHODS measuring same thing
         """)
-        
-        st.markdown("### Interpretation Guide")
         
         col1, col2 = st.columns(2)
         
@@ -257,6 +225,4 @@ def render(df):
         
         st.markdown("""---
         **📝 Note:** Chi-Square test (for categorical association) has been moved to **Tab 4: Diagnostic Tests (ROC)**.
-        
-        **✨ NEW:** Can now analyze both Original and Matched datasets!
         """)
