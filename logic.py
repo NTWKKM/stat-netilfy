@@ -32,7 +32,7 @@ try:
             Compatibility shim that restores sklearn-style data validation expected by FirthLogisticRegression.
             
             Validates the provided input arrays using sklearn's check utilities. If `y` is None, returns the validated feature array for `X`; otherwise returns the validated `(X, y)` pair. Additional validation options may be passed via `**check_params`. The parameters `reset` and `validate_separately` are accepted to match the original signature and may be forwarded to the underlying validators when applicable.
-             
+              
             Parameters:
                 X: array-like
                     Feature data to validate.
@@ -122,24 +122,27 @@ def run_binary_logit(y, X, method='default'):
             - 'firth': Firth-penalized logistic regression (requires optional dependency).
     
     Returns:
-        params (pd.Series or None): Estimated coefficients indexed by predictor names (including intercept), or `None` on failure.
-        conf_int (pd.DataFrame or None): Two-column DataFrame of confidence interval bounds indexed by predictor names, or `None` on failure.
-        pvalues (pd.Series or None): Two-sided p-values for coefficients indexed by predictor names, or `None` on failure.
-        status (str): `"OK"` on success; otherwise an error message describing the failure.
+        params (pd.Series or None): Estimated coefficients indexed by predictor names (including intercept).
+        conf_int (pd.DataFrame or None): Two-column DataFrame of confidence interval bounds.
+        pvalues (pd.Series or None): Two-sided p-values for coefficients.
+        status (str): "OK" on success; otherwise an error message.
+        stats_metrics (dict): Dictionary containing model fit statistics (McFadden R2, Nagelkerke R2).
     """
+    stats_metrics = {"mcfadden": np.nan, "nagelkerke": np.nan}
+    
     try:
         X_const = sm.add_constant(X, has_constant='add')
         
         if method == 'firth':
             if not HAS_FIRTH:
-                return None, None, None, "Library 'firthlogist' not installed."
+                return None, None, None, "Library 'firthlogist' not installed.", stats_metrics
             
             fl = FirthLogisticRegression(fit_intercept=False) 
             fl.fit(X_const, y)
             
             coef = np.asarray(fl.coef_).reshape(-1)
             if coef.shape[0] != len(X_const.columns):
-                return None, None, None, "Firth output shape mismatch."
+                return None, None, None, "Firth output shape mismatch.", stats_metrics
             params = pd.Series(coef, index=X_const.columns)
             pvalues = pd.Series(getattr(fl, "pvals_", np.full(len(X_const.columns), np.nan)), index=X_const.columns)
             ci = getattr(fl, "ci_", None)
@@ -148,32 +151,42 @@ def run_binary_logit(y, X, method='default'):
                 if ci is not None
                 else pd.DataFrame(np.nan, index=X_const.columns, columns=[0, 1])
             )
-            return params, conf_int, pvalues, "OK"
+            return params, conf_int, pvalues, "OK", stats_metrics
 
         elif method == 'bfgs':
-            model = sm.Logit(y, X_const).fit(method='bfgs', maxiter=100, disp=0)
+            model = sm.Logit(y, X_const)
+            result = model.fit(method='bfgs', maxiter=100, disp=0)
         else:
-            model = sm.Logit(y, X_const).fit(disp=0)
+            model = sm.Logit(y, X_const)
+            result = model.fit(disp=0)
             
-        return model.params, model.conf_int(), model.pvalues, "OK"
+        # 🟢 Calculate R-squared metrics for Standard Logistic Regression
+        try:
+            llf = result.llf
+            llnull = result.llnull
+            nobs = result.nobs
+            
+            # McFadden R2
+            mcfadden = 1 - (llf / llnull) if llnull != 0 else np.nan
+            
+            # Nagelkerke R2
+            cox_snell = 1 - np.exp((2/nobs) * (llnull - llf))
+            max_r2 = 1 - np.exp((2/nobs) * llnull)
+            nagelkerke = cox_snell / max_r2 if max_r2 > 1e-9 else np.nan
+            
+            stats_metrics = {"mcfadden": mcfadden, "nagelkerke": nagelkerke}
+        except Exception as e:
+            logger.debug(f"Failed to calculate R2 metrics: {e}")
+        
+        return result.params, result.conf_int(), result.pvalues, "OK", stats_metrics
         
     except Exception as e:
         logger.exception("Logistic regression failed")
-        return None, None, None, str(e)
+        return None, None, None, str(e), stats_metrics
 
 def get_label(col_name, var_meta):
     """
     Create an HTML-formatted label for a column name, optionally including a secondary metadata label.
-    
-    Parameters:
-        col_name (str): The column identifier to be displayed.
-        var_meta (dict or None): Optional mapping of variable keys to metadata. If a metadata entry for
-            the column (or for the suffix after an underscore) contains a 'label' key, that value is
-            rendered as a secondary, smaller gray label beneath the main name.
-    
-    Returns:
-        html_label (str): HTML string with the main name wrapped in `<b>` and an optional secondary
-            label in a smaller, muted `<span>`. Values are HTML-escaped.
     """
     display_name = col_name 
     secondary_label = ""
@@ -198,23 +211,6 @@ def get_label(col_name, var_meta):
 def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     """
     Generate an HTML report and effect estimates from univariate and multivariate logistic analyses for a binary outcome.
-    
-    Parameters:
-        outcome_name (str): Column name of the binary outcome in `df`.
-        df (pandas.DataFrame): Dataset containing the outcome and predictors.
-        var_meta (dict, optional): Optional metadata per variable (labels, type hints, mapping). Keys may be full column names or short names; recognised `type` values influence mode selection (e.g., 'categorical', 'linear').
-        method (str, optional): Estimation method hint — 'auto' (choose automatically), 'firth' (Firth penalized likelihood, used only if available), 'bfgs' or 'default' (statsmodels optimization).
-    
-    Returns:
-        tuple:
-            html_table (str): Complete HTML string containing a tabular report with descriptive statistics, crude ORs (and p-values), and adjusted ORs (aOR) when multivariate models were fit.
-            or_results (dict): Univariate effect dictionary keyed by variable or "var: level vs ref" with entries {'or', 'ci_low', 'ci_high', 'p_value'} when available.
-            aor_results (dict): Multivariate adjusted-effect dictionary keyed similarly with entries {'aor', 'ci_low', 'ci_high', 'p_value'} when available.
-    
-    Notes:
-        - The function auto-detects per-variable mode ("categorical" vs "linear") but `var_meta` can override via the `type` hint.
-        - Screening for multivariate inclusion uses the comparison test p-value (chi-square or Mann-Whitney) with a threshold of 0.20; only complete-case predictors are used in the multivariate model.
-        - If `method='auto'`, the implementation prefers Firth logistic when available for small samples or suspected perfect separation; otherwise falls back to statsmodels fitting.
     """
     
     logger.log_analysis(analysis_type="Logistic Regression", outcome=outcome_name, n_vars=len(df.columns) - 1, n_samples=len(df))
@@ -271,15 +267,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     elif method == 'default': preferred_method = 'default'
 
     def fmt_p(val):
-        """
-        Format a p-value (or p-value-like input) for compact display.
-        
-        Parameters:
-            val: A numeric p-value or value convertible to float; may be NaN or non-numeric.
-        
-        Returns:
-            str: "-" if the input is missing or cannot be converted to a number; "<0.001" if 0 <= value < 0.001; ">0.999" if 0.999 < value <= 1; otherwise the value rounded to three decimal places (e.g., "0.123").
-        """
         if pd.isna(val): return "-"
         try:
             val = float(val)
@@ -293,18 +280,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     or_results = {}
 
     def count_val(series, v_str):
-        """
-        Count how many elements in a Series equal a target string after normalizing numeric-like values.
-        
-        Normalization: each element is converted to a string; if that string represents a number containing at most one decimal point, a trailing `.0` is removed (e.g., `2.0` -> `2`). Comparison is performed against `v_str` after this normalization.
-        
-        Parameters:
-            series (pandas.Series): Series of values to compare; values will be stringified and normalized as described.
-            v_str (str): Target string to match against normalized element strings.
-        
-        Returns:
-            int: Number of elements equal to `v_str` after normalization.
-        """
         return (series.astype(str).apply(lambda x: x.replace('.0','') if x.replace('.','',1).isdigit() else x) == v_str).sum()
         
     # --- UNIVARIATE ANALYSIS LOOP ---
@@ -414,7 +389,8 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                         dummy_cols.append(d_name)
                     
                     if dummy_cols and temp_df[dummy_cols].std().sum() > 0:
-                        params, conf, pvals, status = run_binary_logit(temp_df['y'], temp_df[dummy_cols], method=preferred_method)
+                        # 🟢 Call site updated: unpack 5 values (ignore stats for univariate)
+                        params, conf, pvals, status, _ = run_binary_logit(temp_df['y'], temp_df[dummy_cols], method=preferred_method)
                         if status == "OK":
                             or_lines, p_lines = ["Ref."], ["-"]
                             for lvl in levels[1:]:
@@ -460,7 +436,8 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                     
                 data_uni = pd.DataFrame({'y': y, 'x': X_num}).dropna()
                 if not data_uni.empty and data_uni['x'].nunique() > 1:
-                    params, Hex_conf, pvals, status = run_binary_logit(data_uni['y'], data_uni[['x']], method=preferred_method)
+                    # 🟢 Call site updated: unpack 5 values
+                    params, Hex_conf, pvals, status, _ = run_binary_logit(data_uni['y'], data_uni[['x']], method=preferred_method)
                     if status == "OK" and 'x' in params:
                         odd = np.exp(params['x'])
                         ci_l, ci_h = np.exp(Hex_conf.loc['x'][0]), np.exp(Hex_conf.loc['x'][1])
@@ -487,16 +464,11 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     # --- MULTIVARIATE ANALYSIS ---
     with logger.track_time("multivariate_analysis"):
         aor_results = {}
+        mv_metrics_text = ""  # For R-squared storage
 
         def _is_candidate_valid(col: str) -> bool:
             """
             Determine whether a column has enough valid observations to be considered for multivariable modeling.
-            
-            Parameters:
-                col (str): Name of the column in the aligned DataFrame.
-            
-            Returns:
-                bool: `True` if the column has more than five valid observations, `False` otherwise. For columns treated as categorical, "valid" means non-missing entries; for columns treated as linear, "valid" means entries that can be interpreted as numeric.
             """
             mode = mode_map.get(col, "linear")
             series = df_aligned[col]
@@ -530,9 +502,20 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             predictors = [col for col in multi_data.columns if col != 'y']
 
             if not multi_data.empty and final_n_multi > 10 and len(predictors) > 0:
-                params, conf, pvals, status = run_binary_logit(multi_data['y'], multi_data[predictors], method=preferred_method)
+                # 🟢 Call site updated: Capture mv_stats
+                params, conf, pvals, status, mv_stats = run_binary_logit(multi_data['y'], multi_data[predictors], method=preferred_method)
                 
                 if status == "OK":
+                    # ⭐ Format R-squared strings
+                    r2_parts = []
+                    mcf = mv_stats.get('mcfadden')
+                    nag = mv_stats.get('nagelkerke')
+                    if pd.notna(mcf): r2_parts.append(f"McFadden R² = {mcf:.3f}")
+                    if pd.notna(nag): r2_parts.append(f"Nagelkerke R² = {nag:.3f}")
+                    
+                    if r2_parts:
+                         mv_metrics_text = " | ".join(r2_parts)
+
                     for var in cand_valid:
                         mode = mode_map.get(var, 'linear')
                         
@@ -558,6 +541,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                                 pv = pvals[var]
                                 results_db[var]['multi_res'] = {'aor': aor, 'l': ci_low, 'h': ci_high, 'p': pv}
                                 aor_results[var] = {'aor': aor, 'ci_low': ci_low, 'ci_high': ci_high, 'p_value': pv}
+
     # --- HTML BUILD ---
     html_rows = []
     current_sheet = ""
@@ -565,15 +549,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     
     # ✅ FIX: Grouping logic to prevent sorting error
     def _get_sheet_name(col_name):
-        """
-        Extract the sheet (group) name prefix from a column identifier.
-        
-        Parameters:
-            col_name (str): Column name that may contain a sheet prefix followed by an underscore.
-        
-        Returns:
-            str: The substring before the first underscore if present, otherwise "Variables".
-        """
         return col_name.split('_')[0] if '_' in col_name else "Variables"
         
     grouped_cols = sorted(valid_cols_for_html, key=lambda x: (_get_sheet_name(x), x))
@@ -650,6 +625,11 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     
     logger.info("✅ Logistic analysis done (n_multi=%d)", final_n_multi)
     
+    # ⭐ ADD METRICS TO HTML
+    model_fit_html = ""
+    if mv_metrics_text:
+        model_fit_html = f"<div style='margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ccc; color: {COLORS['primary_dark']};'><b>Model Fit:</b> {mv_metrics_text}</div>"
+
     html_table = f"""
     <div id='{outcome_name}' class='table-container'>
     <div class='outcome-title'>Outcome: {outcome_name} (Total n={total_n})</div>
@@ -675,6 +655,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             <b>Modes:</b> 
             📊 Categorical (All Levels vs Reference) | 
             📉 Linear (Per-unit Trend)
+            {model_fit_html}
         </div>
     </div>
     </div><br>
@@ -685,14 +666,6 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
 def generate_forest_plot_html(or_results, aor_results, plot_title="Forest Plots: Odds Ratios"):
     """
     Builds HTML containing forest plots (and interpretation) for provided univariate and multivariate odds-ratio results.
-    
-    Parameters:
-        or_results (dict): Mapping of variable name -> result dict containing keys at minimum 'or', 'ci_low', 'ci_high', and 'p_value' for univariate (crude) estimates.
-        aor_results (dict): Mapping of variable name -> result dict containing keys at minimum 'aor', 'ci_low', 'ci_high', and 'p_value' for multivariate (adjusted) estimates.
-        plot_title (str): Title displayed above the plots.
-    
-    Returns:
-        html (str): An HTML fragment including the plot(s) (if any) and a short interpretation block, or a message indicating no results for plotting.
     """
     html_parts = [f"<h2 style='margin-top:30px; color:{COLORS['primary']};'>{plot_title}</h2>"]
     has_plot = False
@@ -724,17 +697,6 @@ def generate_forest_plot_html(or_results, aor_results, plot_title="Forest Plots:
 def process_data_and_generate_html(df, target_outcome, var_meta=None, method='auto'):
     """
     Builds a standalone HTML document containing logistic regression results and corresponding forest plots for a specified binary outcome.
-    
-    Parameters:
-        df (pandas.DataFrame): Source dataset containing the outcome column and predictors.
-        target_outcome (str): Column name of the binary outcome to analyze.
-        var_meta (dict, optional): Variable metadata (labels, types, overrides) used to influence display and mode detection. Keys are column names.
-        method (str, optional): Regression method selector; 'auto' (default) lets the analysis choose, other supported values include 'bfgs', 'firth', and 'default'.
-    
-    Returns:
-        full_html (str): Complete HTML document including embedded CSS, the analysis table, forest plots, and footer.
-        or_res (dict): Univariate (crude) effect results keyed by variable/level containing odds ratios, confidence intervals, p-values, and descriptive summaries.
-        aor_res (dict): Multivariate (adjusted) effect results keyed by variable/level with adjusted odds ratios, confidence intervals, p-values, and related metadata.
     """
     css = f"""<style>
         body {{ font-family: 'Segoe UI', sans-serif; padding: 20px; background-color: #f4f6f8; }}
