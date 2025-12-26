@@ -150,7 +150,7 @@ def render(df):
 
     # สร้าง container สำหรับเลือกหน้า
     if total_pages > 1:
-        c1, c2, c3 = st.columns([1, 2, 8])
+        c1, c2, _ = st.columns([1, 2, 8])
         with c1:
             page = st.number_input("Page", min_value=1, max_value=total_pages, value=1, step=1)
         with c2:
