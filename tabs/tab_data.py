@@ -145,7 +145,7 @@ def render(df):
     st.write("") 
 
     # --- ⚡ PAGINATION LOGIC ---
-    batch_size = 100
+    batch_size = 600
     total_rows = len(df)
     total_pages = math.ceil(total_rows / batch_size) if total_rows > 0 else 1
 
