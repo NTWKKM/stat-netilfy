@@ -27,8 +27,8 @@ def check_data_quality(df, container):
         strict_nan_count = is_strict_nan.sum()
 
         # 2. Relaxed Check: ลองลบสัญลักษณ์พิเศษออกก่อน (ใช้สำหรับตัดสิน Type)
-        # ลบ <, >, และ , ออก
-        clean_vals_for_check = original_vals.str.replace(r'[<>,]', '', regex=True)
+        # ลบ <, >, ,, % ออก (เพิ่ม % เข้ามาด้วย)
+        clean_vals_for_check = original_vals.str.replace(r'[<>,%]', '', regex=True)
         numeric_relaxed = pd.to_numeric(clean_vals_for_check, errors='coerce')
         
         # นับจำนวนข้อมูลที่ 'น่าจะเป็นตัวเลข'
@@ -40,16 +40,26 @@ def check_data_quality(df, container):
         non_empty_mask = (original_vals != '') & (~original_vals.str.lower().isin(['nan', 'none', '']))
         total_data_count = non_empty_mask.sum()
 
+        # ตรวจสอบว่ามีเครื่องหมาย < หรือ > หรือไม่ (เป็นเอกลักษณ์ของ Lab Value)
+        has_inequality = original_vals.str.contains(r'[<>]', regex=True).any()
+
         # ======================================================
         # DECISION LOGIC: เป็น Numeric หรือไม่?
         # ======================================================
-        # เกณฑ์ใหม่: ถ้าข้อมูลที่มีอยู่เกิน 80% สามารถแปลงเป็นตัวเลขได้ (แบบ Relaxed) -> นับเป็น Numeric
-        # หรือถ้าไม่มีข้อมูลเลย (total_data_count == 0) ให้ใช้เกณฑ์เดิม (strict < 90%)
         is_numeric_col = False
         if total_data_count > 0:
-            if (relaxed_numeric_count / total_data_count) > 0.8:
+            ratio = relaxed_numeric_count / total_data_count
+            
+            # เกณฑ์ใหม่:
+            # 1. ถ้ามีข้อมูล > 60% เป็นตัวเลข (ลดจาก 80%) -> Numeric
+            # 2. หรือถ้ามีเครื่องหมาย <, > (Lab Value) และมีตัวเลข > 40% -> Numeric (ช่วยเคส Lab สกปรก)
+            if ratio > 0.6:
                 is_numeric_col = True
+            elif has_inequality and ratio > 0.4:
+                is_numeric_col = True
+                
         else:
+            # Fallback เดิม (ถ้าข้อมูลว่างเยอะๆ)
             if strict_nan_count < (total_rows * 0.9):
                 is_numeric_col = True
 
@@ -73,7 +83,6 @@ def check_data_quality(df, container):
         # ======================================================
         else:
             # 2.1: เช็คว่ามี "ตัวเลข" หลงมาไหม?
-            # ใช้ Strict Check เพราะถ้าเป็น Text จริงๆ ไม่ควรมีตัวเลขเพียวๆ
             is_numeric_in_text = (~numeric_strict.isna()) & (original_vals != '')
             numeric_in_text_count = is_numeric_in_text.sum()
             
@@ -125,8 +134,8 @@ def get_clean_data(df, custom_na_list=None):
         # 3. Numeric Conversion Logic (Improved)
         # ใช้ Logic เดียวกับ check_data_quality ในการตัดสินใจเปลี่ยน Type
         
-        # ลองแปลงแบบ Clean (ลบ <, >)
-        clean_vals = df_clean[col].astype(str).str.replace(r'[<>,]', '', regex=True)
+        # ลองแปลงแบบ Clean (ลบ <, >, %)
+        clean_vals = df_clean[col].astype(str).str.replace(r'[<>,%]', '', regex=True)
         numeric_relaxed = pd.to_numeric(clean_vals, errors='coerce')
         
         # เช็คว่าควรเป็น Numeric หรือไม่
@@ -134,10 +143,15 @@ def get_clean_data(df, custom_na_list=None):
         non_empty_mask = (original_vals != '') & (~original_vals.str.lower().isin(['nan', 'none']))
         total_data_count = non_empty_mask.sum()
         relaxed_numeric_count = (~numeric_relaxed.isna() & non_empty_mask).sum()
+        has_inequality = original_vals.str.contains(r'[<>]', regex=True).any()
         
         is_numeric_col = False
         if total_data_count > 0:
-             if (relaxed_numeric_count / total_data_count) > 0.8: # เกณฑ์ 80%
+             ratio = relaxed_numeric_count / total_data_count
+             # ใช้เกณฑ์เดียวกับ check_data_quality (0.6 หรือ 0.4+symbol)
+             if ratio > 0.6: 
+                 is_numeric_col = True
+             elif has_inequality and ratio > 0.4:
                  is_numeric_col = True
         else:
              # Fallback เดิม
