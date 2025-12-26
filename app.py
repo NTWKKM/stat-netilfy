@@ -33,8 +33,8 @@ def _init_logging() -> bool:
 
 _init_logging()
 
-#Get logger instance (after configuration)
-#logger = get_logger(__name__)
+# Get logger instance (after configuration)
+logger = get_logger(__name__)
 
 #st.title(f"🏥 {CONFIG.get('ui.page_title', 'Medical Statistical Tool')}")
 
