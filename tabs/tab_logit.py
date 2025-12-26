@@ -13,7 +13,14 @@ logger = get_logger(__name__)
 
 def check_perfect_separation(df, target_col):
     """
-    Identify predictor columns that may cause perfect separation with the specified target.
+    Check which predictor columns may cause perfect separation with a binary target.
+    
+    Parameters:
+        df (pd.DataFrame): Dataset containing the target and predictor columns.
+        target_col (str): Name of the binary target column to evaluate.
+    
+    Returns:
+        list[str]: Column names of predictors that are flagged as risky for perfect separation (i.e., at least one cell in the predictor×target contingency table is zero). If the target is not binary or an error occurs, returns an empty list.
     """
     risky_vars = []
     try:
@@ -34,7 +41,10 @@ def check_perfect_separation(df, target_col):
 # 🟢 NEW: Helper function to select dataset
 def _get_dataset_for_analysis(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     """
-    Choose between the original and a propensity-score matched dataset for analysis.
+    Selects which DataFrame to use for analysis, preferring a propensity-score matched dataset when available.
+    
+    Returns:
+        tuple[pd.DataFrame, str]: The selected DataFrame and a label describing the data source and row count (e.g., "✅ Matched Data (123 rows)" or "📊 Original Data (456 rows)").
     """
     has_matched = st.session_state.get('is_matched', False) and st.session_state.get('df_matched') is not None
     
@@ -353,7 +363,14 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame) -> None:
 
 def render(df, var_meta):
     """
-    Render the "4. Logistic Regression Analysis" section in a Streamlit app.
+    Render the "4. Logistic Regression Analysis" section of the Streamlit app.
+    
+    Creates three subtabs for Binary Logistic Regression, Subgroup Analysis, and Reference & Interpretation,
+    and wires UI controls, analysis execution, plotting, and export features for logistic regression workflows.
+    
+    Parameters:
+        df (pandas.DataFrame): The dataset available for analysis (original or matched dataset is selectable via session state).
+        var_meta (dict): Variable metadata that guides auto-detection and reporting modes (e.g., categorical vs. linear handling for variables).
     """
     st.subheader("📰 Logistic Regression Analysis")
     
