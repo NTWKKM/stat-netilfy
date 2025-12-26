@@ -239,7 +239,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                 key='chi_v2_pos_diag',
             )
         
-        # 🛑 จุดที่เพิ่ม 1: ถ้าเลือกไม่ได้ (เป็น None) ให้หยุดทำงาน อย่าฝืนคำนวณต่อ
+        # 📊 จุดที่เพิ่ม 1: ถ้าเลือกไม่ได้ (เป็น None) ให้หยุดทำงาน อย่างฝืน
         inputs_ok = not (v1_pos_label is None or v2_pos_label is None)
         if not inputs_ok:
             st.warning("Chi-Square disabled: one of the selected columns has no non-null values.")
@@ -257,7 +257,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
             # --- 🟢 จุดที่ 3 เพิ่มตรงนี้ครับ ---
             # CodeRabbit เตือนว่า selectbox คืนค่าเป็น String (เช่น "1") 
             # แต่ในตารางอาจเป็น Int (เช่น 1) ทำให้เทียบกันไม่ติด
-            # เราจึงต้องสร้างตารางจำลอง (df_calc) และแปลงข้อมูลเป็น String ก่อนส่งไปคำนวณ
+            # เราจึงต้องสร้างตารางจำลอง (df_calc) แล้วแปลงข้อมูลเป็น String ก่อนส่งไป
             df_calc = selected_df.copy()
             df_calc[v1] = df_calc[v1].astype("string")
             df_calc[v2] = df_calc[v2].astype("string")
@@ -273,13 +273,13 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
             
             if tab is not None:
                 # 🟢 UPDATE 1: จัดการข้อความสถานะ/หมายเหตุ (Warning/Note)
-                # เมื่อ tab is not None, msg จะมีแค่ข้อความเตือน (Warning/Note) หรือเป็นสตริงว่างเปล่าเท่านั้น
+                # เมื่อ tab is not None, msg จะมีแค่ข้อความเตือน (Warning/Note) หรือเป็นสตริงว่าง
                 if msg.strip():
                     status_text = f"Note: {msg.strip()}"
                 else:
                     status_text = "Analysis Status: Completed successfully."
                 
-                # 🟢 FIX: แยกข้อความและลบแท็ก HTML (<b>, <br>) ออก
+                # 🟢 FIX: แยกข้อความแล้วลบแท็ก HTML (<b>, <br>) ออก
                 # และใช้ตัวแปร rep_elements ให้สอดคล้องกับโค้ดส่วนอื่น
                 rep_elements = [ 
                     {'type': 'text', 'data': "Analysis: Diagnostic Test / Chi-Square"},
@@ -290,7 +290,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                     {'type': 'contingency_table', 'header': 'Contingency Table', 'data': tab, 'outcome_col': v2},
                 ]
                 
-                # 🟢 NOTE: ใช้โครงสร้างเดิมในการเพิ่ม Statistics และ Risk/Effect Measures
+                # 🟢 NOTE: ใช้โครงสร้างสร้างเดิมในการเพิ่ม Statistics แล้ว Risk/Effect Measures
                 if stats is not None:
                     # เดิม: rep_elements.append({'type': 'table', 'header': 'Statistics', 'data': stats})
                     rep_elements.append({'type': 'table', 'header': 'Statistics', 'data': stats})
@@ -300,6 +300,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                 html = diag_test.generate_report(f"Chi2: {v1} vs {v2}", rep_elements)
                 st.session_state.html_output_chi = html
                 st.components.v1.html(html, height=600, scrolling=True)
+                st.success("✅ Chi-Square analysis complete!")
             else: 
                 # กรณีนี้ msg คือ Fatal Error ซึ่งจะถูกแสดงด้วย Streamlit error
                 st.error(msg)
@@ -345,7 +346,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
                 kv2_default_idx = i
                 break
 
-        # ป้องกันไม่ให้ Rater 1 และ Rater 2 เป็นคอลัมน์เดียวกัน ถ้าเจอชื่อที่ตรงกัน
+        # ป้องกันไม่ให้ Rater 1 แล้ว Rater 2 เป็นคอลัมน์เดียวกัน ถ้าเจอชื่อที่ตรงกัน 
         if kv1_default_idx == kv2_default_idx and len(all_cols) > 1:
             # ถ้าชื่อซ้ำกัน ให้ Rater 2 เลือกคอลัมน์ถัดไป
             kv2_default_idx = min(kv1_default_idx + 1, len(all_cols) - 1)
@@ -511,4 +512,6 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         
         **Question: I just want to understand my data distribution?**
         → Use **Descriptive Statistics** (Tab 4)
+        
+        **💡 TIP:** Use Chi-Square on both Original and **Matched Datasets** to compare risk differences after PSM! 📊
         """)
