@@ -471,7 +471,15 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
     # --- MULTIVARIATE ANALYSIS ---
     with logger.track_time("multivariate_analysis"):
         aor_results = {}
-        cand_valid = [c for c in candidates if df_aligned[c].apply(clean_numeric_value).notna().sum() > 5 or c in mode_map]
+
+        def _is_candidate_valid(col: str) -> bool:
+            mode = mode_map.get(col, "linear")
+            series = df_aligned[col]
+            if mode == "categorical":
+                return series.notna().sum() > 5
+            return series.apply(clean_numeric_value).notna().sum() > 5
+
+        cand_valid = [c for c in candidates if _is_candidate_valid(c)]
         
         final_n_multi = 0
         if len(cand_valid) > 0:
