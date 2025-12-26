@@ -178,7 +178,7 @@ def render(df):
 
     # --- UPDATE LOGIC ---
     # ตรวจสอบว่ามีการแก้ไขข้อมูลใน Slice หรือไม่
-    # หมายเหตุ: การเทียบแบบนี้อาจช้าถ้าข้อมูลเยอะ แต่สำหรับ slice 100 แถว ถือว่าเร็วมาก
+    # หมายเหตุ: การเทียบแบบนี้อาจช้าถ้าข้อมูลเยอะ แต่สำหรับ slice 600 แถว ถือว่าเร็วมาก
     if not df_display_slice.equals(edited_slice):
         # 1. อัปเดตข้อมูลกลับไปยัง DataFrame ตัวแม่ (df)
         # เราใช้ index ของ slice เพื่อระบุตำแหน่งใน df ตัวแม่
@@ -201,12 +201,14 @@ def render(df):
              # แปลงกลับเป็น Original Type เท่าที่ทำได้ หรือเก็บเป็น Object ไปก่อน
              # เพราะเราต้องการ Raw Data แบบ Text
              
-             # สร้าง df update ที่มี index ตรงกับ master
-             df.loc[edited_slice.index, edited_slice.columns] = edited_slice
+             # Filter to only update indices that exist in the parent DataFrame
+             valid_indices = edited_slice.index.intersection(df.index)
+             if len(valid_indices) > 0:
+                 df.loc[valid_indices, edited_slice.columns] = edited_slice.loc[valid_indices]
              
              # Force rerun เพื่อให้ข้อมูลอัปเดตทันที
              # st.rerun() # อาจจะทำให้กระพริบ ปิดไว้ก่อน
-        except Exception as e:
+        except (KeyError, IndexError, ValueError) as e:
              st.error(f"Error updating data: {e}")
 
     # --- CHECK QUALITY (เฉพาะหน้านี้) ---
