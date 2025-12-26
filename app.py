@@ -33,28 +33,28 @@ def _init_logging() -> bool:
 
 _init_logging()
 
-# Get logger instance (after configuration)
-logger = get_logger(__name__)
+#Get logger instance (after configuration)
+#logger = get_logger(__name__)
 
-st.title(f"🏥 {CONFIG.get('ui.page_title', 'Medical Statistical Tool')}")
+#st.title(f"🏥 {CONFIG.get('ui.page_title', 'Medical Statistical Tool')}")
 
-components.html("""
-<script>
-    try {
-        var loader = window.parent && window.parent.document
-            ? window.parent.document.getElementById('loading-screen')
-            : null;
-        if (loader) {
-            loader.style.opacity = '0';
-            setTimeout(function() {
-                loader.style.display = 'none';
-            }, 500);
-        }
-    } catch (e) {
-        console.log("Loader removal error: " + e);
-    }
-</script>
-""", height=0)
+#components.html("""
+#<script>
+#    try {
+#        var loader = window.parent && window.parent.document
+#            ? window.parent.document.getElementById('loading-screen')
+#            : null;
+#        if (loader) {
+#            loader.style.opacity = '0';
+#            setTimeout(function() {
+#                loader.style.display = 'none';
+#            }, 500);
+#        }
+#    } catch (e) {
+#        console.log("Loader removal error: " + e);
+#    }
+#</script>
+#""", height=0)
 
 # ==========================================
 # 1a. CHECK OPTIONAL DEPENDENCIES (FIX #1)
