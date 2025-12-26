@@ -87,6 +87,7 @@ class ForestPlot:
             self.data[col] = pd.to_numeric(self.data[col], errors='coerce')
         
         # Drop rows where essential plotting data is missing (NaN)
+        # Note: This checks for NaN but allows Infinite values (Perfect Separation needs specific handling later)
         self.data = self.data.dropna(subset=numeric_cols)
         
         if self.data.empty:
@@ -162,14 +163,27 @@ class ForestPlot:
         
         ci_width = ci_high - ci_low
         
-        # Normalize CI width to [0, 1]
-        ci_min, ci_max = ci_width.min(), ci_width.max()
+        # --- FIX: Handle Infinite Widths (Perfect Separation) ---
+        # If CI is infinite, width is infinite. This breaks normalization.
+        # Strategy: Normalize only finite widths. Set infinite widths to 1.0 (max width -> min opacity).
         
-        # Avoid division by zero
-        if ci_max > ci_min:
-            ci_normalized = (ci_width - ci_min) / (ci_max - ci_min)
-        else:
-            ci_normalized = pd.Series([0.5] * len(ci_width))
+        is_finite = np.isfinite(ci_width)
+        finite_widths = ci_width[is_finite]
+        
+        # Initialize ci_normalized with NaNs
+        ci_normalized = pd.Series(np.nan, index=ci_width.index)
+        
+        if not finite_widths.empty:
+            ci_min, ci_max = finite_widths.min(), finite_widths.max()
+            
+            # Avoid division by zero
+            if ci_max > ci_min:
+                ci_normalized[is_finite] = (finite_widths - ci_min) / (ci_max - ci_min)
+            else:
+                ci_normalized[is_finite] = 0.5
+        
+        # Handle infinite/NaN widths: treat as maximum width (1.0) => 0.5 opacity
+        ci_normalized = ci_normalized.fillna(1.0)
         
         # Parse base color (hex to RGB)
         hex_color = base_color.lstrip('#')
@@ -184,8 +198,9 @@ class ForestPlot:
         # Generate colors with varying opacity
         # CI narrow (0) = full opacity (1.0)
         # CI wide (1) = partial opacity (0.5)
+        # ci_normalized can be float or Series here, ensure float
         marker_colors = [
-            f"rgba({rgb[0]}, {rgb[1]}, {rgb[2]}, {1.0 - 0.5*norm_val:.2f})"
+            f"rgba({rgb[0]}, {rgb[1]}, {rgb[2]}, {1.0 - 0.5*float(norm_val):.2f})"
             for norm_val in ci_normalized
         ]
         
@@ -281,9 +296,21 @@ class ForestPlot:
         
         # --- Pre-processing Data for Display ---
         # 1. Format Estimate (95% CI)
-        self.data['__display_est'] = self.data.apply(
-            lambda x: f"{x[self.estimate_col]:.2f} ({x[self.ci_low_col]:.2f}-{x[self.ci_high_col]:.2f})", axis=1
-        )
+        # FIX: Handle infinite values in display string
+        def fmt_est_ci(x):
+            try:
+                est = x[self.estimate_col]
+                low = x[self.ci_low_col]
+                high = x[self.ci_high_col]
+                
+                est_str = f"{est:.2f}" if np.isfinite(est) else "Inf"
+                low_str = f"{low:.2f}" if np.isfinite(low) else "Inf"
+                high_str = f"{high:.2f}" if np.isfinite(high) else "Inf"
+                return f"{est_str} ({low_str}-{high_str})"
+            except:
+                return "Error"
+
+        self.data['__display_est'] = self.data.apply(fmt_est_ci, axis=1)
 
         # 2. Format P-value (if available)
         if self.pval_col:
@@ -375,9 +402,15 @@ class ForestPlot:
             fig.add_trace(go.Scatter(x=[0]*len(y_pos), y=y_pos, text=self.data['__display_p'], mode="text", textposition="middle center", textfont=dict(size=13, color=p_text_colors), hoverinfo="none", showlegend=False), row=1, col=3)
 
         # Column N: Forest Plot
-        est_min, est_max = self.data[self.estimate_col].min(), self.data[self.estimate_col].max()
-        # Use log scale if values are positive and spread is large
-        use_log_scale = (est_min > 0) and ((est_max / est_min) > 5)
+        # FIX: Check for infinity in min/max to avoid log scale errors
+        finite_data = self.data[np.isfinite(self.data[self.estimate_col])]
+        if not finite_data.empty:
+            est_min = finite_data[self.estimate_col].min()
+            est_max = finite_data[self.estimate_col].max()
+            # Use log scale if values are positive and spread is large
+            use_log_scale = (est_min > 0) and ((est_max / est_min) > 5)
+        else:
+            use_log_scale = False
 
         if show_ref_line:
             fig.add_vline(x=ref_line, line_dash='dash', line_color='rgba(192, 21, 47, 0.6)', line_width=2, annotation_text=f'No Effect ({ref_line})', annotation_position='top', row=1, col=plot_col)
