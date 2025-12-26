@@ -13,14 +13,14 @@ logger = get_logger(__name__)
 
 def check_perfect_separation(df, target_col):
     """
-    Check which predictor columns may cause perfect separation with a binary target.
+    Identify predictor columns that may cause perfect separation with a binary target.
     
     Parameters:
         df (pd.DataFrame): Dataset containing the target and predictor columns.
         target_col (str): Name of the binary target column to evaluate.
     
     Returns:
-        list[str]: Column names of predictors that are flagged as risky for perfect separation (i.e., at least one cell in the predictor×target contingency table is zero). If the target is not binary or an error occurs, returns an empty list.
+        list[str]: Predictor column names that have at least one zero cell in their predictor×target contingency table. Returns an empty list if the target is not binary or if an error occurs.
     """
     risky_vars = []
     try:
@@ -74,7 +74,12 @@ def _get_dataset_for_analysis(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
 
 def _render_logit_subgroup_analysis(df: pd.DataFrame) -> None:
     """
-    Render Subgroup Analysis SubTab for Logistic Regression within the Logit Tab.
+    Render the "Subgroup Analysis" subtab UI for performing and exporting logistic regression subgroup analyses.
+    
+    Renders Streamlit controls to select a binary outcome, a treatment/exposure, a categorical subgroup (2–10 levels), optional adjustment covariates, and advanced settings; runs SubgroupAnalysisLogit to compute subgroup-specific odds ratios and an interaction test; displays forest plot, summary metrics, a detailed results table, interpretation text, reporting guidance, and export buttons for HTML, CSV, and JSON. Results and the analyzer instance are saved to st.session_state['subgroup_results_logit'] and st.session_state['subgroup_analyzer_logit']; an optional UI flag st.session_state['edit_forest_title_logit'] may be created for editing the plot title. User-facing errors are shown via Streamlit and exceptions are logged.
+    
+    Parameters:
+        df (pd.DataFrame): Dataset used for analysis. Must contain at least one binary column for the outcome and at least one categorical column with 2–10 unique values for subgrouping.
     """
     st.header("🗒️ Subgroup Analysis")
     

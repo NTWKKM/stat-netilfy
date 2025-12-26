@@ -275,20 +275,20 @@ def fit_nelson_aalen(df, duration_col, event_col, group_col):
 # --- 3. Cox Proportional Hazards (Robust with Progressive L2 Penalization & Data Validation) ---
 def fit_cox_ph(df, duration_col, event_col, covariate_cols):
     """
-    Fit a Cox proportional hazards model after validating, encoding, and preprocessing the specified covariates.
+    Fit a Cox proportional hazards model with preprocessing, validation, and a progressive penalization strategy.
     
-    Validations include presence of required columns, removal of rows with missing values, checks for infinite or extreme values, zero variance, potential perfect separation, and high multicollinearity. Categorical covariates are one-hot encoded with drop_first=True. Numeric covariates are standardized in-place (binary 0/1 columns are preserved). The function attempts to fit the model using a progressive penalization strategy (no penalization, modest L2, then stronger L2) and returns the first successful fit or a detailed error message explaining failures and suggested troubleshooting steps.
+    Performs column presence checks, drops rows with missing values, encodes categorical covariates (one-hot with drop_first), validates numeric covariates for infinities, extreme values, zero variance, perfect separation and high multicollinearity, standardizes numeric covariates (preserving binary 0/1), then attempts to fit CoxPH using increasing L2 penalization until a fit succeeds or all methods fail.
     
     Parameters:
-        df (pandas.DataFrame): Input dataset containing duration, event, and covariates.
+        df (pandas.DataFrame): Input dataset containing the duration, event, and covariate columns.
         duration_col (str): Name of the duration / time-to-event column.
         event_col (str): Name of the event indicator column (expected 0/1).
         covariate_cols (list[str]): List of covariate column names to include in the model.
     
     Returns:
         cph (lifelines.CoxPHFitter or None): Fitted CoxPHFitter instance when fitting succeeds, otherwise None.
-        res_df (pandas.DataFrame or None): Result table containing hazard ratios (`HR`), 95% CI bounds (`95% CI Lower`, `95% CI Upper`), `P-value`, and `Method` when fitting succeeds; None on failure.
-        data (pandas.DataFrame): Processed DataFrame used for fitting (after dropping missing rows and any encoding/standardization). Returned even on failure to aid debugging.
+        res_df (pandas.DataFrame or None): Results table with columns `HR`, `95% CI Lower`, `95% CI Upper`, `P-value`, and `Method` when fitting succeeds; None on failure.
+        data (pandas.DataFrame): Processed DataFrame used for fitting (after selecting columns, dropping missing values, encoding, and standardization); returned even on failure to aid debugging.
         error_message (str or None): Detailed error message when validation or fitting fails; None on success.
     """
     # 1. Basic Validation
@@ -570,14 +570,13 @@ def create_forest_plot_cox(res_df):
 # --- 🟢 UPDATED: Generate Forest Plot HTML for Cox Regression (HTML Report) ---
 def generate_forest_plot_cox_html(res_df):
     """
-    Generate an HTML forest plot for Cox regression hazard ratios using Plotly.
-    Embeds Plotly JS directly in the plot for offline-friendly reports.
+    Generate an HTML snippet that embeds an interactive Cox regression forest plot and an interpretation guide.
     
     Parameters:
-        res_df (pandas.DataFrame): Results DataFrame with columns 'HR', '95% CI Lower', '95% CI Upper', 'P-value'.
+        res_df (pandas.DataFrame): Results DataFrame with columns 'HR', '95% CI Lower', '95% CI Upper', and 'P-value'.
     
     Returns:
-        html_str (str): HTML string containing the forest plot as Plotly embed + interpretation.
+        str: HTML string containing the Plotly-embedded forest plot (Plotly JS included for offline use) followed by a concise interpretation guide; if `res_df` is None or empty, returns a short HTML message indicating no results are available.
     """
     if res_df is None or res_df.empty:
         return "<p>No Cox regression results available for forest plot.</p>"
@@ -609,18 +608,20 @@ def generate_forest_plot_cox_html(res_df):
 # --- 4. Landmark Analysis (KM) 🟢 FIX LM CI ---
 def fit_km_landmark(df, duration_col, event_col, group_col, landmark_time):
     """
-    Perform Kaplan–Meier survival analysis using a landmark-time approach and plot group-specific survival curves re-based to time since the landmark.
+    Perform a landmark-time Kaplan–Meier analysis and plot group-specific survival curves re-based to time since the landmark.
+    
+    Only rows with observed time >= landmark_time are used; their times are re-baselined to time since the landmark and survival curves (with 95% CI shading when available) are produced per group. The function also runs an appropriate log-rank test on the landmarked data and returns a one-row summary of the test or an error note.
     
     Parameters:
-        df (pandas.DataFrame): Input data containing the duration, event indicator, and grouping column.
-        duration_col (str): Column name for observed times-to-event.
-        event_col (str): Column name for the event indicator (1 = event, 0 = censored).
-        group_col (str): Column name used to stratify curves and comparisons; required for stratified analysis.
-        landmark_time (numeric): Time threshold for the landmark analysis; only rows with duration >= landmark_time are included and their durations are replaced with time since the landmark.
+        df (pandas.DataFrame): Source dataset containing the required columns.
+        duration_col (str): Name of the column with observed times-to-event.
+        event_col (str): Name of the column with the event indicator (1 = event, 0 = censored).
+        group_col (str): Name of the column used to stratify groups for curves and comparisons.
+        landmark_time (numeric): Landmark time threshold; rows with duration < landmark_time are excluded and remaining durations are replaced by (duration - landmark_time).
     
     Returns:
-        fig (plotly.graph_objects.Figure or None): Plotly figure with Kaplan–Meier curves and shaded 95% confidence intervals for each group, or None if the function fails before plotting.
-        stats_df (pandas.DataFrame or None): Single-row DataFrame summarizing the performed log-rank test (columns include Test, Statistic, P-value, Comparison, Method) or a DataFrame containing an error/note; None if not applicable.
+        fig (plotly.graph_objects.Figure or None): Plotly figure with Kaplan–Meier curves and shaded 95% confidence intervals for each group, or None if execution failed before plotting.
+        stats_df (pandas.DataFrame or None): Single-row DataFrame summarizing the performed log-rank test or containing an error/note; None if not applicable.
         n_pre_filter (int): Number of records after dropping rows with missing duration, event, or group (before applying the landmark filter).
         n_post_filter (int): Number of records remaining after applying the landmark filter (duration >= landmark_time).
         error (str or None): Error message describing early failures (e.g., missing columns or insufficient records), otherwise None.

@@ -22,12 +22,12 @@ def render(df: pd.DataFrame, outcome_var: str | None = None, treatment_var: str 
     """
     Render the Streamlit Subgroup Analysis subtab for logistic regression.
     
-    Displays a stepwise UI to select a binary outcome, treatment/exposure, and a subgroup variable (2–10 categories), optionally choose adjustment covariates and advanced settings, and run a subgroup logistic regression analysis. When the user runs the analysis the function instantiates SubgroupAnalysisLogit, executes the analysis, and renders results including a forest plot, summary statistics, a detailed results table, interpretation, clinical reporting guidance, and export options (HTML plot, CSV, JSON). Successful analysis results and the analyzer are saved to st.session_state under 'subgroup_results_logit' and 'subgroup_analyzer_logit'.
+    Displays a user interface to select a binary outcome, a treatment/exposure, a categorical subgroup (2–10 levels), optional adjustment covariates, and advanced settings; runs a subgroup logistic regression via SubgroupAnalysisLogit when requested and renders results (forest plot, summary statistics, detailed table, interpretation, reporting guidance, and export options). Successful analysis objects are saved to st.session_state under 'subgroup_results_logit' and 'subgroup_analyzer_logit'.
     
     Parameters:
-        df (pd.DataFrame): Input dataset used to populate selection widgets and run analyses.
-        outcome_var (str | None): Optional pre-selected binary outcome column name; applied if present and binary.
-        treatment_var (str | None): Optional pre-selected treatment/exposure column name; applied if present.
+        df (pd.DataFrame): Dataset used to populate selection widgets and run the analysis.
+        outcome_var (str | None): Optional pre-selected binary outcome column name; applied if present in df and binary.
+        treatment_var (str | None): Optional pre-selected treatment/exposure column name; applied if present in df.
     """
     st.markdown("---")
     st.header("🗒️ Subgroup Analysis")

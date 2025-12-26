@@ -28,7 +28,27 @@ try:
         logger.info("🔧 Applying sklearn 1.6+ compatibility patch to FirthLogisticRegression")
         
         def _validate_data_patch(self, X, y=None, reset=True, validate_separately=False, **check_params):
-            """Shim to restore _validate_data for firthlogist compatibility with sklearn 1.6+"""
+            """
+            Compatibility shim that restores sklearn-style data validation expected by FirthLogisticRegression.
+            
+            Validates the provided input arrays using sklearn's check utilities. If `y` is None, returns the validated feature array for `X`; otherwise returns the validated `(X, y)` pair. Additional validation options may be passed via `**check_params`. The parameters `reset` and `validate_separately` are accepted to match the original signature and may be forwarded to the underlying validators when applicable.
+             
+            Parameters:
+                X: array-like
+                    Feature data to validate.
+                y: array-like, optional
+                    Target array to validate alongside `X`. If omitted, only `X` is validated.
+                reset: bool
+                    Accepted for signature compatibility; not used by this shim itself.
+                validate_separately: bool
+                    Accepted for signature compatibility; not used by this shim itself.
+                **check_params:
+                    Additional keyword arguments forwarded to sklearn.utils.validation.check_array or check_X_y.
+            
+            Returns:
+                ndarray or (ndarray, ndarray):
+                    The validated `X` array if `y` is None, otherwise a tuple `(X_validated, y_validated)`.
+            """
             if y is None:
                 return check_array(X, **check_params)
             else:
@@ -73,13 +93,13 @@ def clean_numeric_value(val):
 
 def _robust_sort_key(x):
     """
-    Return a sort key that orders numeric-like values before non-numeric values.
+    Provide a sort key that places numeric-like values before non-numeric and missing values.
     
     Returns:
         tuple: A (priority, value) tuple where
-            - priority 0: numeric values with the value as a float,
-            - priority 1: non-numeric values with the value as a string,
-            - priority 2: missing values represented with an empty string.
+            - priority 0: numeric values, with `value` as a float,
+            - priority 1: non-numeric values, with `value` as the string representation,
+            - priority 2: missing values (`NaN`), with `value` as an empty string.
     """
     try:
         # Check if it's already a number or can be one
@@ -91,21 +111,21 @@ def _robust_sort_key(x):
 
 def run_binary_logit(y, X, method='default'):
     """
-    Run a binary logistic regression using the chosen estimation method and return parameter estimates and diagnostics.
+    Fit a binary logistic regression using the specified estimation method.
     
     Parameters:
         y (array-like): Binary outcome vector aligned to X.
-        X (DataFrame or array-like): Predictor matrix; an intercept will be added if absent.
+        X (DataFrame or array-like): Predictor matrix. An intercept column will be added if absent.
         method (str): Estimation method to use. Accepted values:
-            - 'default': fit using statsmodels Logit with default optimizer,
-            - 'bfgs': fit using statsmodels Logit with BFGS optimizer,
-            - 'firth': fit using a Firth-penalized logistic regression implementation (requires optional dependency).
+            - 'default': statsmodels Logit with default optimizer,
+            - 'bfgs': statsmodels Logit with BFGS optimizer,
+            - 'firth': Firth-penalized logistic regression (requires optional dependency).
     
     Returns:
-        params (pd.Series or None): Estimated coefficients indexed by predictor names (including intercept), or None on failure.
-        conf_int (pd.DataFrame or None): Two-column DataFrame of confidence interval bounds indexed by predictor names, or None on failure.
-        pvalues (pd.Series or None): Two-sided p-values for coefficients indexed by predictor names, or None on failure.
-        status (str): "OK" on success; otherwise an error message describing the failure (e.g., missing dependency or exception text).
+        params (pd.Series or None): Estimated coefficients indexed by predictor names (including intercept), or `None` on failure.
+        conf_int (pd.DataFrame or None): Two-column DataFrame of confidence interval bounds indexed by predictor names, or `None` on failure.
+        pvalues (pd.Series or None): Two-sided p-values for coefficients indexed by predictor names, or `None` on failure.
+        status (str): `"OK"` on success; otherwise an error message describing the failure.
     """
     try:
         X_const = sm.add_constant(X, has_constant='add')
@@ -252,17 +272,13 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
 
     def fmt_p(val):
         """
-        Format a numeric p-value (or p-value-like input) into a compact string for display.
+        Format a p-value (or p-value-like input) for compact display.
         
         Parameters:
-            val: Numeric or convertible-to-float value representing a p-value; may be NaN or non-numeric.
+            val: A numeric p-value or value convertible to float; may be NaN or non-numeric.
         
         Returns:
-            A string representation:
-              - "-" if the input is NaN or cannot be converted to a number.
-              - "<0.001" if the value is greater than or equal to 0 but less than 0.001.
-              - ">0.999" if the value is greater than 0.999 and up to 1.
-              - Otherwise the value rounded to three decimal places (e.g., "0.123").
+            str: "-" if the input is missing or cannot be converted to a number; "<0.001" if 0 <= value < 0.001; ">0.999" if 0.999 < value <= 1; otherwise the value rounded to three decimal places (e.g., "0.123").
         """
         if pd.isna(val): return "-"
         try:
@@ -473,6 +489,15 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         aor_results = {}
 
         def _is_candidate_valid(col: str) -> bool:
+            """
+            Determine whether a column has enough valid observations to be considered for multivariable modeling.
+            
+            Parameters:
+                col (str): Name of the column in the aligned DataFrame.
+            
+            Returns:
+                bool: `True` if the column has more than five valid observations, `False` otherwise. For columns treated as categorical, "valid" means non-missing entries; for columns treated as linear, "valid" means entries that can be interpreted as numeric.
+            """
             mode = mode_map.get(col, "linear")
             series = df_aligned[col]
             if mode == "categorical":

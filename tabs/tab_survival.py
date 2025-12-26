@@ -16,10 +16,13 @@ logger = get_logger(__name__)
 # 🟢 NEW: Helper function to select between original and matched datasets
 def _get_dataset_for_survival(df: pd.DataFrame):
     """
-    Select which dataset (original or matched) to use for survival analyses and return it with a descriptive label.
+    Choose between the original DataFrame and an available propensity-score matched DataFrame for survival analysis.
+    
+    Parameters:
+        df (pd.DataFrame): The original dataset to use if no matched dataset is available or if the user selects the original data.
     
     Returns:
-        (pd.DataFrame, str): The selected DataFrame and a human-readable label indicating the data source and row count.
+        (pd.DataFrame, str): The selected DataFrame and a human-readable label describing the data source and its row count.
     """
     has_matched = (
         st.session_state.get("is_matched", False)
@@ -392,13 +395,13 @@ def _render_cox_subgroup_analysis(df: pd.DataFrame) -> None:
 
 def render(df, _var_meta):
     """
-    Render the Streamlit-based UI and workflows for multiple survival analyses (Kaplan–Meier / Nelson–Aalen curves, landmark analysis, Cox regression with assumption checks and forest plots, and Cox subgroup analysis).
+    Render the Streamlit UI and orchestrate interactive survival analysis workflows (Kaplan–Meier / Nelson–Aalen curves, landmark analysis, Cox regression with assumption checks and forest plots, and Cox subgroup analysis) for a chosen dataset.
     
-    This function builds interactive controls, runs selected analyses, displays plots/tables, and provides downloadable HTML/CSV/JSON reports for the chosen dataset (original or matched). It validates presence of time and event columns, manages session state for persisted results, and handles user interactions across five tabs: Survival Curves, Landmark Analysis, Cox Regression, Cox Subgroup Analysis, and Reference & Interpretation.
+    Builds controls for selecting the dataset (original or matched), time and event variables, covariates and subgroup definitions; runs the selected analyses when triggered; displays plots, tables, and interpretation guidance across five tabs; and exposes downloadable HTML/CSV/JSON reports. Analysis outputs and UI state are persisted in st.session_state so users can view or export previous results.
     
     Parameters:
-        df (pandas.DataFrame): Input dataset to use for analysis; must contain at least a time column and an event indicator column.
-        _var_meta (Mapping): Variable metadata or schema information (used for contextual UI hints); not required for core analysis logic.
+        df (pandas.DataFrame): Input dataset used for analyses; must include a time column and an event indicator column.
+        _var_meta (Mapping): Optional variable metadata used to provide contextual UI hints (not required for core analysis).
     """
     st.subheader("⏳ Survival Analysis")
     st.info("""

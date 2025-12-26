@@ -50,7 +50,9 @@ class ForestPlot:
         pval_col: str = None,
     ):
         """
-        Create a ForestPlot instance from a DataFrame and the names of its relevant columns.
+        Initialize a ForestPlot with validated, plotting-ready data and column mappings.
+        
+        Validates that the DataFrame is non-empty and contains the required columns, coerces the estimate and confidence-interval columns to numeric (dropping rows that become NaN), reverses row order for top-down display, and stores the provided column names on the instance.
         
         Parameters:
             data (pd.DataFrame): Source table containing effect estimates and confidence intervals.
@@ -58,17 +60,10 @@ class ForestPlot:
             ci_low_col (str): Column name for the lower 95% confidence interval bound.
             ci_high_col (str): Column name for the upper 95% confidence interval bound.
             label_col (str): Column name used for row labels displayed on the plot.
-            pval_col (str, optional): Column name containing p-values; pass None if not available.
-        
-        Behavior:
-            - Validates that `data` is not empty and that all required columns are present.
-            - Converts the estimate and CI columns to numeric (non-convertible values become NaN).
-            - Drops rows missing any of the numeric plotting fields.
-            - Reverses row order so the first row appears at the top of the plotted table.
-            - Stores the used column names on the instance for later plotting.
+            pval_col (str, optional): Column name containing p-values; omit or pass None if not available.
         
         Raises:
-            ValueError: If `data` is empty, if required columns are missing, or if no valid rows remain after numeric coercion.
+            ValueError: If `data` is empty, if any required columns are missing, or if no valid rows remain after numeric coercion.
         """
         # Validation
         if data.empty:
@@ -119,10 +114,10 @@ class ForestPlot:
     
     def _add_significance_stars(self, p):
         """
-        Map a p-value to significance stars.
+        Convert a p-value into conventional significance star notation.
         
         Parameters:
-            p (float | str | None): The p-value to evaluate. May be a numeric value, a string containing an inequality (e.g., "<0.001"), or None/NaN.
+            p (float | str | None): P-value to evaluate; accepts numeric values, strings with inequality signs (e.g., "<0.001" or ">0.05"), or None/NaN.
         
         Returns:
             str: `"***"` if p < 0.001, `"**"` if p < 0.01, `"*"` if p < 0.05, otherwise an empty string. Returns an empty string for NaN or non-convertible inputs.
@@ -152,14 +147,14 @@ class ForestPlot:
     
     def _get_ci_width_colors(self, base_color: str) -> list:
         """
-        Create per-row RGBA marker colors whose opacity is scaled by each row's confidence-interval width.
+        Generate per-row RGBA marker colors with opacity scaled inversely to each row's confidence-interval width.
         
         Parameters:
-            base_color (str): Hex color string used as the base RGB for markers (e.g. "#21808D"). If parsing fails, a default teal color is used.
+            base_color (str): Hex color string to use as the RGB base for markers (e.g. "#21808D"). If parsing fails or a non-6-digit hex is provided, a default teal color is used.
         
         Returns:
-            marker_colors (list): List of `rgba(r, g, b, a)` color strings for each row; opacity is higher for narrower CIs and lower for wider CIs.
-            ci_normalized (ndarray): Array of CI widths normalized to the range [0, 1], aligned with `marker_colors`.
+            marker_colors (list): List of `rgba(r, g, b, a)` color strings for each row; rows with narrower CIs have higher opacity, rows with wider CIs have lower opacity.
+            ci_normalized (numpy.ndarray): Array of CI widths normalized to the range [0, 1], aligned with `marker_colors` (0 = narrowest CI, 1 = widest CI).
         """
         # Ensure values are float for calculation
         ci_high = self.data[self.ci_high_col]
@@ -198,20 +193,20 @@ class ForestPlot:
     
     def get_summary_stats(self, ref_line: float = 1.0):
         """
-        Compute summary statistics for the forest plot dataset relative to a reference line.
+        Compute dataset-level summary metrics for the plotted estimates relative to a reference line.
         
         Parameters:
             ref_line (float): Reference value used to assess whether confidence intervals cross the reference (e.g., 1.0 for ratios).
         
         Returns:
-            dict: Summary values including:
+            dict: A mapping with the following keys:
                 - 'n_variables': number of rows used in the plot.
                 - 'median_est': median of the estimate column.
                 - 'min_est': minimum of the estimate column.
                 - 'max_est': maximum of the estimate column.
-                - 'n_significant': count of rows with p-value < 0.05 (or `None` if no p-value column provided).
-                - 'pct_significant': percentage of rows with p-value < 0.05 (0-100, or `None` if no p-value column provided).
-                - 'n_ci_significant': count of rows whose 95% CI does not cross `ref_line`.
+                - 'n_significant': count of rows with p-value < 0.05, or `None` if no p-value column is available.
+                - 'pct_significant': percentage (0–100) of rows with p-value < 0.05, or `None` if no p-value column is available.
+                - 'n_ci_significant': count of rows whose confidence interval does not cross `ref_line`.
         """
         n_sig = 0
         pct_sig = 0
@@ -294,13 +289,13 @@ class ForestPlot:
         if self.pval_col:
             def fmt_p(p):
                 """
-                Format a p-value for display using common reporting conventions.
+                Format a p-value for human-readable display following common reporting conventions.
                 
                 Parameters:
-                    p: A numeric p-value or a string representation (may include '<' or '>').
+                    p: A numeric p-value or string representation (may include leading '<' or '>').
                 
                 Returns:
-                    A string: `"<0.001"` if the numeric p-value is less than 0.001, a three-decimal string (e.g. `"0.123"`) for other numeric values, or the original input converted to string if the value cannot be parsed as a number.
+                    A string: "<0.001" if the parsed numeric value is less than 0.001, a three-decimal string (e.g. "0.123") for other numeric values, or the original input converted to a string if the value cannot be parsed as a number.
                 """
                 try:
                     # Clean string first if necessary
@@ -463,12 +458,12 @@ def create_forest_plot(
     Create a forest plot from a DataFrame using a single convenience call.
     
     Parameters:
-        data (pd.DataFrame): DataFrame containing estimates and confidence intervals.
+        data (pd.DataFrame): DataFrame containing point estimates and confidence intervals.
         estimate_col (str): Column name for point estimates.
-        ci_low_col (str): Column name for lower 95% CI bounds.
-        ci_high_col (str): Column name for upper 95% CI bounds.
-        label_col (str): Column name for row labels/variables.
-        pval_col (str, optional): Column name for p-values for significance annotation.
+        ci_low_col (str): Column name for lower confidence interval bounds.
+        ci_high_col (str): Column name for upper confidence interval bounds.
+        label_col (str): Column name for row labels displayed on the plot.
+        pval_col (str, optional): Column name for p-values used for significance annotations.
         title (str, optional): Plot title.
         x_label (str, optional): X-axis label.
         ref_line (float, optional): Reference line value shown on the plot (e.g., 1.0 for ratios).
@@ -476,7 +471,7 @@ def create_forest_plot(
         **kwargs: Additional keyword arguments forwarded to ForestPlot.create.
     
     Returns:
-        go.Figure: A Plotly Figure containing the generated forest plot. An empty Figure is returned if input validation fails.
+        go.Figure: Plotly Figure with the constructed forest plot, or an empty Figure if plotting failed due to invalid input.
     """
     try:
         fp = ForestPlot(data, estimate_col, ci_low_col, ci_high_col, label_col, pval_col)
@@ -545,10 +540,10 @@ def create_forest_plot_from_logit(aor_dict: dict, title: str = "Adjusted Odds Ra
 
 def create_forest_plot_from_cox(hr_dict: dict, title: str = "Hazard Ratios (Cox Regression)") -> go.Figure:
     """
-    Create a forest plot Figure from Cox regression hazard ratio results.
+    Builds a forest plot from Cox regression hazard ratio results.
     
     Parameters:
-        hr_dict (dict): Mapping of variable names to result dicts. Each result dict must contain an estimate and CI using one of the supported key sets:
+        hr_dict (dict): Mapping of variable names to result dicts. Each result dict must include an estimate and confidence interval using one of the supported key sets:
             - estimate: 'hr' or 'HR'
             - lower CI: 'ci_low' or 'CI Lower'
             - upper CI: 'ci_high' or 'CI Upper'
@@ -556,7 +551,7 @@ def create_forest_plot_from_cox(hr_dict: dict, title: str = "Hazard Ratios (Cox 
         title (str): Plot title.
     
     Returns:
-        go.Figure: A Plotly Figure showing hazard ratios with 95% confidence intervals. Returns an empty Figure if no valid hazard ratio rows are found.
+        go.Figure: Plotly figure showing hazard ratios with 95% confidence intervals; an empty Figure if no valid hazard ratio rows are found.
     """
     data = []
     
@@ -606,15 +601,15 @@ def create_forest_plot_from_rr(
     effect_type: str = 'RR'
 ) -> go.Figure:
     """
-    Create a forest plot of risk or odds ratios from a mapping of group names to result dictionaries.
+    Builds a forest plot of risk or odds ratios from a mapping of group labels to result dictionaries.
     
     Parameters:
-        rr_or_dict (dict): Mapping of group label -> result dict. Each result dict should contain an estimate keyed by the lowercase `effect_type` (e.g., 'rr' or 'or') or by `effect_type` itself, and confidence interval bounds under keys 'ci_low'/'ci_high' or 'CI Lower'/'CI Upper'. A p-value may be provided under 'p_value' or 'p'.
+        rr_or_dict (dict): Mapping from group label to a result dict. Each result dict must contain the effect estimate under the lowercase `effect_type` (e.g., `'rr'` or `'or'`) or the exact `effect_type` key, and confidence bounds under `'ci_low'`/`'ci_high'` or `'CI Lower'`/`'CI Upper'`. An optional p-value may be provided under `'p_value'` or `'p'`.
         title (str): Plot title.
-        effect_type (str): Effect measure to extract and label on the x-axis (commonly 'RR' or 'OR'); the lowercase form is used to read the estimate from each result dict.
+        effect_type (str): Effect measure name used for extracting and labeling the estimate (commonly `'RR'` or `'OR'`); the lowercase form is used to read values from each result dict.
     
     Returns:
-        go.Figure: Plotly Figure containing the forest plot (empty Figure if no valid rows were found).
+        go.Figure: Plotly Figure containing the forest plot; returns an empty Figure if no valid rows were found.
     """
     data = []
     metric_key = effect_type.lower()
