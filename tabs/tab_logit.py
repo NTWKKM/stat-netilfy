@@ -320,14 +320,17 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame) -> None:
             
             # HTML Export
             with col1:
-                html_plot = analyzer.figure.to_html(include_plotlyjs='cdn')
-                st.download_button(
-                    label="💿 HTML Plot",
-                    data=html_plot,
-                    file_name=f"subgroup_{treatment_col}_{subgroup_col}.html",
-                    mime="text/html",
-                    use_container_width=True
-                )
+                if analyzer.figure is None:
+                    st.warning("Forest plot not available for export")
+                else:
+                    html_plot = analyzer.figure.to_html(include_plotlyjs='cdn')
+                    st.download_button(
+                        label="💿 HTML Plot",
+                        data=html_plot,
+                        file_name=f"subgroup_{treatment_col}_{subgroup_col}.html",
+                        mime="text/html",
+                        use_container_width=True
+                    )
             
             # CSV Export
             with col2:
@@ -352,7 +355,7 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame) -> None:
                 )
         
         except Exception as e:
-            st.error(f"❌ Error: {str(e)}", icon="💥")
+            st.error(f"❌ Error: {e!s}", icon="💥")
             st.info("**Troubleshooting:**\n- Ensure outcome is binary (2 categories)\n- Check subgroup has 2-10 categories\n- Verify minimum N per subgroup", icon="🗣")
             logger.exception("Logit subgroup analysis error")
     
