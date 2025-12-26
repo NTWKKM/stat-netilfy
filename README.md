@@ -26,15 +26,23 @@ This content reflects the repository structure (updated by GitHub Actions):
 |-- config.py
 |-- correlation.py
 |-- diag_test.py
+|-- forest_plot_lib.py
 |-- logger.py
 |-- logic.py
 |-- psm_lib.py
 |-- requirements.txt
+|-- subgroup_analysis_module.py
 |-- survival_lib.py
 |-- table_one.py
 |-- tabs /
 |   |-- __init__.py
 |   |-- _common.py
+|   |-- cox_regression /
+|   |   |-- __init__.py
+|   |   `-- subgroup_tab.py
+|   |-- logistic_regression /
+|   |   |-- __init__.py
+|   |   `-- subgroup_tab.py
 |   |-- tab_baseline_matching.py
 |   |-- tab_corr.py
 |   |-- tab_data.py
