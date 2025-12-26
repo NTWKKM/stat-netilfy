@@ -3,6 +3,45 @@ import pandas as pd
 import numpy as np
 import math
 
+def _is_numeric_column(col_series: pd.Series, total_rows: int) -> tuple:
+    """
+    Determine if a column should be treated as numeric.
+    Returns: (is_numeric, strict_numeric_series, relaxed_numeric_series, strict_nan_mask, strict_nan_count)
+    """
+    original_vals = col_series.astype(str).str.strip()
+    
+    # Strict check
+    numeric_strict = pd.to_numeric(col_series, errors='coerce')
+    is_strict_nan = numeric_strict.isna() & (original_vals != '') & \
+                    (~original_vals.str.lower().isin(['nan', 'none', '']))
+    strict_nan_count = is_strict_nan.sum()
+    
+    # Relaxed check
+    clean_vals = original_vals.str.replace(r'[<>,%]', '', regex=True)
+    numeric_relaxed = pd.to_numeric(clean_vals, errors='coerce')
+    
+    is_relaxed_numeric = (~numeric_relaxed.isna()) & (original_vals != '') & \
+                         (~original_vals.str.lower().isin(['nan', 'none', '']))
+    relaxed_numeric_count = is_relaxed_numeric.sum()
+    
+    non_empty_mask = (original_vals != '') & (~original_vals.str.lower().isin(['nan', 'none']))
+    total_data_count = non_empty_mask.sum()
+    has_inequality = original_vals.str.contains(r'[<>]', regex=True).any()
+    
+    # Decision logic
+    is_numeric_col = False
+    if total_data_count > 0:
+        ratio = relaxed_numeric_count / total_data_count
+        if ratio > 0.6:
+            is_numeric_col = True
+        elif has_inequality and ratio > 0.4:
+            is_numeric_col = True
+    else:
+        if strict_nan_count < (total_rows * 0.9):
+            is_numeric_col = True
+    
+    return is_numeric_col, numeric_strict, numeric_relaxed, is_strict_nan, strict_nan_count
+
 def check_data_quality(df, container):
     """
     Data Quality Checker (ตรวจสอบเฉพาะข้อมูลในหน้านั้นๆ เพื่อความรวดเร็ว): 
@@ -18,37 +57,9 @@ def check_data_quality(df, container):
 
     for col in df.columns:
         col_issues = []
-        original_vals = df[col].astype(str).str.strip()
         
-        # 1. Strict Check
-        numeric_strict = pd.to_numeric(df[col], errors='coerce')
-        is_strict_nan = numeric_strict.isna() & (original_vals != '') & \
-                        (~original_vals.str.lower().isin(['nan', 'none', '']))
-        strict_nan_count = is_strict_nan.sum()
-
-        # 2. Relaxed Check (Logic เดิม)
-        clean_vals_for_check = original_vals.str.replace(r'[<>,%]', '', regex=True)
-        numeric_relaxed = pd.to_numeric(clean_vals_for_check, errors='coerce')
-        
-        is_relaxed_numeric = (~numeric_relaxed.isna()) & (original_vals != '') & \
-                             (~original_vals.str.lower().isin(['nan', 'none', '']))
-        relaxed_numeric_count = is_relaxed_numeric.sum()
-        
-        non_empty_mask = (original_vals != '') & (~original_vals.str.lower().isin(['nan', 'none']))
-        total_data_count = non_empty_mask.sum()
-        has_inequality = original_vals.str.contains(r'[<>]', regex=True).any()
-
-        # DECISION LOGIC
-        is_numeric_col = False
-        if total_data_count > 0:
-            ratio = relaxed_numeric_count / total_data_count
-            if ratio > 0.6:
-                is_numeric_col = True
-            elif has_inequality and ratio > 0.4:
-                is_numeric_col = True
-        else:
-            if strict_nan_count < (total_rows * 0.9):
-                is_numeric_col = True
+        # Use helper function
+        is_numeric_col, numeric_strict, _, is_strict_nan, strict_nan_count = _is_numeric_column(df[col], total_rows)
 
         # CASE 1: Numeric
         if is_numeric_col:
@@ -61,6 +72,7 @@ def check_data_quality(df, container):
 
         # CASE 2: Categorical
         else:
+            original_vals = df[col].astype(str).str.strip()
             is_numeric_in_text = (~numeric_strict.isna()) & (original_vals != '')
             numeric_in_text_count = is_numeric_in_text.sum()
             if numeric_in_text_count > 0:
@@ -99,25 +111,8 @@ def get_clean_data(df, custom_na_list=None):
         if df_clean[col].dtype == 'object':
              df_clean[col] = df_clean[col].astype(str).str.strip()
 
-        clean_vals = df_clean[col].astype(str).str.replace(r'[<>,%]', '', regex=True)
-        numeric_relaxed = pd.to_numeric(clean_vals, errors='coerce')
-        
-        original_vals = df_clean[col].astype(str)
-        non_empty_mask = (original_vals != '') & (~original_vals.str.lower().isin(['nan', 'none']))
-        total_data_count = non_empty_mask.sum()
-        relaxed_numeric_count = (~numeric_relaxed.isna() & non_empty_mask).sum()
-        has_inequality = original_vals.str.contains(r'[<>]', regex=True).any()
-        
-        is_numeric_col = False
-        if total_data_count > 0:
-             ratio = relaxed_numeric_count / total_data_count
-             if ratio > 0.6: 
-                 is_numeric_col = True
-             elif has_inequality and ratio > 0.4:
-                 is_numeric_col = True
-        else:
-             if pd.to_numeric(df_clean[col], errors='coerce').isna().sum() < (total_rows * 0.9):
-                 is_numeric_col = True
+        # Use helper function
+        is_numeric_col, _, numeric_relaxed, _, _ = _is_numeric_column(df_clean[col], total_rows)
 
         if is_numeric_col:
              df_clean[col] = numeric_relaxed
