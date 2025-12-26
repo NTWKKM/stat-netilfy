@@ -20,18 +20,15 @@ logger = get_logger(__name__)
 
 def render(df: pd.DataFrame, time_col: str | None = None, event_col: str | None = None, treatment_var: str | None = None):
     """
-    Render Subgroup Analysis SubTab for Cox Regression.
+    Render the Streamlit Subgroup Analysis subtab for Cox (survival) regression and handle user interaction, analysis execution, result display, and exports.
+    
+    Displays a four-step UI to select follow-up time, event indicator, treatment/exposure, subgroup and adjustment covariates; exposes advanced settings (minimum subgroup size/events and custom title), runs a Cox subgroup interaction analysis via SubgroupAnalysisCox, caches results in Streamlit session_state, and provides plots, tables, interpretation, CONSORT-style reporting guidance, and export buttons for HTML/CSV/JSON.
     
     Parameters:
-    -----------
-    df : pd.DataFrame
-        Input data frame
-    time_col : str, optional
-        Pre-selected time/duration variable
-    event_col : str, optional
-        Pre-selected event indicator variable
-    treatment_var : str, optional
-        Pre-selected treatment variable
+        df (pd.DataFrame): Input dataset used for variable selection and analysis.
+        time_col (str | None): Optional preselected name of the follow-up time/duration column.
+        event_col (str | None): Optional preselected name of the binary event indicator column (expected 2 categories, e.g., 0/1).
+        treatment_var (str | None): Optional preselected name of the treatment/exposure column.
     """
     st.markdown("---")
     st.header("🗒️ Subgroup Analysis (Survival)")
@@ -88,6 +85,16 @@ def render(df: pd.DataFrame, time_col: str | None = None, event_col: str | None 
     available_treatment_cols = [col for col in df.columns if col not in [time_col_selected, event_col_selected]]
 
     def get_default_index(options: list, preselected: str | None) -> int:
+        """
+        Select the index of a preselected option within a list, defaulting to 0 if the preselection is missing or not found.
+        
+        Parameters:
+            options (list): Available option values.
+            preselected (str | None): Candidate value to locate in `options`.
+        
+        Returns:
+            int: Index of `preselected` in `options` if present, otherwise 0.
+        """
         if preselected and preselected in options:
             return options.index(preselected)
         return 0

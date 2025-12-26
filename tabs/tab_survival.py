@@ -16,7 +16,10 @@ logger = get_logger(__name__)
 # 🟢 NEW: Helper function to select between original and matched datasets
 def _get_dataset_for_survival(df: pd.DataFrame):
     """
-    Selects which dataset to use for survival analysis and returns the chosen DataFrame with a descriptive label.
+    Select which dataset (original or matched) to use for survival analyses and return it with a descriptive label.
+    
+    Returns:
+        (pd.DataFrame, str): The selected DataFrame and a human-readable label indicating the data source and row count.
     """
     has_matched = (
         st.session_state.get("is_matched", False)
@@ -49,7 +52,12 @@ def _get_dataset_for_survival(df: pd.DataFrame):
 
 def _render_cox_subgroup_analysis(df: pd.DataFrame) -> None:
     """
-    Render Subgroup Analysis SubTab for Cox Regression within the Survival Tab.
+    Render the Cox proportional hazards subgroup analysis UI and execute the analysis workflow.
+    
+    Presents UI controls for selecting follow-up time, binary event indicator, treatment, subgroup, and adjustment covariates; provides advanced settings (minimum subgroup size, minimum events, custom title); runs SubgroupAnalysisCox to fit subgroup-specific Cox models and interaction tests; displays a forest plot, summary metrics, a detailed results table, interpretation text, CONSORT-style reporting guidance, and export buttons (HTML plot, CSV, JSON). Results and analyzer are stored in Streamlit session state under `subgroup_results_cox` and `subgroup_analyzer_cox`. Handles missing lifelines dependency and reports validation or runtime errors with user-facing troubleshooting hints.
+    
+    Parameters:
+        df (pd.DataFrame): Input dataset used for the subgroup Cox analysis (must contain numeric follow-up time and a binary event column).
     """
     st.header("🗒️ Subgroup Analysis (Survival)")
     
@@ -384,7 +392,13 @@ def _render_cox_subgroup_analysis(df: pd.DataFrame) -> None:
 
 def render(df, _var_meta):
     """
-    Render the Streamlit UI for conducting survival analyses.
+    Render the Streamlit-based UI and workflows for multiple survival analyses (Kaplan–Meier / Nelson–Aalen curves, landmark analysis, Cox regression with assumption checks and forest plots, and Cox subgroup analysis).
+    
+    This function builds interactive controls, runs selected analyses, displays plots/tables, and provides downloadable HTML/CSV/JSON reports for the chosen dataset (original or matched). It validates presence of time and event columns, manages session state for persisted results, and handles user interactions across five tabs: Survival Curves, Landmark Analysis, Cox Regression, Cox Subgroup Analysis, and Reference & Interpretation.
+    
+    Parameters:
+        df (pandas.DataFrame): Input dataset to use for analysis; must contain at least a time column and an event indicator column.
+        _var_meta (Mapping): Variable metadata or schema information (used for contextual UI hints); not required for core analysis logic.
     """
     st.subheader("⏳ Survival Analysis")
     st.info("""

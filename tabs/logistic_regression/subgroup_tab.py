@@ -20,16 +20,14 @@ logger = get_logger(__name__)
 
 def render(df: pd.DataFrame, outcome_var: str | None = None, treatment_var: str | None = None):
     """
-    Render Subgroup Analysis SubTab for Logistic Regression.
+    Render the Streamlit Subgroup Analysis subtab for logistic regression.
+    
+    Displays a stepwise UI to select a binary outcome, treatment/exposure, and a subgroup variable (2–10 categories), optionally choose adjustment covariates and advanced settings, and run a subgroup logistic regression analysis. When the user runs the analysis the function instantiates SubgroupAnalysisLogit, executes the analysis, and renders results including a forest plot, summary statistics, a detailed results table, interpretation, clinical reporting guidance, and export options (HTML plot, CSV, JSON). Successful analysis results and the analyzer are saved to st.session_state under 'subgroup_results_logit' and 'subgroup_analyzer_logit'.
     
     Parameters:
-    -----------
-    df : pd.DataFrame
-        Input data frame
-    outcome_var : str, optional
-        Pre-selected outcome variable
-    treatment_var : str, optional
-        Pre-selected treatment variable
+        df (pd.DataFrame): Input dataset used to populate selection widgets and run analyses.
+        outcome_var (str | None): Optional pre-selected binary outcome column name; applied if present and binary.
+        treatment_var (str | None): Optional pre-selected treatment/exposure column name; applied if present.
     """
     st.markdown("---")
     st.header("🗒️ Subgroup Analysis")

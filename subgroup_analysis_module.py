@@ -20,7 +20,11 @@ from contextlib import contextmanager
 
 @contextmanager
 def suppress_convergence_warnings():
-    """Temporarily suppress convergence warnings during model fitting."""
+    """
+    Context manager that suppresses convergence-related warnings during model fitting.
+    
+    While active, ignores RuntimeWarning and any warnings whose message contains the substring "convergence", allowing model-fitting code to run without emitting those warnings.
+    """
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', category=RuntimeWarning)
         warnings.filterwarnings('ignore', message='.*convergence.*')
@@ -43,12 +47,13 @@ class SubgroupAnalysisLogit:
     
     def __init__(self, df: pd.DataFrame):
         """
-        Initialize with dataset.
+        Set up the SubgroupAnalysisLogit instance with a copy of the provided dataset.
+        
+        Copies the input DataFrame and initializes internal containers for results, summary statistics,
+        interaction test results, and plotting figure storage.
         
         Parameters:
-        -----------
-        df : pd.DataFrame
-            Input data frame
+            df (pd.DataFrame): Input dataset to analyze; a shallow copy is stored internally.
         """
         self.df = df.copy()
         self.results = None
@@ -65,11 +70,19 @@ class SubgroupAnalysisLogit:
         adjustment_cols: list = None
     ) -> bool:
         """
-        Validate all required columns and data types.
+        Validate that required columns exist and meet basic requirements for subgroup analysis.
+        
+        Parameters:
+            outcome_col (str): Name of the outcome column; must contain exactly two unique values.
+            treatment_col (str): Name of the treatment/exposure column.
+            subgroup_col (str): Name of the subgroup column; must contain two or more categories.
+            adjustment_cols (list, optional): Additional column names required for adjusted models.
         
         Returns:
-        --------
-        bool : True if all validations pass
+            bool: True if all validations pass.
+        
+        Raises:
+            ValueError: If any required column is missing, the outcome is not binary, the subgroup has fewer than two categories, or the dataframe has fewer than 10 observations.
         """
         # Check columns exist
         required_cols = {outcome_col, treatment_col, subgroup_col}
@@ -104,26 +117,22 @@ class SubgroupAnalysisLogit:
         min_subgroup_n: int = 5,
     ) -> dict:
         """
-        Run complete subgroup analysis with interaction testing.
+        Perform a complete subgroup analysis for a binary outcome, including overall and stratum-specific logistic models and an interaction test.
         
         Parameters:
-        -----------
-        outcome_col : str
-            Binary outcome variable
-        treatment_col : str
-            Treatment/exposure variable
-        subgroup_col : str
-            Variable to stratify by
-        adjustment_cols : list, optional
-            List of adjustment variables
-        min_subgroup_n : int
-            Minimum sample size per subgroup
-        use_firth : bool
-            Use Firth's penalized likelihood for rare outcomes
+            outcome_col (str): Column name of the binary outcome (encoded as 0/1 or two distinct values).
+            treatment_col (str): Column name of the binary treatment/exposure (will be auto-encoded to 0/1 if necessary).
+            subgroup_col (str): Column name of the categorical stratification variable.
+            adjustment_cols (list, optional): List of covariate column names to include as adjustment terms; defaults to None.
+            min_subgroup_n (int): Minimum number of observations required to fit a subgroup model; subgroups with fewer observations are skipped.
         
         Returns:
-        --------
-        dict : Comprehensive results dictionary
+            dict: Structured results containing:
+                - overall: overall model estimate (odds ratio), confidence interval, p-value, n, and events;
+                - subgroups: list of subgroup result records (odds ratio, CI, p-value, n, events, etc.);
+                - interaction: interaction test results including `p_value` and `significant` flag;
+                - summary: computed summary statistics (counts, ranges, heterogeneity indicator);
+                - results_df: DataFrame of raw result rows used to build the output.
         """
         try:
             from statsmodels.formula.api import logit
@@ -324,7 +333,20 @@ class SubgroupAnalysisLogit:
     
     def _compute_summary_statistics(self) -> dict:
         """
-        Compute summary statistics from results.
+        Compute high-level summary statistics from the stored results DataFrame.
+        
+        Returns:
+            summary (dict): Aggregated statistics with keys:
+                - n_overall (int): Total sample size for the overall analysis.
+                - events_overall (int): Number of events in the overall analysis.
+                - n_subgroups (int): Count of subgroup rows included in results.
+                - or_overall (float): Overall odds ratio (OR) for the treatment.
+                - ci_overall (tuple[float, float]): 95% confidence interval for the overall OR as (low, high).
+                - p_overall (float or NaN): P-value for the overall treatment effect.
+                - p_interaction (float or NaN): P-value from the interaction (heterogeneity) test.
+                - heterogeneous (bool): True if the interaction test indicates significant heterogeneity.
+                - or_range (tuple[float, float]): Minimum and maximum subgroup ORs as (min, max); (0, 0) if no subgroups.
+                - or_range_ratio (float): Ratio of max OR to min OR across subgroups; np.inf if undefined (no subgroups or min <= 0).
         """
         if self.results is None or self.results.empty:
             return {}
@@ -350,7 +372,24 @@ class SubgroupAnalysisLogit:
     
     def _format_output(self) -> dict:
         """
-        Format output for reporting.
+        Prepare a JSON-serializable summary dictionary of analysis results for reporting.
+        
+        Returns an empty dict if no results are available or no overall row exists.
+        
+        Returns:
+            output (dict): A dictionary with the following keys:
+                overall (dict): Overall effect estimate with keys:
+                    - or (float): Odds ratio for the overall population.
+                    - ci (tuple[float, float]): Lower and upper 95% confidence interval.
+                    - p_value (float): P-value for the overall effect (may be NaN if model produced NaN).
+                    - n (int): Sample size used for the overall estimate.
+                    - events (int): Number of outcome events for the overall estimate.
+                subgroups (list[dict]): List of subgroup result records (one dict per subgroup) taken from the results DataFrame.
+                interaction (dict):
+                    - p_value (float|None): Interaction p-value, or None if not numeric/NaN.
+                    - significant (bool): Whether the interaction was flagged as significant.
+                summary (dict): Summary statistics computed by _compute_summary_statistics.
+                results_df (pandas.DataFrame): Original results DataFrame (kept for downstream use).
         """
         if self.results is None or self.results.empty:
             return {}
@@ -388,7 +427,19 @@ class SubgroupAnalysisLogit:
         color: str = "#2180BE"
     ):
         """
-        Create publication-grade forest plot.
+        Builds and stores a publication-grade forest plot of subgroup odds ratios.
+        
+        This requires that analyze() has been run and self.results populated; the plot includes subgroup estimates (OR and 95% CI) and appends the interaction p-value and heterogeneity cue to the title when available.
+        
+        Parameters:
+            title (str): Plot title to display above the figure.
+            color (str): Hex color used for the plot elements.
+        
+        Returns:
+            figure: The generated plot figure object.
+        
+        Raises:
+            ValueError: If analyze() has not been run and self.results is None.
         """
         if self.results is None:
             raise ValueError("Run analyze() first")
@@ -426,7 +477,15 @@ class SubgroupAnalysisLogit:
     
     def get_interpretation(self) -> str:
         """
-        Generate clinical interpretation.
+        Produce a concise clinical interpretation based on the stored interaction test result.
+        
+        Returns one of three short, user-facing strings:
+        - If the interaction p-value is missing or non-numeric, a question-mark message indicating the interaction test could not be performed.
+        - If the interaction is statistically significant, a warning-style message noting significant heterogeneity with the formatted p-value and recommending separate subgroup reporting and discussion of mechanisms.
+        - If not significant, a confirmation-style message noting no significant heterogeneity with the formatted p-value and that the overall effect is appropriate across subgroups.
+        
+        Returns:
+            str: A formatted interpretation message (includes an emoji and the interaction p-value when available).
         """
         p_int = self.interaction_result['p_value']
         het = self.interaction_result.get('significant', False)
@@ -462,7 +521,19 @@ class SubgroupAnalysisCox:
     
     def __init__(self, df: pd.DataFrame):
         """
-        Initialize with dataset.
+        Create a SubgroupAnalysisCox instance bound to the provided dataset.
+        
+        Parameters:
+            df (pd.DataFrame): Input dataset containing the columns required for Cox subgroup analysis
+                (e.g., time, event, treatment, subgroup, and any adjustment covariates). The dataframe
+                is copied and stored internally.
+        
+        Attributes set:
+            df (pd.DataFrame): A copy of the provided dataframe.
+            results: Placeholder for the analysis results DataFrame (None until analyze() is run).
+            stats: Placeholder for computed summary statistics (None until analyze() is run).
+            interaction_result: Placeholder for interaction test results (None until analyze() is run).
+            figure: Placeholder for a generated forest plot (None until create_forest_plot() is run).
         """
         self.df = df.copy()
         self.results = None
@@ -480,7 +551,26 @@ class SubgroupAnalysisCox:
         adjustment_cols: list = None
     ) -> bool:
         """
-        Validate all required columns and data types.
+        Validate that the DataFrame contains the required columns and that those columns meet Cox model input requirements.
+        
+        Checks performed:
+        - All required columns (time_col, event_col, treatment_col, subgroup_col, plus any adjustment_cols) are present.
+        - time_col is numeric and all values are greater than zero.
+        - event_col has exactly two distinct values.
+        - subgroup_col has at least two distinct categories.
+        
+        Parameters:
+            time_col (str): Name of the follow-up time/duration column.
+            event_col (str): Name of the binary event indicator column.
+            treatment_col (str): Name of the treatment/exposure column.
+            subgroup_col (str): Name of the subgroup/stratification column.
+            adjustment_cols (list, optional): Additional covariate column names required for the model.
+        
+        Returns:
+            bool: `True` if all validations pass.
+        
+        Raises:
+            ValueError: If any required column is missing, if time_col is non-numeric or contains non-positive values, if event_col is not binary, or if subgroup_col has fewer than two categories.
         """
         required_cols = {time_col, event_col, treatment_col, subgroup_col}
         if adjustment_cols:
@@ -518,28 +608,24 @@ class SubgroupAnalysisCox:
         min_events: int = 2
     ) -> dict:
         """
-        Run complete Cox subgroup analysis.
+        Perform a complete subgroup analysis using Cox proportional hazards models, producing overall and stratum-specific hazard ratios, an interaction test, and formatted results for reporting.
         
         Parameters:
-        -----------
-        time_col : str
-            Time to event variable
-        event_col : str
-            Event indicator (binary)
-        treatment_col : str
-            Treatment variable
-        subgroup_col : str
-            Stratification variable
-        adjustment_cols : list, optional
-            Adjustment variables
-        min_subgroup_n : int
-            Minimum sample size per subgroup
-        min_events : int
-            Minimum number of events per subgroup
+            time_col (str): Column name for follow-up time (duration).
+            event_col (str): Column name for the event indicator (binary).
+            treatment_col (str): Column name for the treatment/exposure variable (auto-encoded to 0/1 if binary non-numeric).
+            subgroup_col (str): Column name for the stratification variable used to define subgroups.
+            adjustment_cols (list, optional): List of covariate column names to adjust for in the models. Defaults to None.
+            min_subgroup_n (int, optional): Minimum number of observations required in a subgroup to attempt model fitting. Defaults to 5.
+            min_events (int, optional): Minimum number of events required in a subgroup to attempt model fitting. Defaults to 2.
         
         Returns:
-        --------
-        dict : Results dictionary
+            dict: A report dictionary containing:
+                - overall: dict with overall hazard ratio (`hr`), confidence interval (`ci` tuple), `p_value`, `n`, and `events`.
+                - subgroups: list of subgroup result dicts (each includes `group`, `subgroup`, `n`, `events`, `hr`, `ci_low`, `ci_high`, `p_value`, and related statistics).
+                - interaction: dict with `p_value` from the likelihood-ratio test and `significant` boolean.
+                - summary: computed summary statistics (counts, ranges, and heterogeneity indicator).
+                - results_df: pandas DataFrame of the raw collected results suitable for further inspection or plotting.
         """
         try:
             from lifelines import CoxPHFitter
@@ -720,7 +806,19 @@ class SubgroupAnalysisCox:
     
     def _compute_summary_statistics(self) -> dict:
         """
-        Compute summary statistics.
+        Assemble high-level summary statistics from self.results and the stored interaction result for reporting.
+        
+        Returns:
+            dict: Mapping with the following keys:
+                - n_overall (int): total sample size from the overall analysis row.
+                - events_overall (int): number of events from the overall analysis row.
+                - n_subgroups (int): count of subgroup rows included in results.
+                - hr_overall (float): hazard ratio from the overall analysis row.
+                - ci_overall (tuple[float, float]): lower and upper 95% confidence limits for the overall HR.
+                - p_overall (float): p-value for the overall treatment effect.
+                - p_interaction (float or NaN): p-value from the interaction (heterogeneity) test.
+                - heterogeneous (bool): whether the interaction was flagged as statistically significant.
+                - hr_range (tuple[float, float]): (min_hr, max_hr) across subgroup HRs; returns (0, 0) if no subgroup rows.
         """
         if self.results is None or self.results.empty:
             return {}
@@ -746,7 +844,24 @@ class SubgroupAnalysisCox:
     
     def _format_output(self) -> dict:
         """
-        Format output for reporting.
+        Format the analysis results into a JSON-serializable report dictionary.
+        
+        Returns:
+            report (dict): Structured output with keys:
+                - overall (dict): overall estimate with keys:
+                    - hr (float): hazard ratio for the overall cohort.
+                    - ci (tuple[float, float]): (lower, upper) 95% confidence interval for the HR.
+                    - p_value (float): p-value for the overall treatment effect.
+                    - n (int): sample size used for the overall estimate.
+                    - events (int): number of events for the overall estimate.
+                - subgroups (list[dict]): list of subgroup result records (each row from the results table serialized to dict).
+                - interaction (dict):
+                    - p_value (float|None): interaction test p-value, or None if not numeric/available.
+                    - significant (bool): flag indicating whether the interaction was marked significant.
+                - summary (dict): precomputed summary statistics from _compute_summary_statistics.
+                - results_df (pandas.DataFrame): the original results DataFrame.
+        
+            Returns an empty dict if no results are available.
         """
         if self.results is None or self.results.empty:
             return {}
@@ -784,7 +899,17 @@ class SubgroupAnalysisCox:
         color: str = "#2180BE"
     ):
         """
-        Create publication-grade forest plot.
+        Generate a publication-quality forest plot of subgroup Cox regression results.
+        
+        Parameters:
+            title (str): Main plot title. If an interaction p-value is available, a formatted interaction line is appended to the title.
+            color (str): Hex color used for plot elements (e.g., "#2180BE").
+        
+        Returns:
+            figure: The figure object containing the forest plot (plot rendered by the plotting backend).
+        
+        Raises:
+            ValueError: If analysis results are missing (run analyze() before calling this method).
         """
         if self.results is None:
             raise ValueError("Run analyze() first")
@@ -821,7 +946,13 @@ class SubgroupAnalysisCox:
     
     def get_interpretation(self) -> str:
         """
-        Generate clinical interpretation.
+        Produce a concise, human-readable interpretation of the interaction test result.
+        
+        Returns:
+            interpretation (str): A short text summarizing the interaction test outcome. Possible forms:
+                - A message indicating the interaction test could not be performed.
+                - A warning stating significant heterogeneity with the formatted P-value.
+                - A confirmation stating no significant heterogeneity with the formatted P-value.
         """
         p_int = self.interaction_result['p_value']
         het = self.interaction_result.get('significant', False)
