@@ -26,11 +26,6 @@ st.set_page_config(
 def _init_logging() -> bool:
     """
     Configure the application's global logging and record that the app has started.
-    
-    This sets up LoggerFactory for the running process and emits a startup log entry.
-    
-    Returns:
-        True if logging was successfully initialized.
     """
     LoggerFactory.configure()
     get_logger(__name__).info("📱 Streamlit app started")
@@ -41,25 +36,25 @@ _init_logging()
 # Get logger instance (after configuration)
 logger = get_logger(__name__)
 
-st.title(f"🏥 {CONFIG.get('ui.page_title', 'Medical Statistical Tool')}")
+#st.title(f"🏥 {CONFIG.get('ui.page_title', 'Medical Statistical Tool')}")
 
-components.html("""
-<script>
-    try {
-        var loader = window.parent && window.parent.document
-            ? window.parent.document.getElementById('loading-screen')
-            : null;
-        if (loader) {
-            loader.style.opacity = '0';
-            setTimeout(function() {
-                loader.style.display = 'none';
-            }, 500);
-        }
-    } catch (e) {
-        console.log("Loader removal error: " + e);
-    }
-</script>
-""", height=0)
+#components.html("""
+#<script>
+#    try {
+#        var loader = window.parent && window.parent.document
+#            ? window.parent.document.getElementById('loading-screen')
+#            : null;
+#        if (loader) {
+#            loader.style.opacity = '0';
+#            setTimeout(function() {
+#                loader.style.display = 'none';
+#            }, 500);
+#        }
+#    } catch (e) {
+#        console.log("Loader removal error: " + e);
+#    }
+#</script>
+#""", height=0)
 
 # ==========================================
 # 1a. CHECK OPTIONAL DEPENDENCIES (FIX #1)
@@ -68,11 +63,6 @@ components.html("""
 def check_optional_deps():
     """
     Report presence of optional third-party dependencies used by the app.
-    
-    Returns:
-        deps_status (dict): Mapping of dependency keys to status objects. Each status object contains:
-            - 'installed' (bool): True if the dependency is importable, False otherwise.
-            - 'msg' (str): Human-readable message describing availability or fallback behavior.
     """
     deps_status = {}
     
@@ -140,21 +130,16 @@ if st.sidebar.button("📄 Load Example Data"):
             n = 600 
             
             # --- 1. Demographics (Baseline) ---
-            # Age: Normal distribution, mean 60, SD 12
             age = np.random.normal(60, 12, n).astype(int).clip(30, 95)
-            # Sex: 0=Female, 1=Male
             sex = np.random.binomial(1, 0.5, n)
-            # BMI: Normal, mean 25, SD 5
             bmi = np.random.normal(25, 5, n).round(1).clip(15, 50)
             
             # --- 2. Create Confounding for PSM (Selection Bias) ---
-            # Scenario: Older patients and higher BMI are MORE likely to get the "New Drug" (Treatment=1)
-            # This creates baseline imbalance, making PSM necessary.
             logit_treat = -4.5 + (0.05 * age) + (0.08 * bmi) + (0.2 * sex)
             p_treat = 1 / (1 + np.exp(-logit_treat))
             group = np.random.binomial(1, p_treat, n)
             
-            # --- 3. Comorbidities (Dependent on Age/BMI) ---
+            # --- 3. Comorbidities ---
             logit_dm = -5 + (0.04 * age) + (0.1 * bmi)
             p_dm = 1 / (1 + np.exp(-logit_dm))
             diabetes = np.random.binomial(1, p_dm, n)
@@ -163,65 +148,44 @@ if st.sidebar.button("📄 Load Example Data"):
             p_ht = 1 / (1 + np.exp(-logit_ht))
             hypertension = np.random.binomial(1, p_ht, n)
 
-            # --- 4. Survival Outcome (Time-to-Event) ---
-            # "New Drug" (group=1) is protective (HR < 1)
-            # Age and Comorbidities increase risk (HR > 1)
-            # Baseline hazard chosen to give ~30-40% event rate
+            # --- 4. Survival Outcome ---
             lambda_base = 0.002 
-            # HR: Group=0.55 (Protective), Age=1.03/yr, DM=1.5
             linear_predictor = 0.03 * age + 0.4 * diabetes + 0.3 * hypertension - 0.6 * group
             hazard = lambda_base * np.exp(linear_predictor)
-            
-            # Generate Survival Time (Exponential distribution)
             surv_time = np.random.exponential(1/hazard, n)
-            
-            # Censoring: Random administrative censoring
-            censor_time = np.random.uniform(0, 100, n) # Follow up up to 100 months
-            
+            censor_time = np.random.uniform(0, 100, n)
             time_obs = np.minimum(surv_time, censor_time).round(1)
-            time_obs = np.maximum(time_obs, 0.5) # Minimum time 0.5 month
+            time_obs = np.maximum(time_obs, 0.5)
             status_death = (surv_time <= censor_time).astype(int)
             
-            # --- 5. Binary Outcome (Logistic Regression) ---
-            # Outcome: "Cured" at 1 year
-            # Treatment increases cure chance, Age decreases it
+            # --- 5. Binary Outcome ---
             logit_cure = 0.5 + 1.2 * group - 0.04 * age - 0.5 * diabetes
             p_cure = 1 / (1 + np.exp(-logit_cure))
             outcome_cured = np.random.binomial(1, p_cure, n)
 
             # --- 6. Diagnostic Test Data ---
-            # Gold Standard: Disease Status
-            gold_std = np.random.binomial(1, 0.3, n) # 30% Prevalence
-            
-            # Continuous Test Score (Rapid Test) - Good separation (AUC ~0.85)
-            # Healthy: Mean 20, SD 10
-            # Diseased: Mean 50, SD 15
+            gold_std = np.random.binomial(1, 0.3, n)
             rapid_score = np.where(gold_std==0, 
                                    np.random.normal(20, 10, n), 
                                    np.random.normal(50, 15, n))
             rapid_score = np.clip(rapid_score, 0, 100).round(1)
             
-            # Inter-rater Reliability (Kappa)
-            # Rater A: Good accuracy
             rater_a = np.where(gold_std==1, 
-                               np.random.binomial(1, 0.85, n), # Sensitivity 0.85
-                               np.random.binomial(1, 0.10, n)) # False Positive 0.10
+                               np.random.binomial(1, 0.85, n), 
+                               np.random.binomial(1, 0.10, n))
             
-            # Rater B: Agrees with A mostly, but has some noise
             agree_prob = 0.85
             rater_b = np.where(np.random.binomial(1, agree_prob, n)==1, 
                                rater_a, 
                                1 - rater_a)
 
             # --- 7. Correlation Data ---
-            # Example: HbA1c vs Fasting Glucose (Linear relationship + Noise)
             hba1c = np.random.normal(6.5, 1.5, n).clip(4, 14).round(1)
-            glucose = (hba1c * 15) + np.random.normal(0, 15, n) # Linear eq
+            glucose = (hba1c * 15) + np.random.normal(0, 15, n)
             glucose = glucose.round(0)
 
-            # --- 8. ICC Data (Continuous) ---
-            icc_rater1 = np.random.normal(120, 15, n).round(1) # e.g., Systolic BP
-            # Rater 2 is systematic higher + random noise
+            # --- 8. ICC Data ---
+            icc_rater1 = np.random.normal(120, 15, n).round(1)
             icc_rater2 = icc_rater1 + 5 + np.random.normal(0, 4, n)
             icc_rater2 = icc_rater2.round(1)
 
@@ -249,7 +213,7 @@ if st.sidebar.button("📄 Load Example Data"):
             
             st.session_state.df = pd.DataFrame(data)
         
-        # Set Metadata (Correctly Mapped)
+        # Set Metadata
         st.session_state.var_meta = {
             'Treatment_Group': {'type':'Categorical', 'map':{0:'Standard Care', 1:'New Drug'}, 'label': 'Treatment Group'},
             'Sex_Male': {'type':'Categorical', 'map':{0:'Female', 1:'Male'}, 'label': 'Sex'},
@@ -288,8 +252,8 @@ if upl:
     data_bytes = upl.getvalue()
     file_size_mb = len(data_bytes) / 1e6
     logger.log_operation("file_upload", "started",   # ✅ LOG START
-                       filename=upl.name, 
-                       size=f"{file_size_mb:.1f}MB")
+                        filename=upl.name, 
+                        size=f"{file_size_mb:.1f}MB")
     
     try:
         file_sig = (upl.name, hashlib.sha256(data_bytes).hexdigest())
@@ -342,7 +306,6 @@ if upl:
             st.sidebar.info("File already loaded.")
             
     except (ValueError, UnicodeDecodeError, pd.errors.ParserError, ImportError, Exception) as e:
-        # Broad catch for unpredictable file format errors
         logger.log_operation("file_upload", "failed", error=str(e))  # ✅ LOG ERROR
         st.sidebar.error(f"Error: {e}")
         st.session_state.df = None
@@ -369,6 +332,7 @@ if st.session_state.df is not None:
     st.sidebar.header("2. Settings")
     cols = st.session_state.df.columns.tolist()
     
+    # Auto detect for select box labeling
     auto_detect_meta = {c: st.session_state.var_meta.get(c, {'type': 'Auto-detect', 'map': {}}).get('type', 'Auto-detect') for c in cols}
     
     s_var = st.sidebar.selectbox("Edit Var:", ["Select...", *cols])
@@ -450,29 +414,41 @@ if st.session_state.df is not None:
         - Treatment: {st.session_state.matched_treatment_col}
         - Use dropdown in each tab to select **"✅ Matched Data"** for analysis
         """)
-    # 🟢 FINAL TAB LAYOUT (6 tabs total, merged Table 1 + PSM)
+        
+    # 🟢 FINAL TAB LAYOUT
     t0, t1, t2, t3, t4, t5 = st.tabs([
         "📁 Data Management", 
-        "📋 Table 1 & Matching",  # ← MERGED (has 2 subtabs)
+        "📋 Table 1 & Matching", 
         "🧪 Diagnostic Tests (ROC)",
         "📈 Correlation & ICC",
         "📊 Risk Factors (Logistic)",
         "⏳ Survival Analysis (KM & Cox)",
     ])
 
+    # ---------------------------------------------------------
+    # TAB 0: Data Management & Cleaning (MASTER LOGIC)
+    # ---------------------------------------------------------
     with t0:
+        # 1. User views/edits raw data (still has symbols like >100)
         st.session_state.df = tab_data.render(df) 
+        
+        # 2. Prepare Clean Data for Analysis Tabs
         custom_na = st.session_state.get('custom_na_list', [])
+        # This converts >100 to 100.0, etc.
         df_clean = tab_data.get_clean_data(st.session_state.df, custom_na)
 
+    # ---------------------------------------------------------
+    # TAB 1-5: Use Cleaned Data (df_clean)
+    # ---------------------------------------------------------
     with t1:
-        tab_baseline_matching.render(df_clean, st.session_state.var_meta)  # ← HAS INTERNAL SUBTABS
+        tab_baseline_matching.render(df_clean, st.session_state.var_meta)
         
     with t2:
         tab_diag.render(df_clean, st.session_state.var_meta)
         
     with t3:
-        tab_corr.render(df_clean)
+        # ✅ Fixed: Added st.session_state.var_meta argument
+        tab_corr.render(df_clean, st.session_state.var_meta)
         
     with t4:
         tab_logit.render(df_clean, st.session_state.var_meta)
