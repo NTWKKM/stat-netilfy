@@ -309,6 +309,14 @@ def _render_cox_subgroup_analysis(df: pd.DataFrame) -> None:
             
             # Clinical Guidelines
             with st.expander("📚 Clinical Reporting Guidelines (CONSORT Extension)", expanded=False):
+                # ✅ FIX: Calculate text outside f-string to avoid backslash error
+                if results['interaction']['significant']:
+                    result_text = "Evidence of significant heterogeneity"
+                    rec_text = "- Report Kaplan-Meier curves by subgroup\n- Discuss differential survival benefits\n- Consider stratified analyses in future trials"
+                else:
+                    result_text = "No significant heterogeneity"
+                    rec_text = "- Overall HR applies to all subgroups\n- No need for separate reporting by subgroup"
+
                 st.markdown(f"""
                 ### Subgroup Analysis in Survival Studies
                 
@@ -326,10 +334,10 @@ def _render_cox_subgroup_analysis(df: pd.DataFrame) -> None:
                 **Interaction Test:**
                 - Method: Wald test of {treatment_col_selected} × {subgroup_col_selected} interaction
                 - P-value: {results['interaction']['p_value']:.4f}
-                - Result: {"Evidence of significant heterogeneity" if results['interaction']['significant'] else "No significant heterogeneity"}
+                - Result: {result_text}
                 
                 **Reporting Recommendations:**
-                { "- Report Kaplan-Meier curves by subgroup\n- Discuss differential survival benefits\n- Consider stratified analyses in future trials" if results['interaction']['significant'] else "- Overall HR applies to all subgroups\n- No need for separate reporting by subgroup"}
+                {rec_text}
                 """)
             
             st.markdown("---")
