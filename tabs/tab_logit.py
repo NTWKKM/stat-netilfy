@@ -298,6 +298,14 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame) -> None:
             
             # Clinical Guidelines
             with st.expander("📚 Clinical Reporting Guidelines", expanded=False):
+                # ✅ FIX: Prepare strings outside f-string to avoid backslash error
+                if results['interaction']['significant']:
+                    conclusion_text = "Evidence of significant heterogeneity"
+                    rec_text = "- Report results separately for each subgroup\n- Discuss possible mechanisms for differential effect"
+                else:
+                    conclusion_text = "No significant heterogeneity detected"
+                    rec_text = "- Overall estimate is appropriate for all subgroups"
+
                 st.markdown(f"""
                 ### Subgroup Analysis Reporting (CONSORT, ICMJE)
                 
@@ -310,10 +318,10 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame) -> None:
                 **Interaction Test:**
                 - Test: Wald test of {treatment_col} × {subgroup_col} interaction
                 - P-value: {results['interaction']['p_value']:.4f}
-                - Conclusion: {"Evidence of significant heterogeneity" if results['interaction']['significant'] else "No significant heterogeneity detected"}
+                - Conclusion: {conclusion_text}
                 
                 **Recommendations:**
-                {"- Report results separately for each subgroup\n- Discuss possible mechanisms for differential effect" if results['interaction']['significant'] else "- Overall estimate is appropriate for all subgroups"}
+                {rec_text}
                 """)
             
             st.markdown("---")
@@ -517,7 +525,7 @@ def render(df, var_meta):
                                             ref_line=1.0
                                         )
                                         st.plotly_chart(fig_crude, use_container_width=True)
-                        
+                                
                         st.divider()
                         st.subheader("📋 Detailed Report")
                         st.components.v1.html(html, height=600, scrolling=True)
