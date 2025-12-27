@@ -41,7 +41,11 @@ def _get_dataset_for_correlation(df: pd.DataFrame):
 # ✅ ปรับแก้ให้รับ var_meta=None เพื่อรองรับการเรียกจาก app.py
 def render(df, var_meta=None):
     """
-    Render the Correlation & ICC section UI in Streamlit.
+    Render the "Correlation & ICC" user interface for exploring correlations and intraclass correlation coefficients.
+    
+    Parameters:
+        df (pd.DataFrame): Source dataset used for analysis and selection between original/matched variants.
+        var_meta (dict, optional): Mapping of column names to metadata (e.g., {'col': {'label': 'Friendly Name'}}). When provided, friendly labels from this mapping are used in selection controls and report headings.
     """
     # จัดการ var_meta ถ้าเป็น None ให้เป็น dict ว่าง
     if var_meta is None:
