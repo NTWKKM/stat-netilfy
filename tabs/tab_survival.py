@@ -444,7 +444,7 @@ def render(df, _var_meta):
         # 🟢 Layout: Buttons side-by-side
         col_btn1, col_btn2 = st.columns([1, 4])
         with col_btn1:
-            run_curves = st.button("🚀 Run Analysis", key='btn_run_curves', use_container_width=True)
+            run_curves = st.button("🚀 Generate Survival Curve", type="primary", key='btn_run_curves', use_container_width=True)
         
         # Initialize session state for this tab
         if 'surv_curve_res' not in st.session_state:
@@ -554,7 +554,7 @@ def render(df, _var_meta):
             # 🟢 Layout: Buttons side-by-side
             col_lm_btn1, col_lm_btn2 = st.columns([1, 4])
             with col_lm_btn1:
-                run_landmark = st.button("🚀 Run Landmark Analysis", key='btn_lm_sur', use_container_width=True)
+                run_landmark = st.button("🚀 Run Landmark Analysis", type="primary", key='btn_lm_sur', use_container_width=True)
 
             # Initialize session state for this tab
             if 'surv_lm_res' not in st.session_state:
@@ -633,7 +633,7 @@ def render(df, _var_meta):
         # 🟢 Layout: Buttons side-by-side
         col_cox_btn1, col_cox_btn2 = st.columns([1, 4])
         with col_cox_btn1:
-            run_cox = st.button("🚀 Run Cox Model", key='btn_run_cox', use_container_width=True)
+            run_cox = st.button("🚀 Run Cox Model", type="primary", key='btn_run_cox', use_container_width=True)
 
         if run_cox:
             if not covariates:

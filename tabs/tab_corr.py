@@ -41,7 +41,11 @@ def _get_dataset_for_correlation(df: pd.DataFrame):
 # ✅ ปรับแก้ให้รับ var_meta=None เพื่อรองรับการเรียกจาก app.py
 def render(df, var_meta=None):
     """
-    Render the Correlation & ICC section UI in Streamlit.
+    Render the "Correlation & ICC" user interface for exploring correlations and intraclass correlation coefficients.
+    
+    Parameters:
+        df (pd.DataFrame): Source dataset used for analysis and selection between original/matched variants.
+        var_meta (dict, optional): Mapping of column names to metadata (e.g., {'col': {'label': 'Friendly Name'}}). When provided, friendly labels from this mapping are used in selection controls and report headings.
     """
     # จัดการ var_meta ถ้าเป็น None ให้เป็น dict ว่าง
     if var_meta is None:
@@ -111,7 +115,7 @@ def render(df, var_meta=None):
         run_col_cont, dl_col_cont = st.columns([1, 1])
         if 'html_output_corr_cont' not in st.session_state: st.session_state.html_output_corr_cont = None
 
-        if run_col_cont.button("📉 Analyze Correlation", key='btn_run_cont'):
+        if run_col_cont.button("📉 Analyze Correlation", type="primary", key='btn_run_cont'):
             if cv1 == cv2:
                 st.error("Please select different variables.")
             else:
@@ -169,7 +173,7 @@ def render(df, var_meta=None):
         if 'html_output_icc' not in st.session_state: 
             st.session_state.html_output_icc = None
         
-        if icc_run.button("📏 Calculate ICC", key='btn_icc_run', help="Calculates Intraclass Correlation Coefficient for reliability"):
+        if icc_run.button("📏 Calculate ICC", type="primary", key='btn_icc_run', help="Calculates Intraclass Correlation Coefficient for reliability"):
             if len(icc_cols) < 2:
                 st.error("❌ Please select at least 2 numeric columns for ICC calculation.")
                 st.stop()

@@ -118,7 +118,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         run_col, dl_col = st.columns([1, 1])
         if 'html_output_roc' not in st.session_state: st.session_state.html_output_roc = None
         
-        if run_col.button("📉 Analyze ROC", key='btn_roc_diag'):
+        if run_col.button("🚀 Analyze ROC", type="primary", key='btn_roc_diag'):
             if pos_label and len(unique_vals) == 2:
                 # Call analyze_roc from diag_test (using selected_df)
                 res, err, fig, coords_df = diag_test.analyze_roc(selected_df, truth, score, 'delong' if 'DeLong' in method else 'hanley', pos_label_user=pos_label)
@@ -252,7 +252,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         if 'html_output_chi' not in st.session_state: 
             st.session_state.html_output_chi = None
 
-        if run_col.button("🚀 Run Analysis (Chi-Square)", key='btn_chi_run_diag', disabled=not inputs_ok):
+        if run_col.button("🚀 Analyze Chi-Square", type="primary", key='btn_chi_run_diag', disabled=not inputs_ok):
             
             # --- 🟢 จุดที่ 3 เพิ่มตรงนี้ครับ ---
             # CodeRabbit เตือนว่า selectbox คืนค่าเป็น String (เช่น "1") 
@@ -361,7 +361,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         if 'html_output_kappa' not in st.session_state:
             st.session_state.html_output_kappa = None
         
-        if k_run.button("🤝 Calculate Kappa", key='btn_kappa_run'):
+        if k_run.button("🚀 Calculate Kappa", type="primary", key='btn_kappa_run'):
             res_df, err, conf_mat = diag_test.calculate_kappa(selected_df, kv1, kv2)
             if err:
                 st.error(err)
