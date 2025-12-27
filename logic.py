@@ -175,8 +175,8 @@ def run_binary_logit(y, X, method='default'):
             nagelkerke = cox_snell / max_r2 if max_r2 > 1e-9 else np.nan
             
             stats_metrics = {"mcfadden": mcfadden, "nagelkerke": nagelkerke}
-        except Exception as e:
-            logger.debug(f"Failed to calculate R2 metrics: {e}")
+        except (AttributeError, ZeroDivisionError, TypeError) as e:
+            logger.debug("Failed to calculate R2 metrics: %s", e)
         
         return result.params, result.conf_int(), result.pvalues, "OK", stats_metrics
         
