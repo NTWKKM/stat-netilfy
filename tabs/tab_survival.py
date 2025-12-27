@@ -442,7 +442,7 @@ def render(df, _var_meta):
         plot_type = c2.radio("Select Plot Type:", ["Kaplan-Meier (Survival Function)", "Nelson-Aalen (Cumulative Hazard)"], horizontal=True)
         
         # 🟢 Layout: Buttons side-by-side
-        col_btn1, col_btn2 = st.columns([4, 1])
+        col_btn1, col_btn2 = st.columns([1, 4])
         with col_btn1:
             run_curves = st.button("🚀 Generate Survival Curve", type="primary", key='btn_run_curves', use_container_width=True)
         
@@ -552,7 +552,7 @@ def render(df, _var_meta):
             col_group = st.selectbox("Compare Group:", available_cols, index=group_idx, key='lm_group_sur')
 
             # 🟢 Layout: Buttons side-by-side
-            col_lm_btn1, col_lm_btn2 = st.columns([2, 2])
+            col_lm_btn1, col_lm_btn2 = st.columns([1, 4])
             with col_lm_btn1:
                 run_landmark = st.button("🚀 Run Landmark Analysis", type="primary", key='btn_lm_sur', use_container_width=True)
 
@@ -631,7 +631,7 @@ def render(df, _var_meta):
             st.session_state.cox_txt_report = None
         
         # 🟢 Layout: Buttons side-by-side
-        col_cox_btn1, col_cox_btn2 = st.columns([2, 2])
+        col_cox_btn1, col_cox_btn2 = st.columns([1, 4])
         with col_cox_btn1:
             run_cox = st.button("🚀 Run Cox Model", type="primary", key='btn_run_cox', use_container_width=True)
 
