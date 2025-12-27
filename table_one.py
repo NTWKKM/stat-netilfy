@@ -299,7 +299,7 @@ def calculate_smd(df, col, group_col, g1_val, g2_val, is_cat, mapped_series=None
                 val_str = f"<b>{val_str}</b>"
             return val_str
 
-    except Exception:
+    except (ValueError, TypeError, ZeroDivisionError, KeyError):
         return "-"
 
 # --- P-value Functions (Unchanged) ---
