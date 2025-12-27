@@ -73,10 +73,10 @@ class ConfigManager:
     
                 # P-value Handling (NEJM-oriented defaults)
                 "pvalue_bounds_lower": 0.001,      # NEJM: show P<0.001 for smaller values
-                "pvalue_bounds_upper": 0.99,       # NEJM: often cap display at >0.99
+                "pvalue_bounds_upper": 0.999,       # NEJM: often cap display at >0.99
                 "pvalue_clip_tolerance": 0.00001,  # tighter tolerance for extreme p
                 "pvalue_format_small": "<0.001",
-                "pvalue_format_large": ">0.99",
+                "pvalue_format_large": ">0.999",
     
                 # Survival Analysis
                 "survival_method": "kaplan-meier",  # 'kaplan-meier', 'weibull'
