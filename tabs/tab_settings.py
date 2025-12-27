@@ -247,10 +247,10 @@ def render():
             
             **Recommended NEJM Settings**:
             - Lower Bound: 0.001
-            - Upper Bound: 0.99
+            - Upper Bound: 0.999
             - Clip Tolerance: 0.00001
             - Small P Format: "<0.001"
-            - Large P Format: ">0.99"
+            - Large P Format: ">0.999"
             """)
             
             c1, c2 = st.columns(2)
@@ -313,10 +313,10 @@ def render():
 
                 curr_fl = CONFIG.get('analysis.pvalue_format_large')
                 new_fl = st.text_input(
-                    "Large P Format (e.g. >0.99)", 
+                    "Large P Format (e.g. >0.999)", 
                     curr_fl, 
                     key='an_pv_fl',
-                    help="NEJM standard: '>0.99'. Display format for p-values above upper bound."
+                    help="NEJM standard: '>0.999'. Display format for p-values above upper bound."
                 )
                 if new_fl != curr_fl:
                     try:
