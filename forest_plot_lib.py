@@ -307,7 +307,7 @@ class ForestPlot:
                 low_str = f"{low:.2f}" if np.isfinite(low) else "Inf"
                 high_str = f"{high:.2f}" if np.isfinite(high) else "Inf"
                 return f"{est_str} ({low_str}-{high_str})"
-            except:
+            except (KeyError, TypeError, ValueError):
                 return "Error"
 
         self.data['__display_est'] = self.data.apply(fmt_est_ci, axis=1)
@@ -1142,4 +1142,4 @@ def render_forest_plot_in_streamlit(
     
     except ValueError as e:
         st.error(f"❌ Error creating forest plot: {e}")
-        logger.error(f"Forest plot rendering failed: {e}")
+        logger.exception("Forest plot rendering failed")
