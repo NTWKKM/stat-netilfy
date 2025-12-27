@@ -83,6 +83,18 @@ def calculate_median_survival(df, duration_col, event_col, group_col):
         raise ValueError(f"Missing required columns: {missing}")
     
     data = df.dropna(subset=[duration_col, event_col])
+    
+    # Validate numeric data types
+    if not pd.api.types.is_numeric_dtype(data[duration_col]):
+        raise ValueError(f"Duration column '{duration_col}' must contain numeric values")
+    if not pd.api.types.is_numeric_dtype(data[event_col]):
+        raise ValueError(f"Event column '{event_col}' must contain numeric values (0/1 or boolean)")
+    
+    # Validate event column values
+    unique_events = data[event_col].dropna().unique()
+    if not all(v in [0, 1, True, False] for v in unique_events):
+        raise ValueError(f"Event column '{event_col}' must contain only 0/1 or boolean values")
+    
     if group_col:
         data = data.dropna(subset=[group_col])
         groups = sorted(data[group_col].unique(), key=lambda v: str(v))
