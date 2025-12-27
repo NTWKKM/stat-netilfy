@@ -36,26 +36,6 @@ _init_logging()
 # Get logger instance (after configuration)
 logger = get_logger(__name__)
 
-#st.title(f"🏥 {CONFIG.get('ui.page_title', 'Medical Statistical Tool')}")
-
-#components.html("""
-#<script>
-#    try {
-#        var loader = window.parent && window.parent.document
-#            ? window.parent.document.getElementById('loading-screen')
-#            : null;
-#        if (loader) {
-#            loader.style.opacity = '0';
-#            setTimeout(function() {
-#                loader.style.display = 'none';
-#            }, 500);
-#        }
-#    } catch (e) {
-#        console.log("Loader removal error: " + e);
-#    }
-#</script>
-#""", height=0)
-
 # ==========================================
 # 1a. CHECK OPTIONAL DEPENDENCIES (FIX #1)
 # ==========================================
@@ -91,6 +71,7 @@ try:
     from tabs import tab_corr
     from tabs import tab_logit
     from tabs import tab_survival
+    from tabs import tab_settings  # 🟢 NEW: Import Settings Tab
 except (KeyboardInterrupt, SystemExit):
     raise
 except Exception as e:
@@ -329,7 +310,7 @@ if st.sidebar.button("⚠️ Reset All Data", type="primary"):
 
 # Variable Settings (Metadata)
 if st.session_state.df is not None:
-    st.sidebar.header("2. Settings")
+    st.sidebar.header("2. Variable Metadata") # 🟢 Renamed to avoid confusion with new Settings Tab
     cols = st.session_state.df.columns.tolist()
     
     # Auto detect for select box labeling
@@ -390,7 +371,7 @@ if st.session_state.df is not None:
             st.rerun()
 
 # ==========================================
-# MAIN AREA - TABS (6 TOTAL - MERGED)
+# MAIN AREA - TABS (7 TOTAL)
 # ==========================================
 if st.session_state.df is not None:
     df = st.session_state.df 
@@ -415,14 +396,15 @@ if st.session_state.df is not None:
         - Use dropdown in each tab to select **"✅ Matched Data"** for analysis
         """)
         
-    # 🟢 FINAL TAB LAYOUT
-    t0, t1, t2, t3, t4, t5 = st.tabs([
+    # 🟢 FINAL TAB LAYOUT (Now 7 Tabs)
+    t0, t1, t2, t3, t4, t5, t6 = st.tabs([
         "📁 Data Management", 
         "📋 Table 1 & Matching", 
         "🧪 Diagnostic Tests (ROC)",
         "📈 Correlation & ICC",
         "📊 Risk Factors (Logistic)",
         "⏳ Survival Analysis (KM & Cox)",
+        "⚙️ Settings" # 🟢 NEW TAB
     ])
 
     # ---------------------------------------------------------
@@ -455,11 +437,17 @@ if st.session_state.df is not None:
         
     with t5:
         tab_survival.render(df_clean, st.session_state.var_meta)
+
+    # ---------------------------------------------------------
+    # TAB 6: Settings (Global Config)
+    # ---------------------------------------------------------
+    with t6:
+        tab_settings.render()
         
 else:
     st.info("👈 Please load example data or upload a file to start.")
     st.markdown("""
-### ✨ 6-Tab Analysis Pipeline:
+### ✨ 7-Tab Analysis Pipeline:
 
 1. **📁 Data Management** - Upload, clean, set variable types
 2. **📋 Table 1 & Matching** - Baseline characteristics + Propensity Score Matching
@@ -467,6 +455,7 @@ else:
 4. **📈 Correlation & ICC** - Pearson, Spearman, ICC reliability
 5. **📊 Risk Factors (Logistic)** - Binary logistic regression
 6. **⏳ Survival Analysis** - Kaplan-Meier & Cox regression
+7. **⚙️ Settings** - Configure system parameters, UI, and analysis defaults
     """)
     
 # ==========================================

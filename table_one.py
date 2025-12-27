@@ -101,6 +101,30 @@ def compute_or_ci(a, b, c, d):
     except Exception:
         return "-"
 
+# --- 🟢 FIXED: Safe comparison helper for Bug #2 ---
+def safe_group_compare(series, val):
+    """
+    Robust comparison handling float vs int vs string mismatches.
+    Fixes: str(1.0) != str(1) issue.
+    
+    Args:
+        series: pandas Series to compare
+        val: value to compare against
+        
+    Returns:
+        Boolean Series with comparison results
+    """
+    # Try numeric comparison first if series is numeric
+    if pd.api.types.is_numeric_dtype(series):
+        try:
+            val_float = float(val)
+            return series == val_float
+        except (ValueError, TypeError):
+            # Fallback to string comparison
+            return series.astype(str) == str(val)
+            
+    # Fallback to string comparison for non-numeric series
+    return series.astype(str) == str(val)
 # --- 🟢 UPDATED: Calculate OR & 95% CI (One-vs-Rest) for Categorical [Legacy/Fallback] ---
 def compute_or_for_row(row_series, cat_val, group_series, g1_val):
     try:
@@ -109,10 +133,11 @@ def compute_or_for_row(row_series, cat_val, group_series, g1_val):
         row_series = row_series[mask]
         group_series = group_series[mask]
         
-        # Cast to strings to ensure safe comparison
+        # Safe string comparison for row categories
         row_bin = (row_series.astype(str) == str(cat_val))
-        # Normalize to string to avoid "1" vs 1 mismatches from CSV/object dtypes
-        group_bin = (group_series.astype(str) == str(g1_val))
+        
+        # 🟢 FIX BUG #2: Use safe numeric comparison
+        group_bin = safe_group_compare(group_series, g1_val)
         
         a = (row_bin & group_bin).sum()
         b = (row_bin & ~group_bin).sum()
@@ -143,7 +168,8 @@ def compute_or_vs_ref(row_series, cat_target, cat_ref, group_series, g1_val):
         exposure = (rs.astype(str) == str(cat_target))
         
         # Outcome: 1 if Case (g1_val)
-        outcome = (gs.astype(str) == str(g1_val))
+        # 🟢 FIX BUG #2: Use safe numeric comparison
+        outcome = safe_group_compare(gs, g1_val)
         
         a = (exposure & outcome).sum()      # Exposed (Target) & Case
         b = (exposure & ~outcome).sum()     # Exposed (Target) & Control
@@ -164,13 +190,14 @@ def calculate_or_continuous_logit(df, feature_col, group_col, group1_val):
     try:
         # Prepare Data
         # Y = Target (Binary: 1=Group1, 0=Others)
-        y = (df[group_col] == group1_val).astype(int)
+        # 🟢 FIX BUG #2: Use safe numeric comparison
+        y = safe_group_compare(df[group_col], group1_val).astype(int)
         
         # X = Feature (Continuous)
         X = df[feature_col].apply(clean_numeric).rename(feature_col)
         
         # Drop NaNs aligned
-        mask = X.notna() & y.notna()
+        mask = X.notna() & df[group_col].notna() # Check group_col na too
         y = y[mask]
         X = X[mask]
         
@@ -207,6 +234,79 @@ def calculate_or_continuous_logit(df, feature_col, group_col, group1_val):
             
         return f"{or_val:.2f} ({lower:.2f}-{upper:.2f})"
     except Exception:
+        return "-"
+
+# --- ⭐ NEW: Calculate SMD (Standardized Mean Difference) ---
+def calculate_smd(df, col, group_col, g1_val, g2_val, is_cat, mapped_series=None, cats=None):
+    """
+    Calculate SMD for Table 1.
+    - Continuous: Cohen's d (using pooled SD).
+    - Categorical: Calculate SMD for each level (P1 vs P2) treating as binary.
+    Returns: String (single value or <br> joined values).
+    """
+    try:
+        # 1. Filter Data by Groups
+        mask1 = safe_group_compare(df[group_col], g1_val)
+        mask2 = safe_group_compare(df[group_col], g2_val)
+        
+        if is_cat:
+            # Categorical: SMD per level
+            if mapped_series is None or cats is None: return "-"
+            
+            s1 = mapped_series[mask1]
+            s2 = mapped_series[mask2]
+            n1, n2 = len(s1), len(s2)
+            if n1 == 0 or n2 == 0: return "-"
+            
+            res_smd = []
+            for cat in cats:
+                # Calculate proportion for this category
+                p1 = (s1.astype(str) == str(cat)).mean()
+                p2 = (s2.astype(str) == str(cat)).mean()
+                
+                # SMD for binary (proportion)
+                # Denominator: sqrt((p1(1-p1) + p2(1-p2))/2)
+                var1 = p1 * (1 - p1)
+                var2 = p2 * (1 - p2)
+                pooled_sd = np.sqrt((var1 + var2) / 2)
+                
+                if pooled_sd == 0:
+                    smd_val = 0.0
+                else:
+                    smd_val = abs(p1 - p2) / pooled_sd
+                
+                # Format
+                val_str = f"{smd_val:.3f}"
+                if smd_val >= 0.1: # Highlight Imbalanced
+                    val_str = f"<b>{val_str}</b>"
+                res_smd.append(val_str)
+                
+            return "<br>".join(res_smd)
+            
+        else:
+            # Continuous: Standard Cohen's d
+            v1 = df.loc[mask1, col].apply(clean_numeric).dropna()
+            v2 = df.loc[mask2, col].apply(clean_numeric).dropna()
+            
+            if len(v1) == 0 or len(v2) == 0: return "-"
+            
+            m1, m2 = v1.mean(), v2.mean()
+            s1, s2 = v1.std(), v2.std()
+            
+            if pd.isna(s1) or pd.isna(s2): return "-"
+            
+            pooled_sd = np.sqrt((s1**2 + s2**2) / 2)
+            if pooled_sd == 0: 
+                smd_val = 0.0
+            else:
+                smd_val = abs(m1 - m2) / pooled_sd
+                
+            val_str = f"{smd_val:.3f}"
+            if smd_val >= 0.1:
+                val_str = f"<b>{val_str}</b>"
+            return val_str
+
+    except (ValueError, TypeError, ZeroDivisionError, KeyError):
         return "-"
 
 # --- P-value Functions (Unchanged) ---
@@ -288,10 +388,15 @@ def generate_table(df, selected_vars, group_col, var_meta, or_style='all_levels'
     # Check if we can calculate OR (Must be exactly 2 groups)
     show_or = has_group and len(groups) == 2
     group_1_val = None
+    group_2_val = None # Need for SMD
+    
     if show_or:
         group_vals = [g["val"] for g in groups]
         # Auto-detect "Case" group (prefer 1 or higher value)
+        # Usually g[1] is case if sorted 0,1
         group_1_val = 1 if 1 in group_vals else max(group_vals, key=_group_sort_key)
+        # Identify the other group
+        group_2_val = next(g for g in group_vals if g != group_1_val)
 
     # CSS with unified teal colors
     css_style = f"""
@@ -359,7 +464,8 @@ def generate_table(df, selected_vars, group_col, var_meta, or_style='all_levels'
     html += f"<th>Total (N={len(df)})</th>"
     if has_group:
         for g in groups:
-            n_g = len(df[df[group_col] == g['val']])
+            # 🟢 FIX BUG #2: Use safe numeric comparison
+            n_g = len(df[safe_group_compare(df[group_col], g['val'])])
             html += f"<th>{_html.escape(str(g['label']))} (n={n_g})</th>"
     
     # OR Column Header
@@ -368,6 +474,9 @@ def generate_table(df, selected_vars, group_col, var_meta, or_style='all_levels'
             html += "<th>OR (95% CI)<br><span style='font-size:0.8em; font-weight:normal'>(Effect vs Ref)</span></th>"
         else:
             html += "<th>OR (95% CI)<br><span style='font-size:0.8em; font-weight:normal'>(All Levels vs Ref)</span></th>"
+        
+        # ⭐ ADD SMD HEADER
+        html += "<th>SMD<br><span style='font-size:0.8em; font-weight:normal'>(>0.1 Imbalanced)</span></th>"
         
     html += "<th>P-value</th>"
     html += "<th>Test Used</th>"
@@ -397,6 +506,7 @@ def generate_table(df, selected_vars, group_col, var_meta, or_style='all_levels'
             val_total = get_stats_categorical_str(counts_total, n_total)
         else:
             val_total = get_stats_continuous(df[col])
+            mapped_full_series = None
             
         row_html += f"<td style='text-align: center;'>{val_total}</td>"
         
@@ -404,7 +514,9 @@ def generate_table(df, selected_vars, group_col, var_meta, or_style='all_levels'
         
         if has_group:
             for g in groups:
-                sub_df = df[df[group_col] == g['val']]
+                # 🟢 FIX BUG #2: Use safe numeric comparison
+                sub_df = df[safe_group_compare(df[group_col], g['val'])]
+                
                 # Get stats for this group
                 if is_cat:
                     counts_g, n_g, _ = get_stats_categorical_data(sub_df[col], var_meta, col)
@@ -428,8 +540,6 @@ def generate_table(df, selected_vars, group_col, var_meta, or_style='all_levels'
                         
                         if or_style == 'simple':
                             # 1. Simple Mode: One line
-                            # - If Binary: Compare 2nd vs 1st(Ref)
-                            # - If Multi: Compare Last vs 1st(Ref) -> To satisfy "One line"
                             target_cat = cats[-1]
                             
                             or_res = compute_or_vs_ref(mapped_full_series, target_cat, ref_cat, df[group_col], group_1_val)
@@ -452,6 +562,11 @@ def generate_table(df, selected_vars, group_col, var_meta, or_style='all_levels'
                     or_cell_content = calculate_or_continuous_logit(df, col, group_col, group_1_val)
                 
                 row_html += f"<td style='text-align: center; white-space: nowrap;'>{or_cell_content}</td>"
+
+                # ⭐ CALCULATE SMD
+                smd_cats = counts_total.index.tolist() if is_cat else None
+                smd_val = calculate_smd(df, col, group_col, group_1_val, group_2_val, is_cat, mapped_full_series, smd_cats)
+                row_html += f"<td style='text-align: center;'>{smd_val}</td>"
 
             # Calculate P-value
             if is_cat: 
@@ -484,7 +599,8 @@ def generate_table(df, selected_vars, group_col, var_meta, or_style='all_levels'
     <b>OR (Odds Ratio):</b> <br>
     - Categorical: { 'Simple (Single level vs Ref)' if or_style=='simple' else 'All Levels (Every level vs Ref)' }.<br>
     - Continuous: Univariate Logistic Regression (Odds change per 1 unit increase).<br>
-    Reference group (exposed/case): <b>{_html.escape(str(ref_group_label))}</b> (value: {group_1_val}). Values are OR (95% CI).
+    Reference group (exposed/case): <b>{_html.escape(str(ref_group_label))}</b> (value: {group_1_val}). Values are OR (95% CI).<br>
+    <b>SMD (Standardized Mean Difference):</b> Value < 0.1 indicates good balance. Bold values indicate SMD >= 0.1.
     </div>"""
     else:
         html += """<div class='footer-note'>

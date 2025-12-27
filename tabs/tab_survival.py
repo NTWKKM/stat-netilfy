@@ -17,12 +17,6 @@ logger = get_logger(__name__)
 def _get_dataset_for_survival(df: pd.DataFrame):
     """
     Choose between the original DataFrame and an available propensity-score matched DataFrame for survival analysis.
-    
-    Parameters:
-        df (pd.DataFrame): The original dataset to use if no matched dataset is available or if the user selects the original data.
-    
-    Returns:
-        (pd.DataFrame, str): The selected DataFrame and a human-readable label describing the data source and its row count.
     """
     has_matched = (
         st.session_state.get("is_matched", False)
@@ -56,11 +50,6 @@ def _get_dataset_for_survival(df: pd.DataFrame):
 def _render_cox_subgroup_analysis(df: pd.DataFrame) -> None:
     """
     Render the Cox proportional hazards subgroup analysis UI and execute the analysis workflow.
-    
-    Presents UI controls for selecting follow-up time, binary event indicator, treatment, subgroup, and adjustment covariates; provides advanced settings (minimum subgroup size, minimum events, custom title); runs SubgroupAnalysisCox to fit subgroup-specific Cox models and interaction tests; displays a forest plot, summary metrics, a detailed results table, interpretation text, CONSORT-style reporting guidance, and export buttons (HTML plot, CSV, JSON). Results and analyzer are stored in Streamlit session state under `subgroup_results_cox` and `subgroup_analyzer_cox`. Handles missing lifelines dependency and reports validation or runtime errors with user-facing troubleshooting hints.
-    
-    Parameters:
-        df (pd.DataFrame): Input dataset used for the subgroup Cox analysis (must contain numeric follow-up time and a binary event column).
     """
     st.header("🗒️ Subgroup Analysis (Survival)")
     
@@ -93,7 +82,7 @@ def _render_cox_subgroup_analysis(df: pd.DataFrame) -> None:
     if not binary_cols:
        st.error("No binary columns found for event indicator.")
        return
-        
+       
     # Time variable
     with col1:
         time_col_selected = st.selectbox(
@@ -309,7 +298,6 @@ def _render_cox_subgroup_analysis(df: pd.DataFrame) -> None:
             
             # Clinical Guidelines
             with st.expander("📚 Clinical Reporting Guidelines (CONSORT Extension)", expanded=False):
-                # ✅ FIX: Calculate text outside f-string to avoid backslash error
                 if results['interaction']['significant']:
                     result_text = "Evidence of significant heterogeneity"
                     rec_text = "- Report Kaplan-Meier curves by subgroup\n- Discuss differential survival benefits\n- Consider stratified analyses in future trials"
@@ -404,12 +392,6 @@ def _render_cox_subgroup_analysis(df: pd.DataFrame) -> None:
 def render(df, _var_meta):
     """
     Render the Streamlit UI and orchestrate interactive survival analysis workflows (Kaplan–Meier / Nelson–Aalen curves, landmark analysis, Cox regression with assumption checks and forest plots, and Cox subgroup analysis) for a chosen dataset.
-    
-    Builds controls for selecting the dataset (original or matched), time and event variables, covariates and subgroup definitions; runs the selected analyses when triggered; displays plots, tables, and interpretation guidance across five tabs; and exposes downloadable HTML/CSV/JSON reports. Analysis outputs and UI state are persisted in st.session_state so users can view or export previous results.
-    
-    Parameters:
-        df (pandas.DataFrame): Input dataset used for analyses; must include a time column and an event indicator column.
-        _var_meta (Mapping): Optional variable metadata used to provide contextual UI hints (not required for core analysis).
     """
     st.subheader("⏳ Survival Analysis")
     st.info("""
@@ -459,31 +441,35 @@ def render(df, _var_meta):
         col_group = c1.selectbox("Compare Groups (Optional):", ["None", *all_cols], key='surv_group')
         plot_type = c2.radio("Select Plot Type:", ["Kaplan-Meier (Survival Function)", "Nelson-Aalen (Cumulative Hazard)"], horizontal=True)
         
-        if st.button("Run Analysis", key='btn_run_curves'):
+        # 🟢 Layout: Buttons side-by-side
+        col_btn1, col_btn2 = st.columns([1, 4])
+        with col_btn1:
+            run_curves = st.button("🚀 Run Analysis", key='btn_run_curves', use_container_width=True)
+        
+        # Initialize session state for this tab
+        if 'surv_curve_res' not in st.session_state:
+            st.session_state['surv_curve_res'] = None
+
+        if run_curves:
             grp = None if col_group == "None" else col_group
             try:
                 if "Kaplan-Meier" in plot_type:
                     # Run KM
                     fig, stats_df = survival_lib.fit_km_logrank(surv_df, col_time, col_event, grp)
                     
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    st.markdown("##### Log-Rank / Statistics")
-                    st.dataframe(stats_df)
-                    
                     elements = [{'type':'header','data':'Kaplan-Meier'}, {'type':'plot','data':fig}, {'type':'table','data':stats_df}]
                     report_html = survival_lib.generate_report_survival(f"KM: {col_time}", elements)
-                    st.download_button("📥 Download Report (KM)", report_html, "km_report.html", "text/html")
+                    
+                    st.session_state['surv_curve_res'] = {
+                        'fig': fig,
+                        'stats': stats_df,
+                        'html': report_html,
+                        'type': 'KM'
+                    }
                     
                 else:
                     # Run Nelson-Aalen
                     fig, stats_df = survival_lib.fit_nelson_aalen(surv_df, col_time, col_event, grp)
-                    
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    st.markdown("##### Summary Statistics (N / Events)")
-                    st.dataframe(stats_df)
-                    st.caption("Note: Nelson-Aalen estimates the cumulative hazard rate function (H(t)).")
                     
                     elements = [
                         {'type':'header','data':'Nelson-Aalen Cumulative Hazard'}, 
@@ -492,11 +478,35 @@ def render(df, _var_meta):
                         {'type':'table','data':stats_df}
                     ]
                     report_html = survival_lib.generate_report_survival(f"NA: {col_time}", elements)
-                    st.download_button("📥 Download Report (NA)", report_html, "na_report.html", "text/html")
-                    
+
+                    st.session_state['surv_curve_res'] = {
+                        'fig': fig,
+                        'stats': stats_df,
+                        'html': report_html,
+                        'type': 'NA'
+                    }
+            
             except Exception as e:
                 logger.exception("Unexpected error in survival curves analysis")
                 st.error(f"Error: {e}")
+                st.session_state['surv_curve_res'] = None
+
+        # Render Results & Download Button
+        if st.session_state['surv_curve_res']:
+            res = st.session_state['surv_curve_res']
+            
+            # Show download button if results exist (in the same row)
+            with col_btn2:
+                file_name = "km_report.html" if res['type'] == 'KM' else "na_report.html"
+                st.download_button("📥 Download Report", res['html'], file_name, "text/html")
+            
+            st.plotly_chart(res['fig'], use_container_width=True)
+            
+            st.markdown("##### Statistics")
+            st.dataframe(res['stats'])
+            if res['type'] == 'NA':
+                 st.caption("Note: Nelson-Aalen estimates the cumulative hazard rate function (H(t)).")
+
 
     # ==========================
     # TAB 2: Landmark Analysis
@@ -541,43 +551,69 @@ def render(df, _var_meta):
             
             col_group = st.selectbox("Compare Group:", available_cols, index=group_idx, key='lm_group_sur')
 
-            if st.button("Run Landmark Analysis", key='btn_lm_sur'):
+            # 🟢 Layout: Buttons side-by-side
+            col_lm_btn1, col_lm_btn2 = st.columns([1, 4])
+            with col_lm_btn1:
+                run_landmark = st.button("🚀 Run Landmark Analysis", key='btn_lm_sur', use_container_width=True)
+
+            # Initialize session state for this tab
+            if 'surv_lm_res' not in st.session_state:
+                st.session_state['surv_lm_res'] = None
+
+            if run_landmark:
                 try:
                     with st.spinner(f"Running Landmark Analysis at t={landmark_t:.2f}..."):
                         fig, stats, n_pre, n_post, err = survival_lib.fit_km_landmark(
                             surv_df, col_time, col_event, col_group, landmark_t
                         )
                         
-                    if err:
-                        st.error(err)
-                    elif fig:
-                        st.markdown(f"""
-                        <p style='font-size:1em;'>
-                        Total N before filter: <b>{n_pre}</b> | 
-                        N Included (Survived $\ge$ {landmark_t:.2f}): <b>{n_post}</b> | 
-                        N Excluded: <b>{n_pre - n_post}</b>
-                        </p>
-                        """, unsafe_allow_html=True)
+                        if err:
+                            st.error(err)
+                            st.session_state['surv_lm_res'] = None
+                        elif fig:
+                            elements = [
+                                {'type':'header','data':f'Landmark Analysis (Survival from t={landmark_t:.2f})'},
+                                {'type':'text', 'data': f"N Included: {n_post}, N Excluded: {n_pre - n_post}"},
+                                {'type':'plot','data':fig},
+                                {'type':'table','data':stats}
+                            ]
+                            report_html = survival_lib.generate_report_survival(f"Landmark Analysis: {col_time} (t >= {landmark_t})", elements)
                             
-                        st.plotly_chart(fig, use_container_width=True)
-                        st.markdown("##### Log-Rank Test Results (Post-Landmark)")
-                        st.dataframe(stats)
-                            
-                        elements = [
-                            {'type':'header','data':f'Landmark Analysis (Survival from t={landmark_t:.2f})'},
-                            {'type':'text', 'data': f"N Included: {n_post}, N Excluded: {n_pre - n_post}"},
-                            {'type':'plot','data':fig},
-                            {'type':'table','data':stats}
-                        ]
-                            
-                        report_html = survival_lib.generate_report_survival(f"Landmark Analysis: {col_time} (t >= {landmark_t})", elements)
-                        st.download_button("📥 Download Report (Landmark)", report_html, "lm_report.html", "text/html")
-                        
+                            st.session_state['surv_lm_res'] = {
+                                'fig': fig,
+                                'stats': stats,
+                                'html': report_html,
+                                'n_pre': n_pre,
+                                'n_post': n_post,
+                                't': landmark_t
+                            }
                 except (ValueError, KeyError) as e:
                     st.error(f"Analysis error: {e}")
+                    st.session_state['surv_lm_res'] = None
                 except Exception as e:
                     logger.exception("Unexpected error in landmark analysis")
                     st.error(f"Unexpected error: {e}")
+                    st.session_state['surv_lm_res'] = None
+
+            # Render Results & Download Button
+            if st.session_state['surv_lm_res']:
+                res = st.session_state['surv_lm_res']
+                
+                with col_lm_btn2:
+                    st.download_button("📥 Download Report", res['html'], "lm_report.html", "text/html")
+                
+                st.markdown(f"""
+                <p style='font-size:1em;'>
+                Total N before filter: <b>{res['n_pre']}</b> | 
+                N Included (Survived $\ge$ {res['t']:.2f}): <b>{res['n_post']}</b> | 
+                N Excluded: <b>{res['n_pre'] - res['n_post']}</b>
+                </p>
+                """, unsafe_allow_html=True)
+                    
+                st.plotly_chart(res['fig'], use_container_width=True)
+                st.markdown("##### Log-Rank Test Results (Post-Landmark)")
+                st.dataframe(res['stats'])
+
 
     # ==========================
     # TAB 3: Cox Regression
@@ -589,8 +625,17 @@ def render(df, _var_meta):
             st.session_state.cox_res = None
         if 'cox_html' not in st.session_state: 
             st.session_state.cox_html = None
+        if 'cox_fig_objects' not in st.session_state:
+            st.session_state.cox_fig_objects = None
+        if 'cox_txt_report' not in st.session_state:
+            st.session_state.cox_txt_report = None
+        
+        # 🟢 Layout: Buttons side-by-side
+        col_cox_btn1, col_cox_btn2 = st.columns([1, 4])
+        with col_cox_btn1:
+            run_cox = st.button("🚀 Run Cox Model", key='btn_run_cox', use_container_width=True)
 
-        if st.button("🚀 Run Cox Model & Check Assumptions", key='btn_run_cox'):
+        if run_cox:
             if not covariates:
                 st.error("Please select at least one covariate.")
             else:
@@ -603,70 +648,31 @@ def render(df, _var_meta):
                             st.session_state.cox_res = None
                             st.session_state.cox_html = None
                         else:
-                            # 🟢 UPDATED: Receive list of figures instead of image bytes
+                            # Receive list of figures
                             txt_report, fig_objects = survival_lib.check_cph_assumptions(cph, model_data)
                             
                             st.session_state.cox_res = res
-                            st.success("✅ Analysis Complete!")
+                            st.session_state.cox_txt_report = txt_report
+                            st.session_state.cox_fig_objects = fig_objects
                             
-                            # 🟢 FIXED: Apply formatting ONLY to numeric columns to avoid string error
-                            format_dict = {
-                                'HR': '{:.4f}',
-                                '95% CI Lower': '{:.4f}',
-                                '95% CI Upper': '{:.4f}',
-                                'P-value': '{:.4f}'
-                            }
-                            st.dataframe(res.style.format(format_dict))
-                            
-                            if 'Method' in res.columns and len(res) > 0:
-                                st.caption(f"Method Used: {res['Method'].iloc[0]}")
-                            
-                            st.markdown("##### 🔍 Proportional Hazards Assumption Check")
-                            
-                            if txt_report:
-                                with st.expander("View Assumption Advice (Text)", expanded=False):
-                                    st.text(txt_report)
-                            
-                            # 🟢 UPDATED: Render Plotly figures directly
-                            if fig_objects:
-                                st.write("**Schoenfeld Residuals Plots:**")
-                                for fig in fig_objects:
-                                    st.plotly_chart(fig, use_container_width=True)
-                            else:
-                                st.info("No assumption plots generated.")
-                            
-                            st.markdown("---")
-                            st.subheader("🌳 Forest Plot: Hazard Ratios")
-                            try:
-                                # Call updated function
-                                fig_forest = survival_lib.create_forest_plot_cox(res)
-                                st.plotly_chart(fig_forest, use_container_width=True)
-                                
-                                with st.expander("📄 View Raw Data Table"):
-                                    st.dataframe(res[['HR', '95% CI Lower', '95% CI Upper', 'P-value']].reset_index())
-                                
-                            except Exception as e:
-                                st.warning(f"Could not generate HR forest plot: {e}")
-
-                            # Generate HTML report
+                            # Generate HTML report immediately
                             elements = [
                                 {'type':'header','data':'Cox Proportional Hazards'},
                                 {'type':'table','data':res},
                                 {'type':'header','data':'Assumption Check (Schoenfeld Residuals)'},
                                 {'type':'preformatted','data':txt_report} 
                             ]
-                            
-                            # 🟢 UPDATED: Append Plotly figures to report elements
                             if fig_objects:
                                 for fig in fig_objects:
                                     elements.append({'type':'plot','data':fig})
                             
-                            # Add forest plot to HTML report
                             forest_plot_html = survival_lib.generate_forest_plot_cox_html(res)
                             elements.append({'type':'html','data':forest_plot_html})
                             
                             report_html = survival_lib.generate_report_survival(f"Cox: {col_time}", elements)
                             st.session_state.cox_html = report_html
+                            
+                            st.success("✅ Analysis Complete!")
 
                 except (ValueError, KeyError, RuntimeError) as e:
                     st.error(f"Analysis error: {e}")
@@ -676,8 +682,51 @@ def render(df, _var_meta):
                     st.error(f"Unexpected error: {e}")
                     st.session_state.cox_res = None
 
+        # Render Results & Download Button
         if st.session_state.cox_html:
-            st.download_button("📥 Download Report (with Forest Plots)", st.session_state.cox_html, "cox_report.html", "text/html")
+             with col_cox_btn2:
+                st.download_button("📥 Download Report", st.session_state.cox_html, "cox_report.html", "text/html")
+
+        if st.session_state.cox_res is not None:
+            res = st.session_state.cox_res
+            # Display results
+            format_dict = {
+                'HR': '{:.4f}',
+                '95% CI Lower': '{:.4f}',
+                '95% CI Upper': '{:.4f}',
+                'P-value': '{:.4f}'
+            }
+            st.dataframe(res.style.format(format_dict))
+            
+            if 'Method' in res.columns and len(res) > 0:
+                st.caption(f"Method Used: {res['Method'].iloc[0]}")
+            
+            st.markdown("##### 🔍 Proportional Hazards Assumption Check")
+            
+            if st.session_state.cox_txt_report:
+                with st.expander("View Assumption Advice (Text)", expanded=False):
+                    st.text(st.session_state.cox_txt_report)
+            
+            if st.session_state.cox_fig_objects:
+                st.write("**Schoenfeld Residuals Plots:**")
+                for fig in st.session_state.cox_fig_objects:
+                    st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No assumption plots generated.")
+            
+            st.markdown("---")
+            st.subheader("🌳 Forest Plot: Hazard Ratios")
+            try:
+                fig_forest = survival_lib.create_forest_plot_cox(res)
+                st.plotly_chart(fig_forest, use_container_width=True)
+                
+                with st.expander("📄 View Raw Data Table"):
+                    st.dataframe(res[['HR', '95% CI Lower', '95% CI Upper', 'P-value']].reset_index())
+                
+            except Exception as e:
+                logger.warning("Forest plot generation failed: %s", e)
+                st.warning(f"Could not generate HR forest plot: {e}")
+
 
     # ==========================
     # TAB 4: Cox Subgroup Analysis

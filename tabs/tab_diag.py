@@ -146,7 +146,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
     with sub_tab2:
         st.markdown("##### 🎲 Chi-Square & Risk Analysis (2x2 Contingency Table)")
         st.info("""
-            **💡 Guide - THE HOME OF CHI-SQUARE ANALYSIS:** Used to analyze the association between **two categorical variables**.   
+            **💡 Guide - THE HOME OF CHI-SQUARE ANALYSIS:** Used to analyze the association between **two categorical variables**.
             
             **Association Test:**
             * **Chi-Square Test:** Determines if there is a significant association between the variables (P-value).
@@ -317,8 +317,7 @@ def render(df, _var_meta=None):  # var_meta reserved for future use
         st.info("""
              **💡 Guide:** Evaluates the **agreement** between two raters or two methods classifying items into categories.
              * **Cohen's Kappa (κ):** Measures agreement adjusting for chance. 
-             * **Interpretation:** 
-                 * < 0: Poor
+             * **Interpretation:** * < 0: Poor
                  * 0.01 - 0.20: Slight
                  * 0.21 - 0.40: Fair
                  * 0.41 - 0.60: Moderate

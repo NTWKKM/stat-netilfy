@@ -24,6 +24,8 @@ def calculate_descriptive(df, col):
         return None
     
     data = df[col].dropna()
+    if data.empty:
+        return None
     
     try:
         num_data = pd.to_numeric(data, errors='raise')
@@ -138,7 +140,7 @@ def calculate_ci_nnt(rd, rd_se, ci=0.95):
     return min(nnt_lower, nnt_upper), max(nnt_lower, nnt_upper)
 
 # ========================================
-# 2. CHI-SQUARE & FISHER'S EXACT TEST + DIAGNOSTIC METRICS
+# 3. CHI-SQUARE & FISHER'S EXACT TEST + DIAGNOSTIC METRICS
 # ========================================
 
 @st.cache_data(show_spinner=False)
@@ -153,6 +155,15 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
         return None, None, "Columns not found", None
     
     data = df[[col1, col2]].dropna()
+
+    # 🟢 FIX Issue #2: Check for empty data
+    if data.empty:
+        return None, None, "No data available after dropping missing values.", None
+
+    # 🟢 FIX Issue #1: Ensure data types are strings to match UI selectors
+    data = data.copy()
+    data[col1] = data[col1].astype(str)
+    data[col2] = data[col2].astype(str)
     
     # 1. Crosstabs
     tab_chi2 = pd.crosstab(data[col1], data[col2])
@@ -166,6 +177,7 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     base_row_labels = [row for row in all_row_labels if row != 'Total']
     
     def get_original_label(label_str: str, df_labels: list) -> any:
+        # Since we converted data to string, direct comparison works
         for lbl in df_labels:
             if str(lbl) == label_str:
                 return lbl
@@ -213,12 +225,15 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
     for row_name in index_names:
         row_data = []
         for col_name in col_names:
-            count = tab_raw.loc[row_name, col_name]
-            if col_name == 'Total':
-                pct = 100.0
-            else:
-                pct = tab_row_pct.loc[row_name, col_name]
-            cell_content = f"{int(count)} ({pct:.1f}%)"
+            try:
+                count = tab_raw.loc[row_name, col_name]
+                if col_name == 'Total':
+                    pct = 100.0
+                else:
+                    pct = tab_row_pct.loc[row_name, col_name]
+                cell_content = f"{int(count)} ({pct:.1f}%)"
+            except KeyError:
+                 cell_content = "0 (0.0%)"
             row_data.append(cell_content)
         display_data.append(row_data)
     
@@ -378,7 +393,7 @@ def calculate_chi2(df, col1, col2, method='Pearson (Standard)', v1_pos=None, v2_
 
 
 # ========================================
-# 3. COHEN'S KAPPA
+# 4. COHEN'S KAPPA
 # ========================================
 
 @st.cache_data(show_spinner=False)
@@ -388,9 +403,12 @@ def calculate_kappa(df, col1, col2):
         return None, "Columns not found", None
     
     data = df[[col1, col2]].dropna()
+    
+    # 🟢 FIX Issue #2
     if data.empty:
         return None, "No data after dropping NAs", None
     
+    # 🟢 FIX Issue #1
     y1 = data[col1].astype(str)
     y2 = data[col2].astype(str)
     
@@ -426,7 +444,7 @@ def calculate_kappa(df, col1, col2):
 
 
 # ========================================
-# 4. ROC CURVE
+# 5. ROC CURVE
 # ========================================
 
 def auc_ci_hanley_mcneil(auc, n1, n2):
@@ -488,6 +506,11 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
     Analyze ROC curve using Plotly for interactive visualization.
     """
     data = df[[truth_col, score_col]].dropna()
+
+    # 🟢 FIX Issue #2
+    if data.empty:
+        return None, "Error: No data available.", None, None
+
     y_true_raw = data[truth_col]
     y_score = pd.to_numeric(data[score_col], errors='coerce').dropna()
     y_true_raw = y_true_raw.loc[y_score.index]
@@ -606,7 +629,7 @@ def analyze_roc(df, truth_col, score_col, method='delong', pos_label_user=None):
 
 
 # ========================================
-# 5. ICC (Intraclass Correlation)
+# 6. ICC (Intraclass Correlation)
 # ========================================
 
 @st.cache_data(show_spinner=False)
@@ -698,7 +721,7 @@ def calculate_icc(df, cols):
 
 
 # ========================================
-# 6. REPORT GENERATION
+# 7. REPORT GENERATION
 # ========================================
 
 def generate_report(title, elements):

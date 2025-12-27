@@ -51,7 +51,7 @@ def render(df, var_meta=None):
     def get_label(col):
         return var_meta.get(col, {}).get('label', col)
 
-    st.subheader("🎯 Correlation & ICC")
+    st.subheader("📈 Correlation & ICC")
     
     # 🟢 NEW: Display matched data status
     if st.session_state.get("is_matched", False):

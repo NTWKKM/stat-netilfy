@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 from lifelines import KaplanMeierFitter, CoxPHFitter, NelsonAalenFitter
 from lifelines.statistics import logrank_test, multivariate_logrank_test, proportional_hazard_test
+# 🟢 NEW: Import utility for Median CI calculation
+from lifelines.utils import median_survival_times 
 import plotly.graph_objects as go
 import plotly.express as px
 # import matplotlib.pyplot as plt  <-- REMOVED: No longer needed
@@ -63,6 +65,106 @@ def _hex_to_rgba(hex_color, alpha) -> str:
         raise ValueError(f"Invalid hex color: got {len(hex_color)} chars, expected 6")
     rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
     return f'rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha})'
+
+# --- 🟢 NEW: Calculate Median Survival Table ---
+def calculate_median_survival(df, duration_col, event_col, group_col):
+    """
+    Calculate Median Survival Time and 95% CI for each group.
+    
+    Returns:
+        pd.DataFrame: A table containing 'Group', 'N', 'Events', and 'Median (95% CI)'.
+    """
+    # Validate required columns exist
+    missing = []
+    if duration_col not in df.columns:
+        missing.append(duration_col)
+    if event_col not in df.columns:
+        missing.append(event_col)
+    if group_col and group_col not in df.columns:
+        missing.append(group_col)
+    if missing:
+        error_msg = f"Missing required columns: {missing}"
+        raise ValueError(error_msg)
+    
+    data = df.dropna(subset=[duration_col, event_col])
+    
+    # Validate numeric data types
+    if not pd.api.types.is_numeric_dtype(data[duration_col]):
+        raise ValueError(f"Duration column '{duration_col}' must contain numeric values")
+    if not pd.api.types.is_numeric_dtype(data[event_col]):
+        raise ValueError(f"Event column '{event_col}' must contain numeric values (0/1 or boolean)")
+    
+    # Validate event column values
+    unique_events = data[event_col].dropna().unique()
+    if not all(v in [0, 1, True, False] for v in unique_events):
+        raise ValueError(f"Event column '{event_col}' must contain only 0/1 or boolean values")
+    
+    if group_col:
+        data = data.dropna(subset=[group_col])
+        groups = sorted(data[group_col].unique(), key=lambda v: str(v))
+    else:
+        groups = ['Overall']
+        
+    results = []
+    
+    for g in groups:
+        if group_col:
+            df_g = data[data[group_col] == g]
+            label = f"{g}" # Short label for table
+        else:
+            df_g = data
+            label = "Overall"
+            
+        n = len(df_g)
+        events = df_g[event_col].sum()
+        
+        if n > 0:
+            kmf = KaplanMeierFitter()
+            kmf.fit(df_g[duration_col], df_g[event_col], label=label)
+            
+            # Median
+            median_val = kmf.median_survival_time_
+            
+            # CI for Median
+            try:
+                # median_survival_times returns a DF with columns like "KM_estimate_lower_0.95", "KM_estimate_upper_0.95"
+                ci_df = median_survival_times(kmf.confidence_interval_)
+                # Validate shape before accessing
+                if ci_df.shape[0] > 0 and ci_df.shape[1] >= 2:
+                    lower = ci_df.iloc[0, 0]
+                    upper = ci_df.iloc[0, 1]
+                else:
+                    lower, upper = np.nan, np.nan
+            except (KeyError, IndexError, AttributeError) as e:
+                # Expected failures when CI cannot be computed
+                _logger.debug(f"Could not compute CI for group {label}: {e}")
+                lower, upper = np.nan, np.nan
+            
+            # Formatting Helper
+            def fmt(v) -> str:
+                if pd.isna(v) or np.isinf(v):
+                    return "NR"  # Not Reached
+                return f"{v:.1f}"
+            
+            med_str = fmt(median_val)
+            low_str = fmt(lower)
+            up_str = fmt(upper)
+            
+            # Combine into "Median (Lower-Upper)"
+            display_str = f"{med_str} ({low_str}-{up_str})"
+            if med_str == "NR" and low_str == "NR" and up_str == "NR":
+                 display_str = "Not Reached"
+        else:
+            display_str = "-"
+
+        results.append({
+            "Group": label,
+            "N": n,
+            "Events": events,
+            "Median Time (95% CI)": display_str
+        })
+        
+    return pd.DataFrame(results)
 
 # --- 1. Kaplan-Meier & Log-Rank (With Robust CI) 🟢 FIX KM CI ---
 def fit_km_logrank(df, duration_col, event_col, group_col):
