@@ -297,7 +297,7 @@ class ForestPlot:
         # --- Pre-processing Data for Display ---
         # 1. Format Estimate (95% CI)
         # FIX: Handle infinite values in display string
-        def fmt_est_ci(x):
+        def fmt_est_ci(x) -> str:
             try:
                 est = x[self.estimate_col]
                 low = x[self.ci_low_col]
@@ -309,7 +309,6 @@ class ForestPlot:
                 return f"{est_str} ({low_str}-{high_str})"
             except (KeyError, TypeError, ValueError):
                 return "Error"
-
         self.data['__display_est'] = self.data.apply(fmt_est_ci, axis=1)
 
         # 2. Format P-value (if available)
