@@ -442,7 +442,7 @@ def render(df, _var_meta):
         plot_type = c2.radio("Select Plot Type:", ["Kaplan-Meier (Survival Function)", "Nelson-Aalen (Cumulative Hazard)"], horizontal=True)
         
         # 🟢 Layout: Buttons side-by-side
-        col_btn1, col_btn2 = st.columns([2, 2])
+        col_btn1, col_btn2 = st.columns([4, 1])
         with col_btn1:
             run_curves = st.button("🚀 Generate Survival Curve", type="primary", key='btn_run_curves', use_container_width=True)
         
