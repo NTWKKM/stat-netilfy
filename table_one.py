@@ -389,7 +389,7 @@ def generate_table(df, selected_vars, group_col, var_meta, or_style='all_levels'
         # Usually g[1] is case if sorted 0,1
         group_1_val = 1 if 1 in group_vals else max(group_vals, key=_group_sort_key)
         # Identify the other group
-        group_2_val = [g for g in group_vals if g != group_1_val][0]
+        group_2_val = next(g for g in group_vals if g != group_1_val)
 
     # CSS with unified teal colors
     css_style = f"""
