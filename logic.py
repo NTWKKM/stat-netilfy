@@ -717,6 +717,6 @@ def process_data_and_generate_html(df, target_outcome, var_meta=None, method='au
     plot_html = generate_forest_plot_html(or_res, aor_res)
     
     full_html = f"<!DOCTYPE html><html><head>{css}</head><body><h1>Logistic Regression Report</h1>{html_table}{plot_html}"
-    full_html += "<div class='report-footer'>&copy; 2025 NTWKKM. Powered by GitHub, Gemini, Streamlit</div></body></html>"
+    full_html += """<div class='report-footer'>&copy; 2025 <a href="https://github.com/NTWKKM/" target="_blank">NTWKKM n donate</a> | Powered by GitHub, Gemini, Streamlit</div>"""
     
     return full_html, or_res, aor_res
