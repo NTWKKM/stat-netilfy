@@ -724,6 +724,7 @@ def render(df, _var_meta):
                     st.dataframe(res[['HR', '95% CI Lower', '95% CI Upper', 'P-value']].reset_index())
                 
             except Exception as e:
+                logger.warning("Forest plot generation failed: %s", e)
                 st.warning(f"Could not generate HR forest plot: {e}")
 
 
