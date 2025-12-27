@@ -388,7 +388,7 @@ def render(df, var_meta):
         df (pandas.DataFrame): The dataset available for analysis (original or matched dataset is selectable via session state).
         var_meta (dict): Variable metadata that guides auto-detection and reporting modes (e.g., categorical vs. linear handling for variables).
     """
-    st.subheader("📰 Logistic Regression Analysis")
+    st.subheader("📊 Logistic Regression Analysis")
     
     if st.session_state.get('is_matched', False):
         st.info("✅ **Matched Dataset Available** - You can select it below for analysis")
