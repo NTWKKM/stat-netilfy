@@ -76,11 +76,15 @@ def calculate_median_survival(df, duration_col, event_col, group_col):
     """
     # Validate required columns exist
     missing = []
-    if duration_col not in df.columns: missing.append(duration_col)
-    if event_col not in df.columns: missing.append(event_col)
-    if group_col and group_col not in df.columns: missing.append(group_col)
+    if duration_col not in df.columns:
+        missing.append(duration_col)
+    if event_col not in df.columns:
+        missing.append(event_col)
+    if group_col and group_col not in df.columns:
+        missing.append(group_col)
     if missing:
-        raise ValueError(f"Missing required columns: {missing}")
+        error_msg = f"Missing required columns: {missing}"
+        raise ValueError(error_msg)
     
     data = df.dropna(subset=[duration_col, event_col])
     
