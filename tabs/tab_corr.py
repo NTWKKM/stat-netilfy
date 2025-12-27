@@ -111,7 +111,7 @@ def render(df, var_meta=None):
         run_col_cont, dl_col_cont = st.columns([1, 1])
         if 'html_output_corr_cont' not in st.session_state: st.session_state.html_output_corr_cont = None
 
-        if run_col_cont.button("📉 Analyze Correlation", key='btn_run_cont'):
+        if run_col_cont.button("📉 Analyze Correlation", type="primary", key='btn_run_cont'):
             if cv1 == cv2:
                 st.error("Please select different variables.")
             else:
@@ -169,7 +169,7 @@ def render(df, var_meta=None):
         if 'html_output_icc' not in st.session_state: 
             st.session_state.html_output_icc = None
         
-        if icc_run.button("📏 Calculate ICC", key='btn_icc_run', help="Calculates Intraclass Correlation Coefficient for reliability"):
+        if icc_run.button("📏 Calculate ICC", type="primary", key='btn_icc_run', help="Calculates Intraclass Correlation Coefficient for reliability"):
             if len(icc_cols) < 2:
                 st.error("❌ Please select at least 2 numeric columns for ICC calculation.")
                 st.stop()
