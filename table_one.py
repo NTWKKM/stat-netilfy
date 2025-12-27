@@ -106,6 +106,13 @@ def safe_group_compare(series, val):
     """
     Robust comparison handling float vs int vs string mismatches.
     Fixes: str(1.0) != str(1) issue.
+    
+    Args:
+        series: pandas Series to compare
+        val: value to compare against
+        
+    Returns:
+        Boolean Series with comparison results
     """
     # Try numeric comparison first if series is numeric
     if pd.api.types.is_numeric_dtype(series):
@@ -113,11 +120,11 @@ def safe_group_compare(series, val):
             val_float = float(val)
             return series == val_float
         except (ValueError, TypeError):
-            pass # Fallback to string
+            # Fallback to string comparison
+            return series.astype(str) == str(val)
             
-    # Fallback to string comparison
+    # Fallback to string comparison for non-numeric series
     return series.astype(str) == str(val)
-
 # --- 🟢 UPDATED: Calculate OR & 95% CI (One-vs-Rest) for Categorical [Legacy/Fallback] ---
 def compute_or_for_row(row_series, cat_val, group_series, g1_val):
     try:
