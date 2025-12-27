@@ -57,7 +57,11 @@ def render():
                     key='an_logit_met',
                     help="Algorithm for coefficient estimation. 'Auto' recommended for most users."
                 )
-                if new_method != curr_method: CONFIG.update('analysis.logit_method', new_method)
+                if new_method != curr_method:
+                    try:
+                        CONFIG.update('analysis.logit_method', new_method)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
                 curr_p = CONFIG.get('analysis.logit_screening_p')
                 new_p = st.number_input(
@@ -67,7 +71,11 @@ def render():
                     key='an_scr_p',
                     help="For univariate screening. Variables with p > threshold excluded from multivariate. Typical: 0.05-0.20"
                 )
-                if new_p != curr_p: CONFIG.update('analysis.logit_screening_p', new_p)
+                if new_p != curr_p:
+                    try:
+                        CONFIG.update('analysis.logit_screening_p', new_p)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
             with c2:
                 curr_iter = CONFIG.get('analysis.logit_max_iter')
@@ -77,7 +85,11 @@ def render():
                     key='an_max_it',
                     help="Maximum iterations for algorithm convergence. Increase if model fails to converge."
                 )
-                if new_iter != curr_iter: CONFIG.update('analysis.logit_max_iter', new_iter)
+                if new_iter != curr_iter:
+                    try:
+                        CONFIG.update('analysis.logit_max_iter', new_iter)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
                 curr_min = CONFIG.get('analysis.logit_min_cases')
                 new_min = st.number_input(
@@ -86,7 +98,11 @@ def render():
                     key='an_min_cs',
                     help="Minimum events required for multivariate analysis. Ensures model stability (rule: 10-20 per variable)."
                 )
-                if new_min != curr_min: CONFIG.update('analysis.logit_min_cases', new_min)
+                if new_min != curr_min:
+                    try:
+                        CONFIG.update('analysis.logit_min_cases', new_min)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
         # --- Survival Analysis ---
         with st.expander("🔹 Survival Analysis"):
@@ -114,7 +130,11 @@ def render():
                     key='an_surv_m',
                     help="Kaplan-Meier (non-parametric) recommended for most studies."
                 )
-                if new_surv != curr_surv: CONFIG.update('analysis.survival_method', new_surv)
+                if new_surv != curr_surv:
+                    try:
+                        CONFIG.update('analysis.survival_method', new_surv)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
                 
             with c2:
                 curr_cox = CONFIG.get('analysis.cox_method')
@@ -125,7 +145,11 @@ def render():
                     key='an_cox_m',
                     help="Efron: more accurate with ties. Breslow: faster, less accurate."
                 )
-                if new_cox != curr_cox: CONFIG.update('analysis.cox_method', new_cox)
+                if new_cox != curr_cox:
+                    try:
+                        CONFIG.update('analysis.cox_method', new_cox)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
         # --- Data Detection & Missing ---
         with st.expander("🔹 Data Handling & Detection"):
@@ -156,7 +180,11 @@ def render():
                     key='an_var_th',
                     help="Variables with ≤ this threshold → categorical. Example: threshold=10, variable with 5 unique values = categorical."
                 )
-                if new_vth != curr_vth: CONFIG.update('analysis.var_detect_threshold', new_vth)
+                if new_vth != curr_vth:
+                    try:
+                        CONFIG.update('analysis.var_detect_threshold', new_vth)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
                 
                 curr_dec = CONFIG.get('analysis.var_detect_decimal_pct')
                 new_dec = st.number_input(
@@ -166,7 +194,11 @@ def render():
                     key='an_var_dec',
                     help="If % of decimal values in continuous variable > threshold → classified as continuous (e.g., 0.15 = 15%)."
                 )
-                if new_dec != curr_dec: CONFIG.update('analysis.var_detect_decimal_pct', new_dec)
+                if new_dec != curr_dec:
+                    try:
+                        CONFIG.update('analysis.var_detect_decimal_pct', new_dec)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
             with c2:
                 # Missing Data
@@ -178,7 +210,11 @@ def render():
                     key='an_mis_str',
                     help="Complete-case: exclude rows with any missing values (recommended for most analyses)."
                 )
-                if new_mstrat != curr_mstrat: CONFIG.update('analysis.missing_strategy', new_mstrat)
+                if new_mstrat != curr_mstrat:
+                    try:
+                        CONFIG.update('analysis.missing_strategy', new_mstrat)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
                 curr_mpct = CONFIG.get('analysis.missing_threshold_pct')
                 new_mpct = st.number_input(
@@ -187,7 +223,11 @@ def render():
                     key='an_mis_pct',
                     help="Variables with > threshold% missing values → flagged in report. Example: 20 = flag if >20% missing."
                 )
-                if new_mpct != curr_mpct: CONFIG.update('analysis.missing_threshold_pct', new_mpct)
+                if new_mpct != curr_mpct:
+                    try:
+                        CONFIG.update('analysis.missing_threshold_pct', new_mpct)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
         # --- P-value Handling ---
         with st.expander("🔹 P-value Formatting & Bounds (NEJM Standard)"):
@@ -223,7 +263,11 @@ def render():
                     key='an_pv_low',
                     help="NEJM standard: 0.001. Smallest p-value shown (smaller → show as format string)."
                 )
-                if new_pl != curr_pl: CONFIG.update('analysis.pvalue_bounds_lower', new_pl)
+                if new_pl != curr_pl:
+                    try:
+                        CONFIG.update('analysis.pvalue_bounds_lower', new_pl)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
                 curr_tol = CONFIG.get('analysis.pvalue_clip_tolerance')
                 new_tol = st.number_input(
@@ -233,7 +277,11 @@ def render():
                     key='an_pv_tol',
                     help="Rounding tolerance for extreme p-values. NEJM standard: 0.00001"
                 )
-                if new_tol != curr_tol: CONFIG.update('analysis.pvalue_clip_tolerance', new_tol)
+                if new_tol != curr_tol:
+                    try:
+                        CONFIG.update('analysis.pvalue_clip_tolerance', new_tol)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
                 curr_fs = CONFIG.get('analysis.pvalue_format_small')
                 new_fs = st.text_input(
@@ -242,7 +290,11 @@ def render():
                     key='an_pv_fs',
                     help="NEJM standard: '<0.001'. Display format for p-values below lower bound."
                 )
-                if new_fs != curr_fs: CONFIG.update('analysis.pvalue_format_small', new_fs)
+                if new_fs != curr_fs:
+                    try:
+                        CONFIG.update('analysis.pvalue_format_small', new_fs)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
             
             with c2:
                 curr_pu = CONFIG.get('analysis.pvalue_bounds_upper')
@@ -253,7 +305,11 @@ def render():
                     key='an_pv_up',
                     help="NEJM standard: 0.99. Largest p-value shown (larger → show as format string)."
                 )
-                if new_pu != curr_pu: CONFIG.update('analysis.pvalue_bounds_upper', new_pu)
+                if new_pu != curr_pu:
+                    try:
+                        CONFIG.update('analysis.pvalue_bounds_upper', new_pu)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
                 curr_fl = CONFIG.get('analysis.pvalue_format_large')
                 new_fl = st.text_input(
@@ -262,7 +318,11 @@ def render():
                     key='an_pv_fl',
                     help="NEJM standard: '>0.99'. Display format for p-values above upper bound."
                 )
-                if new_fl != curr_fl: CONFIG.update('analysis.pvalue_format_large', new_fl)
+                if new_fl != curr_fl:
+                    try:
+                        CONFIG.update('analysis.pvalue_format_large', new_fl)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
 
     # ==========================================
@@ -282,7 +342,11 @@ def render():
                     key='ui_title',
                     help="Title shown in browser tab and page header."
                 )
-                if new_title != curr_title: CONFIG.update('ui.page_title', new_title)
+                if new_title != curr_title:
+                    try:
+                        CONFIG.update('ui.page_title', new_title)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
                 
                 curr_theme = CONFIG.get('ui.theme')
                 new_theme = st.selectbox(
@@ -292,7 +356,11 @@ def render():
                     key='ui_theme',
                     help="Light: bright colors. Dark: dark background. Auto: follows system preference."
                 )
-                if new_theme != curr_theme: CONFIG.update('ui.theme', new_theme)
+                if new_theme != curr_theme:
+                    try:
+                        CONFIG.update('ui.theme', new_theme)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
             with c2:
                 curr_layout = CONFIG.get('ui.layout')
@@ -303,7 +371,11 @@ def render():
                     key='ui_layout',
                     help="Wide: use full screen width. Centered: constrain to max width."
                 )
-                if new_layout != curr_layout: CONFIG.update('ui.layout', new_layout)
+                if new_layout != curr_layout:
+                    try:
+                        CONFIG.update('ui.layout', new_layout)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
         # --- Sidebar ---
         with st.expander("🔹 Sidebar"):
@@ -316,7 +388,11 @@ def render():
                     key='ui_sw',
                     help="Width of the left navigation sidebar in pixels."
                 )
-                if new_sw != curr_sw: CONFIG.update('ui.sidebar_width', new_sw)
+                if new_sw != curr_sw:
+                    try:
+                        CONFIG.update('ui.sidebar_width', new_sw)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
             with c2:
                 curr_logo = CONFIG.get('ui.show_sidebar_logo')
                 new_logo = st.toggle(
@@ -325,7 +401,11 @@ def render():
                     key='ui_logo',
                     help="Display logo in the sidebar."
                 )
-                if new_logo != curr_logo: CONFIG.update('ui.show_sidebar_logo', new_logo)
+                if new_logo != curr_logo:
+                    try:
+                        CONFIG.update('ui.show_sidebar_logo', new_logo)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
         # --- Tables ---
         with st.expander("🔹 Tables"):
@@ -338,7 +418,11 @@ def render():
                     key='ui_tr',
                     help="Maximum rows to display before pagination. Reduces page load time."
                 )
-                if new_tr != curr_tr: CONFIG.update('ui.table_max_rows', new_tr)
+                if new_tr != curr_tr:
+                    try:
+                        CONFIG.update('ui.table_max_rows', new_tr)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
                 
                 curr_tpag = CONFIG.get('ui.table_pagination')
                 new_tpag = st.toggle(
@@ -347,7 +431,11 @@ def render():
                     key='ui_tpag',
                     help="Split large tables into pages."
                 )
-                if new_tpag != curr_tpag: CONFIG.update('ui.table_pagination', new_tpag)
+                if new_tpag != curr_tpag:
+                    try:
+                        CONFIG.update('ui.table_pagination', new_tpag)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
             with c2:
                 curr_tdec = CONFIG.get('ui.table_decimal_places')
@@ -357,7 +445,11 @@ def render():
                     key='ui_tdec',
                     help="Number of decimal places in table numeric values. Example: 3 = 0.123"
                 )
-                if new_tdec != curr_tdec: CONFIG.update('ui.table_decimal_places', new_tdec)
+                if new_tdec != curr_tdec:
+                    try:
+                        CONFIG.update('ui.table_decimal_places', new_tdec)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
         # --- Plots ---
         with st.expander("🔹 Plots"):
@@ -370,7 +462,11 @@ def render():
                     key='ui_pw',
                     help="Width of plots in inches. Typical: 10-14 for wide displays."
                 )
-                if new_pw != curr_pw: CONFIG.update('ui.plot_width', new_pw)
+                if new_pw != curr_pw:
+                    try:
+                        CONFIG.update('ui.plot_width', new_pw)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
                 curr_pdpi = CONFIG.get('ui.plot_dpi')
                 new_pdpi = st.number_input(
@@ -379,7 +475,11 @@ def render():
                     key='ui_pdpi',
                     help="Resolution in dots per inch. Higher = sharper but larger file. Typical: 100-300"
                 )
-                if new_pdpi != curr_pdpi: CONFIG.update('ui.plot_dpi', new_pdpi)
+                if new_pdpi != curr_pdpi:
+                    try:
+                        CONFIG.update('ui.plot_dpi', new_pdpi)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
             with c2:
                 curr_ph = CONFIG.get('ui.plot_height')
@@ -389,7 +489,11 @@ def render():
                     key='ui_ph',
                     help="Height of plots in inches. Typical: 5-8 for readable charts."
                 )
-                if new_ph != curr_ph: CONFIG.update('ui.plot_height', new_ph)
+                if new_ph != curr_ph:
+                    try:
+                        CONFIG.update('ui.plot_height', new_ph)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
                 curr_pstyle = CONFIG.get('ui.plot_style')
                 new_pstyle = st.text_input(
@@ -398,7 +502,11 @@ def render():
                     key='ui_pstyle',
                     help="Matplotlib style. Options: seaborn, ggplot, bmh, etc."
                 )
-                if new_pstyle != curr_pstyle: CONFIG.update('ui.plot_style', new_pstyle)
+                if new_pstyle != curr_pstyle:
+                    try:
+                        CONFIG.update('ui.plot_style', new_pstyle)
+                    except KeyError as e:
+                        st.error(f"Configuration update failed: {e}")
 
 
     # ==========================================
@@ -417,7 +525,11 @@ def render():
                 key='log_en',
                 help="Record application events for debugging and monitoring."
             )
-            if new_log_en != curr_log_en: CONFIG.update('logging.enabled', new_log_en)
+            if new_log_en != curr_log_en:
+                try:
+                    CONFIG.update('logging.enabled', new_log_en)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
         with c2:
             curr_log_lvl = CONFIG.get('logging.level')
             new_log_lvl = st.selectbox(
@@ -427,7 +539,11 @@ def render():
                 key='log_lvl',
                 help="DEBUG: most verbose, CRITICAL: least verbose."
             )
-            if new_log_lvl != curr_log_lvl: CONFIG.update('logging.level', new_log_lvl)
+            if new_log_lvl != curr_log_lvl:
+                try:
+                    CONFIG.update('logging.level', new_log_lvl)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
 
         st.divider()
 
@@ -444,7 +560,11 @@ def render():
                 key='log_f_en',
                 help="Save logs to disk file."
             )
-            if new_f_en != curr_f_en: CONFIG.update('logging.file_enabled', new_f_en)
+            if new_f_en != curr_f_en:
+                try:
+                    CONFIG.update('logging.file_enabled', new_f_en)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
             
             curr_f_dir = CONFIG.get('logging.log_dir')
             new_f_dir = st.text_input(
@@ -453,7 +573,11 @@ def render():
                 key='log_f_dir',
                 help="Folder where log files are saved."
             )
-            if new_f_dir != curr_f_dir: CONFIG.update('logging.log_dir', new_f_dir)
+            if new_f_dir != curr_f_dir:
+                try:
+                    CONFIG.update('logging.log_dir', new_f_dir)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
 
             curr_f_name = CONFIG.get('logging.log_file')
             new_f_name = st.text_input(
@@ -462,7 +586,11 @@ def render():
                 key='log_f_name',
                 help="Name of the log file (e.g., app.log)"
             )
-            if new_f_name != curr_f_name: CONFIG.update('logging.log_file', new_f_name)
+            if new_f_name != curr_f_name:
+                try:
+                    CONFIG.update('logging.log_file', new_f_name)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
 
         # Console Logging
         with col_console:
@@ -474,7 +602,11 @@ def render():
                 key='log_c_en',
                 help="Print logs to terminal/console."
             )
-            if new_c_en != curr_c_en: CONFIG.update('logging.console_enabled', new_c_en)
+            if new_c_en != curr_c_en:
+                try:
+                    CONFIG.update('logging.console_enabled', new_c_en)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
 
             curr_c_lvl = CONFIG.get('logging.console_level')
             new_c_lvl = st.selectbox(
@@ -484,7 +616,11 @@ def render():
                 key='log_c_lvl',
                 help="Minimum severity level for console output."
             )
-            if new_c_lvl != curr_c_lvl: CONFIG.update('logging.console_level', new_c_lvl)
+            if new_c_lvl != curr_c_lvl:
+                try:
+                    CONFIG.update('logging.console_level', new_c_lvl)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
 
         # Streamlit Logging
         with col_st:
@@ -496,7 +632,11 @@ def render():
                 key='log_st_en',
                 help="Log events in Streamlit-specific format."
             )
-            if new_st_en != curr_st_en: CONFIG.update('logging.streamlit_enabled', new_st_en)
+            if new_st_en != curr_st_en:
+                try:
+                    CONFIG.update('logging.streamlit_enabled', new_st_en)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
 
             curr_st_lvl = CONFIG.get('logging.streamlit_level')
             new_st_lvl = st.selectbox(
@@ -506,7 +646,11 @@ def render():
                 key='log_st_lvl',
                 help="Minimum severity level for Streamlit output."
             )
-            if new_st_lvl != curr_st_lvl: CONFIG.update('logging.streamlit_level', new_st_lvl)
+            if new_st_lvl != curr_st_lvl:
+                try:
+                    CONFIG.update('logging.streamlit_level', new_st_lvl)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
 
         st.divider()
 
@@ -521,7 +665,11 @@ def render():
                 key='l_fo',
                 help="Log file reads, writes, uploads."
             )
-            if n_fo != l_fo: CONFIG.update('logging.log_file_operations', n_fo)
+            if n_fo != l_fo:
+                try:
+                    CONFIG.update('logging.log_file_operations', n_fo)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
             
             l_do = CONFIG.get('logging.log_data_operations')
             n_do = st.checkbox(
@@ -530,7 +678,11 @@ def render():
                 key='l_do',
                 help="Log data loading, filtering, transformations."
             )
-            if n_do != l_do: CONFIG.update('logging.log_data_operations', n_do)
+            if n_do != l_do:
+                try:
+                    CONFIG.update('logging.log_data_operations', n_do)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
 
         with c2:
             l_ao = CONFIG.get('logging.log_analysis_operations')
@@ -540,7 +692,11 @@ def render():
                 key='l_ao',
                 help="Log statistical analyses, model fitting."
             )
-            if n_ao != l_ao: CONFIG.update('logging.log_analysis_operations', n_ao)
+            if n_ao != l_ao:
+                try:
+                    CONFIG.update('logging.log_analysis_operations', n_ao)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
             
             l_ui = CONFIG.get('logging.log_ui_events')
             n_ui = st.checkbox(
@@ -549,7 +705,11 @@ def render():
                 key='l_ui',
                 help="Log clicks, selections, scrolling. Very verbose!"
             )
-            if n_ui != l_ui: CONFIG.update('logging.log_ui_events', n_ui)
+            if n_ui != l_ui:
+                try:
+                    CONFIG.update('logging.log_ui_events', n_ui)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
 
         with c3:
             l_pf = CONFIG.get('logging.log_performance')
@@ -559,7 +719,11 @@ def render():
                 key='l_pf',
                 help="Log execution times and performance metrics."
             )
-            if n_pf != l_pf: CONFIG.update('logging.log_performance', n_pf)
+            if n_pf != l_pf:
+                try:
+                    CONFIG.update('logging.log_performance', n_pf)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
 
 
     # ==========================================
@@ -577,7 +741,11 @@ def render():
                 key='perf_cache',
                 help="Cache results to speed up repeated operations."
             )
-            if new_cache != curr_cache: CONFIG.update('performance.enable_caching', new_cache)
+            if new_cache != curr_cache:
+                try:
+                    CONFIG.update('performance.enable_caching', new_cache)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
             
             curr_comp = CONFIG.get('performance.enable_compression')
             new_comp = st.toggle(
@@ -586,7 +754,11 @@ def render():
                 key='perf_comp',
                 help="Compress data to reduce memory usage."
             )
-            if new_comp != curr_comp: CONFIG.update('performance.enable_compression', new_comp)
+            if new_comp != curr_comp:
+                try:
+                    CONFIG.update('performance.enable_compression', new_comp)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
 
         with c2:
             curr_ttl = CONFIG.get('performance.cache_ttl')
@@ -596,7 +768,11 @@ def render():
                 key='perf_ttl',
                 help="How long cached results remain valid (in seconds). Typical: 3600 (1 hour)"
             )
-            if new_ttl != curr_ttl: CONFIG.update('performance.cache_ttl', new_ttl)
+            if new_ttl != curr_ttl:
+                try:
+                    CONFIG.update('performance.cache_ttl', new_ttl)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
 
             curr_thr = CONFIG.get('performance.num_threads')
             new_thr = st.number_input(
@@ -605,7 +781,11 @@ def render():
                 key='perf_thr',
                 help="CPU threads for parallel processing. Use system core count for optimal performance."
             )
-            if new_thr != curr_thr: CONFIG.update('performance.num_threads', new_thr)
+            if new_thr != curr_thr:
+                try:
+                    CONFIG.update('performance.num_threads', new_thr)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
 
 
     # ==========================================
@@ -626,7 +806,11 @@ def render():
                 help="Error instead of Warn on validation failures. Stop execution on errors.",
                 key='val_strict'
             )
-            if new_strict != curr_strict: CONFIG.update('validation.strict_mode', new_strict)
+            if new_strict != curr_strict:
+                try:
+                    CONFIG.update('validation.strict_mode', new_strict)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
 
             curr_v_in = CONFIG.get('validation.validate_inputs')
             new_v_in = st.checkbox(
@@ -635,7 +819,11 @@ def render():
                 key='val_in',
                 help="Check data types and formats before analysis."
             )
-            if new_v_in != curr_v_in: CONFIG.update('validation.validate_inputs', new_v_in)
+            if new_v_in != curr_v_in:
+                try:
+                    CONFIG.update('validation.validate_inputs', new_v_in)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
 
             curr_v_out = CONFIG.get('validation.validate_outputs')
             new_v_out = st.checkbox(
@@ -644,7 +832,11 @@ def render():
                 key='val_out',
                 help="Check results for consistency and correctness."
             )
-            if new_v_out != curr_v_out: CONFIG.update('validation.validate_outputs', new_v_out)
+            if new_v_out != curr_v_out:
+                try:
+                    CONFIG.update('validation.validate_outputs', new_v_out)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
             
             curr_fix = CONFIG.get('validation.auto_fix_errors')
             new_fix = st.checkbox(
@@ -653,7 +845,11 @@ def render():
                 key='val_fix',
                 help="Automatically correct common data issues."
             )
-            if new_fix != curr_fix: CONFIG.update('validation.auto_fix_errors', new_fix)
+            if new_fix != curr_fix:
+                try:
+                    CONFIG.update('validation.auto_fix_errors', new_fix)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
 
         with col_dbg:
             st.subheader("Debugging")
@@ -665,7 +861,11 @@ def render():
                 key='dbg_en',
                 help="Show detailed debugging information and stack traces."
             )
-            if new_dbg != curr_dbg: CONFIG.update('debug.enabled', new_dbg)
+            if new_dbg != curr_dbg:
+                try:
+                    CONFIG.update('debug.enabled', new_dbg)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
 
             curr_verb = CONFIG.get('debug.verbose')
             new_verb = st.checkbox(
@@ -674,7 +874,11 @@ def render():
                 key='dbg_verb',
                 help="Print detailed intermediate steps and variables."
             )
-            if new_verb != curr_verb: CONFIG.update('debug.verbose', new_verb)
+            if new_verb != curr_verb:
+                try:
+                    CONFIG.update('debug.verbose', new_verb)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
 
             curr_prof = CONFIG.get('debug.profile_performance')
             new_prof = st.checkbox(
@@ -683,7 +887,11 @@ def render():
                 key='dbg_prof',
                 help="Measure CPU and memory usage for each function."
             )
-            if new_prof != curr_prof: CONFIG.update('debug.profile_performance', new_prof)
+            if new_prof != curr_prof:
+                try:
+                    CONFIG.update('debug.profile_performance', new_prof)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
 
             curr_time = CONFIG.get('debug.show_timings')
             new_time = st.checkbox(
@@ -692,7 +900,11 @@ def render():
                 key='dbg_time',
                 help="Display execution time for each operation."
             )
-            if new_time != curr_time: CONFIG.update('debug.show_timings', new_time)
+            if new_time != curr_time:
+                try:
+                    CONFIG.update('debug.show_timings', new_time)
+                except KeyError as e:
+                    st.error(f"Configuration update failed: {e}")
         
         st.markdown("---")
         with st.expander("📄 Raw Configuration (JSON)"):
