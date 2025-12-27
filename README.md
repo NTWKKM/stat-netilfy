@@ -48,6 +48,7 @@ This content reflects the repository structure (updated by GitHub Actions):
 |   |-- tab_data.py
 |   |-- tab_diag.py
 |   |-- tab_logit.py
+|   |-- tab_settings.py
 |   `-- tab_survival.py
 |-- tests /
 |   `-- test_color_palette.py
