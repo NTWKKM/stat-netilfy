@@ -237,7 +237,7 @@ def render():
             **NEJM Standard Formatting**:
             - P < 0.001 displayed as "<0.001" (not exact value)
             - P reported to 3 decimal places (0.001, 0.042, 0.123)
-            - P > 0.999 displayed as ">0.909"
+            - P > 0.999 displayed as ">0.999"
             
             **Lower Bound**: Smallest displayable p-value (typically 0.001 for NEJM)
             
