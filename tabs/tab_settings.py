@@ -237,11 +237,11 @@ def render():
             **NEJM Standard Formatting**:
             - P < 0.001 displayed as "<0.001" (not exact value)
             - P reported to 3 decimal places (0.001, 0.042, 0.123)
-            - P > 0.99 displayed as ">0.99"
+            - P > 0.999 displayed as ">0.909"
             
             **Lower Bound**: Smallest displayable p-value (typically 0.001 for NEJM)
             
-            **Upper Bound**: Largest displayable p-value (typically 0.99 for NEJM)
+            **Upper Bound**: Largest displayable p-value (typically 0.999 for NEJM)
             
             **Clip Tolerance**: Rounding tolerance for very small/large values
             
@@ -303,7 +303,7 @@ def render():
                     0.0, 1.0, float(curr_pu), 0.001, 
                     format="%.4f",
                     key='an_pv_up',
-                    help="NEJM standard: 0.99. Largest p-value shown (larger → show as format string)."
+                    help="NEJM standard: 0.999. Largest p-value shown (larger → show as format string)."
                 )
                 if new_pu != curr_pu:
                     try:
