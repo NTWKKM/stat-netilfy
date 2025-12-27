@@ -306,9 +306,10 @@ class ForestPlot:
                 est_str = f"{est:.2f}" if np.isfinite(est) else "Inf"
                 low_str = f"{low:.2f}" if np.isfinite(low) else "Inf"
                 high_str = f"{high:.2f}" if np.isfinite(high) else "Inf"
-                return f"{est_str} ({low_str}-{high_str})"
             except (KeyError, TypeError, ValueError):
                 return "Error"
+            else:
+                return f"{est_str} ({low_str}-{high_str})"
         self.data['__display_est'] = self.data.apply(fmt_est_ci, axis=1)
 
         # 2. Format P-value (if available)
