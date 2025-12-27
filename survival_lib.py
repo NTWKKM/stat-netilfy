@@ -74,6 +74,14 @@ def calculate_median_survival(df, duration_col, event_col, group_col):
     Returns:
         pd.DataFrame: A table containing 'Group', 'N', 'Events', and 'Median (95% CI)'.
     """
+    # Validate required columns exist
+    missing = []
+    if duration_col not in df.columns: missing.append(duration_col)
+    if event_col not in df.columns: missing.append(event_col)
+    if group_col and group_col not in df.columns: missing.append(group_col)
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+    
     data = df.dropna(subset=[duration_col, event_col])
     if group_col:
         data = data.dropna(subset=[group_col])
@@ -105,9 +113,15 @@ def calculate_median_survival(df, duration_col, event_col, group_col):
             try:
                 # median_survival_times returns a DF with columns like "KM_estimate_lower_0.95", "KM_estimate_upper_0.95"
                 ci_df = median_survival_times(kmf.confidence_interval_)
-                lower = ci_df.values[0][0]
-                upper = ci_df.values[0][1]
-            except Exception:
+                # Validate shape before accessing
+                if ci_df.shape[0] > 0 and ci_df.shape[1] >= 2:
+                    lower = ci_df.iloc[0, 0]
+                    upper = ci_df.iloc[0, 1]
+                else:
+                    lower, upper = np.nan, np.nan
+            except (KeyError, IndexError, AttributeError) as e:
+                # Expected failures when CI cannot be computed
+                _logger.debug(f"Could not compute CI for group {label}: {e}")
                 lower, upper = np.nan, np.nan
             
             # Formatting Helper
