@@ -141,8 +141,9 @@ def calculate_median_survival(df, duration_col, event_col, group_col):
                 lower, upper = np.nan, np.nan
             
             # Formatting Helper
-            def fmt(v):
-                if pd.isna(v) or np.isinf(v): return "NR" # Not Reached
+            def fmt(v) -> str:
+                if pd.isna(v) or np.isinf(v):
+                    return "NR"  # Not Reached
                 return f"{v:.1f}"
             
             med_str = fmt(median_val)
