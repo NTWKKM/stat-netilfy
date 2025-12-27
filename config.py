@@ -58,6 +58,7 @@ class ConfigManager:
             their corresponding default settings.
         """
         return {
+
             # ========== ANALYSIS SETTINGS ==========
             "analysis": {
                 # Logistic Regression
@@ -65,22 +66,22 @@ class ConfigManager:
                 "logit_max_iter": 100,
                 "logit_screening_p": 0.20,  # Variables with p < this get into multivariate
                 "logit_min_cases": 10,  # Minimum cases for multivariate analysis
-                
+    
                 # Variable Detection
                 "var_detect_threshold": 10,  # Unique values threshold for categorical/continuous
                 "var_detect_decimal_pct": 0.30,  # Decimal % for continuous classification
-                
-                # P-value Handling
-                "pvalue_bounds_lower": 0.0,
-                "pvalue_bounds_upper": 1.0,
-                "pvalue_clip_tolerance": 0.0001,  # Allow +/- this much
+    
+                # P-value Handling (NEJM-oriented defaults)
+                "pvalue_bounds_lower": 0.001,      # NEJM: show P<0.001 for smaller values
+                "pvalue_bounds_upper": 0.99,       # NEJM: often cap display at >0.99
+                "pvalue_clip_tolerance": 0.00001,  # tighter tolerance for extreme p
                 "pvalue_format_small": "<0.001",
-                "pvalue_format_large": ">0.999",
-                
+                "pvalue_format_large": ">0.99",
+    
                 # Survival Analysis
                 "survival_method": "kaplan-meier",  # 'kaplan-meier', 'weibull'
                 "cox_method": "efron",  # 'efron', 'breslow'
-                
+    
                 # Missing Data
                 "missing_strategy": "complete-case",  # 'complete-case', 'drop'
                 "missing_threshold_pct": 50,  # Flag if >X% missing in a column
