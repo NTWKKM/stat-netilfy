@@ -394,13 +394,8 @@ def render(df, _var_meta):
     Render the Streamlit UI and orchestrate interactive survival analysis workflows (Kaplan–Meier / Nelson–Aalen curves, landmark analysis, Cox regression with assumption checks and forest plots, and Cox subgroup analysis) for a chosen dataset.
     """
     st.subheader("⏳ Survival Analysis")
-    st.info("""
-**💡 Guide:**
-* **Survival Analysis** models the relationship between predictors and the **Time-to-Event**.
-* **Hazard Ratio (HR):** >1 Increased Hazard (Risk), <1 Decreased Hazard (Protective).
-* **🌳 Forest Plots:** Hazard Ratios with 95% CI are included in the downloadable Cox regression HTML report!
-""")
     
+    # 🟢 NEW: Display matched data status if available
     if st.session_state.get("is_matched", False):
         st.info("✅ **Matched Dataset Available** - You can select it below for analysis")
     
