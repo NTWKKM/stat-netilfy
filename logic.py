@@ -392,21 +392,37 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                         # 🟢 Call site updated: unpack 5 values (ignore stats for univariate)
                         params, conf, pvals, status, _ = run_binary_logit(temp_df['y'], temp_df[dummy_cols], method=preferred_method)
                         if status == "OK":
-                            or_lines, p_lines = ["Ref."], ["-"]
+                            # 🟢 NEW: Add Coef list
+                            or_lines, coef_lines, p_lines = ["Ref."], ["-"], ["-"]
                             for lvl in levels[1:]:
                                 d_name = f"{col}::{lvl}"
                                 if d_name in params:
-                                    odd = np.exp(params[d_name])
+                                    raw_coef = params[d_name] # Extract Coef
+                                    odd = np.exp(raw_coef)
                                     ci_l, ci_h = np.exp(conf.loc[d_name][0]), np.exp(conf.loc[d_name][1])
                                     pv = pvals[d_name]
+                                    
+                                    coef_lines.append(f"{raw_coef:.3f}") # Format Coef
                                     or_lines.append(f"{odd:.2f} ({ci_l:.2f}-{ci_h:.2f})")
                                     p_lines.append(fmt_p(pv))
-                                    or_results[f"{col}: {lvl} vs {levels[0]}"] = {'or': odd, 'ci_low': ci_l, 'ci_high': ci_h, 'p_value': pv}
-                                else: or_lines.append("-"); p_lines.append("-")
-                            res['or'], res['p_or'] = "<br>".join(or_lines), "<br>".join(p_lines)
-                        else: res['or'] = "-"
-                    else: res['or'] = "-"
-                else: res['or'] = "-"
+                                    or_results[f"{col}: {lvl} vs {levels[0]}"] = {'or': odd, 'ci_low': ci_l, 'ci_high': ci_h, 'p_value': pv, 'coef': raw_coef}
+                                else: 
+                                    or_lines.append("-")
+                                    p_lines.append("-") 
+                                    coef_lines.append("-")
+                            
+                            res['or'] = "<br>".join(or_lines)
+                            res['coef'] = "<br>".join(coef_lines) # Store for HTML
+                            res['p_or'] = "<br>".join(p_lines)
+                        else: 
+                            res['or'] = "-"
+                            res['coef'] = "-"
+                    else: 
+                        res['or'] = "-"
+                        res['coef'] = "-"
+                else: 
+                    res['or'] = "-" 
+                    res['coef'] = "-"
 
             # =========================================================
             # 🟢 MODE B: LINEAR (Continuous / Trend)
@@ -439,14 +455,21 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                     # 🟢 Call site updated: unpack 5 values
                     params, Hex_conf, pvals, status, _ = run_binary_logit(data_uni['y'], data_uni[['x']], method=preferred_method)
                     if status == "OK" and 'x' in params:
-                        odd = np.exp(params['x'])
+                        raw_coef = params['x'] # Extract Coef
+                        odd = np.exp(raw_coef)
                         ci_l, ci_h = np.exp(Hex_conf.loc['x'][0]), np.exp(Hex_conf.loc['x'][1])
                         pv = pvals['x']
+                        
+                        res['coef'] = f"{raw_coef:.3f}" # Store for HTML
                         res['or'] = f"{odd:.2f} ({ci_l:.2f}-{ci_h:.2f})"
                         res['p_or'] = pv
-                        or_results[col] = {'or': odd, 'ci_low': ci_l, 'ci_high': ci_h, 'p_value': pv}
-                    else: res['or'] = "-"
-                else: res['or'] = "-"
+                        or_results[col] = {'or': odd, 'ci_low': ci_l, 'ci_high': ci_h, 'p_value': pv, 'coef': raw_coef}
+                    else: 
+                        res['or'] = "-"
+                        res['coef'] = "-"
+                else: 
+                    res['or'] = "-"
+                    res['coef'] = "-"
 
             results_db[col] = res
             
@@ -514,7 +537,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                     if pd.notna(nag): r2_parts.append(f"Nagelkerke R² = {nag:.3f}")
                     
                     if r2_parts:
-                         mv_metrics_text = " | ".join(r2_parts)
+                        mv_metrics_text = " | ".join(r2_parts)
 
                     for var in cand_valid:
                         mode = mode_map.get(var, 'linear')
@@ -526,21 +549,23 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                             for lvl in levels[1:]:
                                 d_name = f"{var}::{lvl}"
                                 if d_name in params:
-                                    aor = np.exp(params[d_name])
+                                    raw_coef = params[d_name] # Extract Coef
+                                    aor = np.exp(raw_coef)
                                     ci_low, ci_high = np.exp(conf.loc[d_name][0]), np.exp(conf.loc[d_name][1])
                                     pv = pvals[d_name]
-                                    aor_entries.append({'lvl': lvl, 'aor': aor, 'l': ci_low, 'h': ci_high, 'p': pv})
-                                    aor_results[f"{var}: {lvl} vs {levels[0]}"] = {'aor': aor, 'ci_low': ci_low, 'ci_high': ci_high, 'p_value': pv}
+                                    aor_entries.append({'lvl': lvl, 'aor': aor, 'l': ci_low, 'h': ci_high, 'p': pv, 'coef': raw_coef})
+                                    aor_results[f"{var}: {lvl} vs {levels[0]}"] = {'aor': aor, 'ci_low': ci_low, 'ci_high': ci_high, 'p_value': pv, 'coef': raw_coef}
                             results_db[var]['multi_res'] = aor_entries
                         
                         # --- Multi: Linear ---
                         else:
                             if var in params:
-                                aor = np.exp(params[var])
+                                raw_coef = params[var] # Extract Coef
+                                aor = np.exp(raw_coef)
                                 ci_low, ci_high = np.exp(conf.loc[var][0]), np.exp(conf.loc[var][1])
                                 pv = pvals[var]
-                                results_db[var]['multi_res'] = {'aor': aor, 'l': ci_low, 'h': ci_high, 'p': pv}
-                                aor_results[var] = {'aor': aor, 'ci_low': ci_low, 'ci_high': ci_high, 'p_value': pv}
+                                results_db[var]['multi_res'] = {'aor': aor, 'l': ci_low, 'h': ci_high, 'p': pv, 'coef': raw_coef}
+                                aor_results[var] = {'aor': aor, 'ci_low': ci_low, 'ci_high': ci_high, 'p_value': pv, 'coef': raw_coef}
 
     # --- HTML BUILD ---
     html_rows = []
@@ -560,7 +585,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
         
         sheet = _get_sheet_name(col)
         if sheet != current_sheet:
-            html_rows.append(f"<tr class='sheet-header'><td colspan='9'>{sheet}</td></tr>")
+            html_rows.append(f"<tr class='sheet-header'><td colspan='11'>{sheet}</td></tr>") # 🟢 Update colspan for new columns
             current_sheet = sheet
             
         lbl = get_label(col, var_meta)
@@ -574,6 +599,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             lbl += f"<br><span style='font-size:0.8em; color:#888'>{mode_badge[mode]}</span>"
         
         or_s = res.get('or', '-')
+        coef_s = res.get('coef', '-') # Get Univariate Coef
         
         # P-value display
         if mode == 'categorical': 
@@ -586,22 +612,25 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 p_s = f"<span class='sig-p'>{p_s}*</span>"
             p_col_display = p_s
 
-        # Adjusted OR
-        aor_s, ap_s = "-", "-"
+        # Adjusted OR & Coef
+        aor_s, acoef_s, ap_s = "-", "-", "-"
         multi_res = res.get('multi_res')
         
         if multi_res:
             if isinstance(multi_res, list): # Categorical List
-                aor_lines, ap_lines = ["Ref."], ["-"]
+                aor_lines, acoef_lines, ap_lines = ["Ref."], ["-"], ["-"]
                 for item in multi_res:
                     p_txt = fmt_p(item['p'])
                     # ✅ FIX: Type check before comparison
                     if isinstance(item['p'], (int, float)) and pd.notna(item['p']) and item['p'] < 0.05: 
                         p_txt = f"<span class='sig-p'>{p_txt}*</span>"
+                    
+                    acoef_lines.append(f"{item['coef']:.3f}")
                     aor_lines.append(f"{item['aor']:.2f} ({item['l']:.2f}-{item['h']:.2f})")
                     ap_lines.append(p_txt)
-                aor_s, ap_s = "<br>".join(aor_lines), "<br>".join(ap_lines)
+                aor_s, acoef_s, ap_s = "<br>".join(aor_lines), "<br>".join(acoef_lines), "<br>".join(ap_lines)
             else: # Linear Single Dict
+                acoef_s = f"{multi_res['coef']:.3f}"
                 aor_s = f"{multi_res['aor']:.2f} ({multi_res['l']:.2f}-{multi_res['h']:.2f})"
                 ap_val = multi_res['p']
                 ap_txt = fmt_p(ap_val)
@@ -616,9 +645,11 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
             <td>{res.get('desc_total','')}</td>
             <td>{res.get('desc_neg','')}</td>
             <td>{res.get('desc_pos','')}</td>
+            <td>{coef_s}</td>
             <td>{or_s}</td>
             <td>{res.get('test_name', '-')}</td> 
             <td>{p_col_display}</td>
+            <td>{acoef_s}</td>
             <td>{aor_s}</td>
             <td>{ap_s}</td>
         </tr>""")
@@ -640,9 +671,9 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                 <th>Total</th>
                 <th>Group 0</th>
                 <th>Group 1</th>
-                <th>Crude OR (95% CI)</th>
+                <th>Crude Coef.</th> <th>Crude OR (95% CI)</th>
                 <th>Test Used</th> <th>Crude P-value</th>
-                <th>aOR (95% CI) <sup style='color:{COLORS['danger']}; font-weight:bold;'>†</sup><br><span style='font-size:0.8em; font-weight:normal'>(n={final_n_multi})</span></th>
+                <th>Adj. Coef.</th> <th>aOR (95% CI) <sup style='color:{COLORS['danger']}; font-weight:bold;'>†</sup><br><span style='font-size:0.8em; font-weight:normal'>(n={final_n_multi})</span></th>
                 <th>aP-value</th>
             </tr>
         </thead>

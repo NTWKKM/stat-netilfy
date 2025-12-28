@@ -85,18 +85,8 @@ def render(df, var_meta=None):
     # SUB-TAB 1: Pearson/Spearman (Continuous)
     # ==================================================
     with sub_tab1:
-        st.markdown("##### Continuous Correlation Analysis (Pearson & Spearman)")
-        st.info("""
-    **💡 Guide:** Measures the relationship between **two continuous (numeric) variables**.
-
-    * **Pearson (r):** Assesses **linear** correlation; best for normally distributed data.
-    * **Spearman (rho):** Assesses **monotonic** (directional) correlation; best for non-normal data or ranks/outliers.
-    
-    **Interpretation of Coefficient (r/rho):**
-    * **Close to +1:** Strong positive association (Both variables increase together).
-    * **Close to -1:** Strong negative association (One increases as the other decreases).
-    * **Close to 0:** Weak or no association.
-        """)
+        st.markdown("##### Continuous Correlation Analysis")
+        # 🧹 Removed detailed description (Moved to Tab 3)
         
         c1, c2, c3 = st.columns(3)
         cm = c1.selectbox("Correlation Coefficient:", ["Pearson", "Spearman"], key='coeff_type_tab')
@@ -146,14 +136,8 @@ def render(df, var_meta=None):
     # SUB-TAB 2: Reliability (ICC)
     # ==================================================
     with sub_tab2:
-        st.markdown("##### Reliability Analysis (Intraclass Correlation Coefficient - ICC)")
-        st.info("""
-            **💡 Guide:** Evaluates the reliability/agreement between 2 or more raters/methods for **Numeric/Continuous** variables.
-            
-            **ICC Types (Most Common):**
-            * **ICC(2,1) Absolute Agreement:** Use when you care if the absolute scores are the same.
-            * **ICC(3,1) Consistency:** Use when you care if the ranking is consistent.
-        """)
+        st.markdown("##### Reliability Analysis (ICC)")
+        # 🧹 Removed detailed description (Moved to Tab 3)
         
         # Auto-select columns
         default_icc_cols = [c for c in numeric_cols if any(k in c.lower() for k in ['measure', 'machine', 'rater', 'read', 'icc'])]
@@ -200,43 +184,66 @@ def render(df, var_meta=None):
                 st.button("📥 Download Report", disabled=True, key='ph_icc_corr')
 
     # ==================================================
-    # SUB-TAB 3: Reference & Interpretation
+    # SUB-TAB 3: Reference & Interpretation (Updated)
     # ==================================================
     with sub_tab3:
-        st.markdown("##### Quick Reference: Correlation vs ICC")
+        st.markdown("## 📚 Reference & Interpretation Guide")
         
-        st.info("""
-        **📊 When to Use What:**
-        
-        | Test | Variables | Purpose | Example |
-        |------|-----------|---------|----------|
-        | **Pearson** | 2 continuous | Linear relationship | Age vs Blood Pressure |
-        | **Spearman** | 2 continuous | Monotonic relationship (rank-based) | Severity score vs Hospital Stay |
-        | **ICC** | 2+ continuous | Reliability/agreement between raters/methods | Agreement between 2 doctors rating images |
-        """)
+        st.info("💡 **Tip:** Use this tab to understand which test to choose and how to interpret the results.")
         
         col1, col2 = st.columns(2)
+        
+        # --- Column 1: Correlation ---
         with col1:
-            st.markdown("**Correlation Coefficient (r, rho)**")
+            st.markdown("### 📉 Correlation (Relationship)")
             st.markdown("""
-            - **|r| = 0.7 to 1.0** → Strong
-            - **|r| = 0.4 to 0.7** → Moderate  
-            - **|r| = 0.2 to 0.4** → Weak
-            - **|r| < 0.2** → Very weak/negligible
-            - **p < 0.05** → Statistically significant
+            **Concept:** Measures the strength and direction of the relationship between **two continuous variables**.
+            
+            **1. Pearson (r):**
+            * **Best for:** Linear relationships (straight line), normally distributed data.
+            * **Sensitive to:** Outliers.
+            
+            **2. Spearman (rho):**
+            * **Best for:** Monotonic relationships (variables increase together but not necessarily at a constant rate), non-normal data, or ranks.
+            * **Robust to:** Outliers.
+            
+            **Interpretation of Coefficient (r or rho):**
+            * **+1.0:** Perfect Positive (As X goes up, Y goes up).
+            * **-1.0:** Perfect Negative (As X goes up, Y goes down).
+            * **0.0:** No relationship.
+            
+            **Strength Guidelines:**
+            * **0.7 - 1.0:** Strong
+            * **0.4 - 0.7:** Moderate
+            * **0.2 - 0.4:** Weak
+            * **< 0.2:** Negligible
             """)
-        
+
+        # --- Column 2: ICC ---
         with col2:
-            st.markdown("**ICC Value**")
+            st.markdown("### 📏 ICC (Reliability)")
             st.markdown("""
-            - **0.90 to 1.00** → Excellent
-            - **0.75 to 0.89** → Good
-            - **0.50 to 0.74** → Moderate
-            - **0.25 to 0.49** → Fair
-            - **< 0.25** → Poor
+            **Concept:** Measures the reliability or agreement between **two or more raters/methods** measuring the same thing. Unlike correlation, ICC accounts for systematic error (bias).
+            
+            **Common Types:**
+            * **ICC(2,1) Absolute Agreement:** Use when you care if the **exact scores** match. (e.g., Doctor A gives 5, Doctor B must give 5).
+            * **ICC(3,1) Consistency:** Use when you care if the **ranking** is consistent, even if scores differ. (e.g., Doctor A is consistently 1 point higher than Doctor B).
+            
+            **Interpretation of ICC Value:**
+            * **> 0.90:** Excellent Reliability ✅
+            * **0.75 - 0.90:** Good Reliability
+            * **0.50 - 0.75:** Moderate Reliability ⚠️
+            * **< 0.50:** Poor Reliability ❌
             """)
         
-        st.markdown("""---
-        **📝 Note:** Chi-Square test (for categorical association) has been moved to **Tab 4: Diagnostic Tests (ROC)**.
-        **✨ NEW:** Can now analyze both Original and Matched datasets!
+        st.markdown("---")
+        st.markdown("### 📝 Common Questions")
+        st.markdown("""
+        **Q: Why use ICC instead of Pearson correlation for reliability?**
+        * **A:** Pearson only measures linearity. If Rater A always gives a score exactly 10 points higher than Rater B, Pearson correlation will be 1.0 (perfect), but they don't agree! ICC accounts for this difference and would show lower agreement.
+        
+        **Q: What if my p-value is significant (< 0.05) but r is low (0.1)?**
+        * **A:** A significant p-value just means the correlation is likely not zero. With large sample sizes, even tiny correlations can be "significant". **Focus on the r-value magnitude** for clinical relevance.
         """)
+        
+        st.caption("Note: Chi-Square test (for categorical association) can be found in **Tab 4: Diagnostic Tests**.")

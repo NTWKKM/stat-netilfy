@@ -404,15 +404,6 @@ def render(df, var_meta):
     # ==================================================
     with sub_tab1:
         st.markdown("### Binary Logistic Regression")
-        st.info("""
-    **💡 Guide:** Models the relationship between predictors and the **probability** of a **binary outcome**.
-
-    * **Odds Ratio (OR/aOR):**
-        * **OR > 1:** Increased odds (Risk factor).
-        * **OR < 1:** Decreased odds (Protective factor).
-    * **Forest Plots:** Both Crude OR and Adjusted OR forest plots are automatically generated.
-""")
-        
         # Dataset selection
         selected_df, data_label = _get_dataset_for_analysis(df)
         st.write(f"**Using:** {data_label}")
