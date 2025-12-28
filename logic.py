@@ -468,7 +468,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                         res['or'] = "-"
                         res['coef'] = "-"
                 else: 
-                    res['or'] = "-"; 
+                    res['or'] = "-"
                     res['coef'] = "-"
 
             results_db[col] = res
