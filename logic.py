@@ -407,14 +407,22 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                                     p_lines.append(fmt_p(pv))
                                     or_results[f"{col}: {lvl} vs {levels[0]}"] = {'or': odd, 'ci_low': ci_l, 'ci_high': ci_h, 'p_value': pv, 'coef': raw_coef}
                                 else: 
-                                    or_lines.append("-"); p_lines.append("-"); coef_lines.append("-")
+                                    or_lines.append("-")
+                                    p_lines.append("-") 
+                                    coef_lines.append("-")
                             
                             res['or'] = "<br>".join(or_lines)
                             res['coef'] = "<br>".join(coef_lines) # Store for HTML
                             res['p_or'] = "<br>".join(p_lines)
-                        else: res['or'] = "-"; res['coef'] = "-"
-                    else: res['or'] = "-"; res['coef'] = "-"
-                else: res['or'] = "-"; res['coef'] = "-"
+                        else: 
+                            res['or'] = "-"
+                            res['coef'] = "-"
+                    else: 
+                        res['or'] = "-"
+                        res['coef'] = "-"
+                else: 
+                    res['or'] = "-" 
+                    res['coef'] = "-"
 
             # =========================================================
             # 🟢 MODE B: LINEAR (Continuous / Trend)
@@ -456,8 +464,12 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                         res['or'] = f"{odd:.2f} ({ci_l:.2f}-{ci_h:.2f})"
                         res['p_or'] = pv
                         or_results[col] = {'or': odd, 'ci_low': ci_l, 'ci_high': ci_h, 'p_value': pv, 'coef': raw_coef}
-                    else: res['or'] = "-"; res['coef'] = "-"
-                else: res['or'] = "-"; res['coef'] = "-"
+                    else: 
+                        res['or'] = "-"
+                        res['coef'] = "-"
+                else: 
+                    res['or'] = "-"; 
+                    res['coef'] = "-"
 
             results_db[col] = res
             
@@ -525,7 +537,7 @@ def analyze_outcome(outcome_name, df, var_meta=None, method='auto'):
                     if pd.notna(nag): r2_parts.append(f"Nagelkerke R² = {nag:.3f}")
                     
                     if r2_parts:
-                          mv_metrics_text = " | ".join(r2_parts)
+                        mv_metrics_text = " | ".join(r2_parts)
 
                     for var in cand_valid:
                         mode = mode_map.get(var, 'linear')
