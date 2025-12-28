@@ -12,12 +12,6 @@ logger = get_logger(__name__)
 def _get_dataset_for_table1(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     """
     Choose which dataset to use for Table 1 display and provide a descriptive label.
-    
-    Parameters:
-        df (pd.DataFrame): Original dataset to use when matched data is not selected or unavailable.
-    
-    Returns:
-        tuple[pd.DataFrame, str]: The selected DataFrame and a human-readable label indicating dataset type and row count (for example, "📊 Original Data (N rows)" or "✅ Matched Data (N rows)").
     """
     has_matched = (
         st.session_state.get("is_matched", False)
@@ -51,18 +45,7 @@ def _get_dataset_for_table1(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
 
 def render(df, var_meta):
     """
-    Render the "Table 1 & Matching" interactive Streamlit interface with subtabs for baseline characteristics, propensity score matching, matched data viewing, and reference/interpretation.
-    
-    This function builds a multi-step UI that lets users:
-    - generate a Table 1 summary (original or matched dataset) with OR display options,
-    - configure and run propensity score matching (variable selection, caliper settings),
-    - compute and display balance diagnostics (SMD pre/post, Love plot) and match-quality metrics,
-    - preview and export matched data (CSV/Excel) and a PSM report,
-    - persist matched results in Streamlit session state for use across tabs.
-    
-    Parameters:
-        df (pandas.DataFrame): Source dataset used for summaries, propensity score modeling, and matching.
-        var_meta (Mapping): Variable metadata (e.g., display names, types, formatting) used when generating Table 1 and reports.
+    Render the "Table 1 & Matching" interactive Streamlit interface.
     """
     st.subheader("📋 Table 1 & Matching")
     
@@ -78,24 +61,8 @@ def render(df, var_meta):
     # SUBTAB 1: BASELINE CHARACTERISTICS (Table 1)
     # ==========================================
     with sub_tab1:
-        st.markdown("### Baseline Characteristics (Table 1)")
-        st.info("""
-        **💡 Guide:** Summarizes key demographics and patient characteristics, stratified by a **Grouping Variable**, 
-        to assess **group comparability**.
-
-        **Presentation:**
-        * **Numeric:** Mean ± SD (Normally Distributed Data) or Median (IQR) (**Non**-Normally Distributed Data).
-        * **Categorical:** Count (Percentage).
-        * **Odds Ratio (OR):** Automatically calculated for categorical variables when there are **exactly 2 groups**.
-        * **P-value & Test Used:** Tests for statistically significant differences in characteristics across groups.
-        * **Automatically selects the appropriate test for P-value** (e.g., t-test, Chi-square, Kruskal-Wallis) 
-        based on the variable type and distribution.
-
-        **Variable Selection:**
-        * **Grouping Variable (Split):** The primary categorical variable used to stratify the **dataset** 
-        (e.g., 'Treatment' or 'Outcome').
-        * **Characteristics:** All other variables (numeric/categorical) to be summarized and compared.
-        """)
+        st.markdown("##### Baseline Characteristics (Table 1)")
+        # 🧹 Removed detailed description (Moved to Tab 4)
         
         # 🟢 Display matched data status and selector
         if st.session_state.get("is_matched", False):
@@ -123,7 +90,7 @@ def render(df, var_meta):
                 ["All Levels (Every Level vs Ref)", "Simple (Single Line/Risk vs Ref)"],
                 index=0,
                 key="or_style_radio",
-                help="All Levels: Shows OR for every sub-group (Detailed). Simple: Shows OR for only one comparison (Concise)."
+                help="See Reference tab for details."
             )
             # Map display string to internal code
             or_style_code = 'all_levels' if "All Levels" in or_style_display else 'simple'
@@ -161,17 +128,8 @@ def render(df, var_meta):
     # SUBTAB 2: PROPENSITY SCORE MATCHING
     # ==========================================
     with sub_tab2:
-        st.markdown("### ⚖️ Propensity Score Matching (PSM)")
-        st.info("""
-        **💡 Workflow:**
-        1. **Select variables** → Treatment, Outcome, Confounders
-        2. **Configure matching** → Choose presets or custom settings
-        3. **Run matching** → System calculates propensity scores
-        4. **Review results** → Check balance metrics (SMD < 0.1 is good)
-        5. **Export matched data** → Use for downstream analysis
-        
-        **Goal:** Reduce selection bias and create balanced treatment groups mimicking an RCT.
-        """)
+        st.markdown("##### ⚖️ Propensity Score Matching (PSM)")
+        # 🧹 Removed detailed description (Moved to Tab 4)
 
         all_cols = df.columns.tolist()
         if not all_cols:
@@ -384,7 +342,7 @@ def render(df, var_meta):
                             smd_pre = psm_lib.calculate_smd(df_ps, final_treat_col, final_cov_cols)
                             smd_post = psm_lib.calculate_smd(df_matched, final_treat_col, final_cov_cols)
                             
-                           # 🟢 NEW: Add categorical SMD (cat_covs is guaranteed to exist now)
+                            # 🟢 NEW: Add categorical SMD (cat_covs is guaranteed to exist now)
                             smd_pre_cat = _calculate_categorical_smd(df_ps, final_treat_col, cat_covs)
                             smd_post_cat = _calculate_categorical_smd(df_matched, final_treat_col, cat_covs)
                             
@@ -556,7 +514,7 @@ def render(df, var_meta):
     # SUBTAB 3: MATCHED DATA VIEW
     # ==========================================
     with sub_tab3:
-        st.markdown("### ✅ Matched Data View & Export")
+        st.markdown("##### ✅ Matched Data View & Export")
         
         if st.session_state.get("is_matched", False) and st.session_state.get("df_matched") is not None:
             df_m = st.session_state.df_matched
@@ -683,90 +641,70 @@ def render(df, var_meta):
             """)
 
     # ==========================================
-    # SUBTAB 4: REFERENCE & INTERPRETATION
+    # SUBTAB 4: REFERENCE & INTERPRETATION (Updated)
     # ==========================================
     with sub_tab4:
-        st.markdown("##### 📚 Quick Reference: Table 1 & Matching")
+        st.markdown("## 📚 Reference & Interpretation Guide")
         
-        st.info("""
-        **🎯 When to Use What:**
+        st.info("💡 **Tip:** This section provides detailed explanations and interpretation rules for Table 1 and Propensity Score Matching.")
         
-        | Analysis | Purpose | Output |
-        |----------|---------|--------|
-        | **Table 1** | Compare baseline characteristics | Mean/Median, % counts, p-values |
-        | **PSM** | Balance groups (remove confounding) | SMD pre/post, Love plot, matched data |
-        | **Matched Data View** | Export & summarize matched cohort | CSV/Excel, descriptive stats |
+        # 💡 Decision Guide (First for quick access)
+        st.markdown("### 🚦 Quick Decision Guide")
+        st.markdown("""
+        | **Question** | **Recommended Action** | **Goal** |
+        | :--- | :--- | :--- |
+        | Do my groups (e.g., Treated vs Control) differ at baseline? | **Generate Table 1** (Tab 1) | Check for significant p-values (< 0.05). |
+        | My groups are imbalanced (p < 0.05 in Table 1). Can I fix this? | **Run PSM** (Tab 2) | Create a "synthetic" RCT where groups are balanced. |
+        | Did the matching work? | **Check SMD** (Tab 2 - Results) | Look for **SMD < 0.1** in the Love Plot. |
+        | Now that I have matched data, what do I do? | **Export / Use Matched Data** | Go to **Tab 3** to export, or select "✅ Matched Data" in other analysis tabs. |
         """)
         
+        st.divider()
+
         col1, col2 = st.columns(2)
         
+        # --- Column 1: Table 1 ---
         with col1:
-            st.markdown("### Table 1 (Baseline)")
+            st.markdown("### 📊 Baseline Characteristics (Table 1)")
             st.markdown("""
-            **When to Use:**
-            - RCTs: Assess randomization balance
-            - Observational: Check comparability
-            - Publication standard
+            **Concept:** A standard table in medical research that compares the demographic and clinical characteristics of two or more groups (e.g., Treatment vs Placebo).
             
             **Interpretation:**
-            - **p < 0.05**: Variables differ ⚠️
-            - **p ≥ 0.05**: Balanced ✅
+            * **P-value:** Tests if there is a statistically significant difference between groups.
+                * **p < 0.05:** Significant difference (Imbalance) ⚠️. This suggests confounding may be present.
+                * **p ≥ 0.05:** No significant difference (Balanced) ✅.
             
-            **Presentation:**
-            - Numeric: Mean ± SD (normal) or Median (IQR)
-            - Categorical: Count (%) and OR
-            - Include N for each group
-            
-            **Common Mistakes:**
-            - Using t-test for non-normal data ❌
-            - Multiple testing without adjustment
-            - Assuming p>0.05 = no confounding
-            
-            **✨ NEW:** Can now compare both Original and Matched datasets!
+            **Reporting Standards:**
+            * **Numeric Data (Normal):** Report **Mean ± SD**. (e.g., Age: 45.2 ± 10.1)
+            * **Numeric Data (Skewed):** Report **Median (IQR)**. (e.g., LOS: 5 (3-10))
+            * **Categorical Data:** Report **Count (%)**. (e.g., Male: 50 (45%))
             """)
-        
+            
+        # --- Column 2: PSM ---
         with col2:
-            st.markdown("### PSM (Propensity Matching)")
+            st.markdown("### ⚖️ Propensity Score Matching (PSM)")
             st.markdown("""
-            **When to Use:**
-            - Observational studies (imbalance)
-            - Can't randomize
-            - Adjust for confounders
-            - Mimic RCT
+            **Concept:** A statistical technique used in observational studies to reduce selection bias. It pairs patients in the treated group with patients in the control group who have similar "propensity scores" (probability of receiving treatment).
             
-            **SMD (Balance Check):**
-            - **SMD < 0.1**: Good ✅
-            - **0.1-0.2**: Acceptable ⚠️
-            - **> 0.2**: Poor ❌
+            **Key Metric: Standardized Mean Difference (SMD):**
+            * The gold standard for checking balance after matching.
+            * **SMD < 0.1:** Excellent Balance ✅ (Groups are comparable).
+            * **SMD 0.1 - 0.2:** Acceptable.
+            * **SMD > 0.2:** Imbalanced ❌.
             
-            **Key Steps:**
-            1. Check Table 1 (p-values)
-            2. Run PSM if imbalanced
-            3. Check SMD pre vs post
-            4. Use matched data for analysis
-            
-            **Common Mistakes:**
-            - Not checking Table 1 first ❌
-            - Only checking p-values after PSM
-            - PSM on balanced groups
-            - Ignoring sample size loss
+            **Caliper (Tolerance):**
+            * Determines how "close" a match must be.
+            * **Stricter (0.1*SD):** Better balance, but you might lose more patients (fewer matches).
+            * **Looser (0.5*SD):** More matches, but balance might be worse.
             """)
-        
+
         st.markdown("---")
+        st.markdown("### 📝 Common Workflow")
         st.markdown("""
-        ### 💡 Decision Guide
-        
-        **Question: Do my groups differ at baseline?**
-        → Use **Table 1** (Tab 1) to check - compare Original vs Matched after PSM ✨
-        
-        **Question: They're imbalanced. Can I fix it?**
-        → Use **PSM** (Tab 2) to match
-        
-        **Question: After PSM, are they balanced?**
-        → Check **SMD < 0.1** in Love plot ✅
-        
-        **Question: Now what? Use for analysis?**
-        → Export from **Matched Data View** (Tab 3) and select **"✅ Matched Data"** in other analysis tabs ✅
+        1.  **Check Original Data:** Run Table 1 on the "Original Data". Note any variables with p < 0.05.
+        2.  **Match:** Go to PSM, select Treatment, Outcome, and **all confounding variables** (especially those with p < 0.05).
+        3.  **Verify:** After matching, check the **Love Plot**. Ensure all dots (Matched) are within the < 0.1 zone.
+        4.  **Re-check Table 1:** Go back to Tab 1, switch the dataset selector to **"✅ Matched Data"**, and generate Table 1 again. P-values should now be non-significant (or SMDs low).
         """)
 
 
@@ -777,17 +715,6 @@ def _calculate_categorical_smd(
 ) -> pd.DataFrame:
     """
     Compute standardized mean differences (SMD) for categorical covariates between treated and control groups.
-    
-    Calculates a single SMD per categorical variable by computing level-specific differences in group proportions, standardizing each by the pooled variance, and aggregating level SMDs using the root-sum-square method. This supports binary and multi-level categorical variables and yields a single balance metric per variable.
-    
-    Parameters:
-        df (pd.DataFrame): Data containing treatment and categorical covariates.
-        treatment_col (str): Name of the binary treatment column (expected values 1 for treated, 0 for control).
-        cat_cols (list): List of column names for categorical covariates to evaluate.
-    
-    Returns:
-        pd.DataFrame: DataFrame with columns ['Variable', 'SMD'] giving the SMD for each categorical variable.
-                      Returns an empty DataFrame with those columns if `cat_cols` is empty or if either treatment group has no observations.
     """
     if not cat_cols:
         return pd.DataFrame(columns=['Variable', 'SMD'])
