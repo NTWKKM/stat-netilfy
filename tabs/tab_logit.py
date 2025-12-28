@@ -298,7 +298,6 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame) -> None:
             
             # Clinical Guidelines
             with st.expander("📚 Clinical Reporting Guidelines", expanded=False):
-                # ✅ FIX: Prepare strings outside f-string to avoid backslash error
                 if results['interaction']['significant']:
                     conclusion_text = "Evidence of significant heterogeneity"
                     rec_text = "- Report results separately for each subgroup\n- Discuss possible mechanisms for differential effect"
