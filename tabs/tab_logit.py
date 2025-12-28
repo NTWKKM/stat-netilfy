@@ -298,7 +298,6 @@ def _render_logit_subgroup_analysis(df: pd.DataFrame) -> None:
             
             # Clinical Guidelines
             with st.expander("📚 Clinical Reporting Guidelines", expanded=False):
-                # ✅ FIX: Prepare strings outside f-string to avoid backslash error
                 if results['interaction']['significant']:
                     conclusion_text = "Evidence of significant heterogeneity"
                     rec_text = "- Report results separately for each subgroup\n- Discuss possible mechanisms for differential effect"
@@ -404,7 +403,16 @@ def render(df, var_meta):
     # SUB-TAB 1: Binary Logistic Regression
     # ==================================================
     with sub_tab1:
-        st.markdown("### Binary Logistic Regression")  
+        st.markdown("### Binary Logistic Regression")
+        st.info("""
+    **💡 Guide:** Models the relationship between predictors and the **probability** of a **binary outcome**.
+
+    * **Odds Ratio (OR/aOR):**
+        * **OR > 1:** Increased odds (Risk factor).
+        * **OR < 1:** Decreased odds (Protective factor).
+    * **Forest Plots:** Both Crude OR and Adjusted OR forest plots are automatically generated.
+""")
+        
         # Dataset selection
         selected_df, data_label = _get_dataset_for_analysis(df)
         st.write(f"**Using:** {data_label}")
