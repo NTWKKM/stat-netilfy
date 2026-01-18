@@ -103,7 +103,7 @@ st.sidebar.title("MENU")
 # 🟢 NEW: PROMO SECTION (ADDED HERE)
 st.sidebar.success("""
 **🚀 New Version Available StatioMed**:  
-👉 [HuggingFace Space](https://huggingface.co/spaces/ntwkkm/shinystat)  
+👉 [HuggingFace Space](https://ntwkkm-shinystat.hf.space)  
 👉 [Posit Cloud](https://ntwkkm-shinymedstat.share.connect.posit.cloud/)
 """)
 # 🔴 END PROMO SECTION
