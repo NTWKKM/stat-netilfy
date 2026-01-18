@@ -99,6 +99,16 @@ if 'matched_covariates' not in st.session_state:
     
 # --- SIDEBAR ---
 st.sidebar.title("MENU")
+
+# 🟢 NEW: PROMO SECTION (ADDED HERE)
+st.sidebar.success("""
+**🚀 New Version Available: StatioMed** ลองใช้งานเวอร์ชันใหม่ (Shiny Engine) ได้ที่:  
+  
+👉 [HuggingFace Space](https://huggingface.co/spaces/ntwkkm/shinystat)  
+👉 [Posit Cloud](https://ntwkkm-shinymedstat.share.connect.posit.cloud/)
+""")
+# 🔴 END PROMO SECTION
+
 st.sidebar.header("1. Data Management")
 
 # Example Data Generator
@@ -339,7 +349,7 @@ if st.session_state.df is not None:
             allowed_types,
             index=allowed_types.index(current_type),
         )
-                                    
+                                            
         st.sidebar.markdown("Labels (0=No):")
         map_txt = st.sidebar.text_area("Map", value="\n".join([f"{k}={v}" for k,v in meta.get('map',{}).items()]), height=80)
         
