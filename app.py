@@ -102,7 +102,7 @@ st.sidebar.title("MENU")
 
 # 🟢 NEW: PROMO SECTION (ADDED HERE)
 st.sidebar.success("""
-**🚀 New Version Available: StatioMed** ลองใช้งานเวอร์ชันใหม่ (Shiny Engine) ได้ที่:  
+**🚀 New Version Available StatioMed**:  
   
 👉 [HuggingFace Space](https://huggingface.co/spaces/ntwkkm/shinystat)  
 👉 [Posit Cloud](https://ntwkkm-shinymedstat.share.connect.posit.cloud/)
