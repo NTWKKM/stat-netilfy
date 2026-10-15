@@ -103,17 +103,17 @@ if 'matched_covariates' not in st.session_state:
 def render_skills_hero_banner(compact: bool = False):
     """Render the promotional banner for shinystat-skills on the main page."""
     if compact:
-        with st.expander("🤖 **NEW! ใช้ AI วิเคราะห์สถิติการแพทย์อัตโนมัติด้วย `shinystat-skills` (Claude Code / Cursor / Cloud Sandbox)** — คลิกเพื่อดูวิธีติดตั้ง", expanded=False):
+        with st.expander("🤖 **NEW! Automate Clinical Biostatistics with AI (`shinystat-skills` for Claude Code / Cursor / Cloud Sandbox)** — Click to view install guide", expanded=False):
             col_a, col_b = st.columns([1.6, 1.4])
             with col_a:
                 st.markdown("""
-                **ShinyStat Biostatistical Skills** สังเคราะห์สมองกลสถิติจากเว็บแอปนี้ไปอยู่ใน AI Agent ของคุณ:
-                - วิเคราะห์ **Table 1, Firth/Logistic, Cox PH, KM, PSM, ROC (DeLong), ICC, DCA, MICE** อัตโนมัติ
-                - ออกรายงาน **Dual Interactive Plotly + 300 DPI Publication Figures (NEJM/JAMA)** และ Word/PPTX/HTML
+                **ShinyStat Biostatistical Skills** brings the statistical engine of this web app directly into your AI Agent:
+                - Automated **Table 1, Firth/Logistic, Cox PH, KM, PSM, ROC (DeLong), ICC, DCA, and MICE**
+                - Generates **Dual Interactive Plotly + 300 DPI Publication Figures (NEJM/JAMA)** and Word/PPTX/HTML reports
                 """)
-                st.markdown("🔗 **[ดูรายละเอียดและติดดาวบน GitHub (ntwkkm/shinystat-skills) ↗](https://github.com/ntwkkm/shinystat-skills)**")
+                st.markdown("🔗 **[Explore & Star on GitHub (ntwkkm/shinystat-skills) ↗](https://github.com/ntwkkm/shinystat-skills)**")
             with col_b:
-                st.caption("📋 คัดลอกคำสั่งด้านล่างไปรันใน Terminal เพื่อติดตั้ง Skill:")
+                st.caption("📋 Copy and run this command in your terminal to install the skill:")
                 st.code('npx skills add "https://github.com/ntwkkm/shinystat-skills"', language="bash")
         return
 
@@ -124,10 +124,10 @@ def render_skills_hero_banner(compact: bool = False):
             <span style="color: #93c5fd; font-size: 0.85rem; font-weight: 600;">Autonomous Biostatistical Intelligence</span>
         </div>
         <h3 style="margin: 0 0 8px 0; color: #ffffff; font-size: 1.35rem; font-weight: 800;">
-            🤖 เปลี่ยน AI ของคุณให้เป็นนักชีวสถิติคลินิกด้วย <code>shinystat-skills</code>
+            🤖 Turn Your AI Into a Clinical Biostatistician with <code>shinystat-skills</code>
         </h3>
         <p style="margin: 0 0 14px 0; color: #e2e8f0; font-size: 0.95rem; line-height: 1.55;">
-            Skill ที่สังเคราะห์จาก Logic ของเว็บแอปนี้โดยตรง สำหรับ <b>Claude Web / Claude Code / Cursor / Codex / Gemini</b> ช่วยตรวจข้อมูลและรันสถิติการแพทย์อัตโนมัติ (<b>Table 1, Logistic & Firth, Cox PH, Kaplan-Meier, PSM, ROC & DeLong, Bland-Altman, ICC, Calibration, DCA, MICE</b>) พร้อมสร้างกราฟ <b>300 DPI มาตรฐานวารสาร NEJM/JAMA</b> และออกรายงาน HTML/DOCX/PPTX ในคำสั่งเดียว
+            Synthesized directly from this web app's statistical engine for <b>Claude Web / Claude Code / Cursor / Codex / Gemini</b>. Autonomously profiles clinical data and runs <b>Table 1, Logistic & Firth, Cox PH, Kaplan-Meier, PSM, ROC & DeLong, Bland-Altman, ICC, Calibration, DCA, and MICE</b>—complete with <b>300 DPI NEJM/JAMA publication figures</b> and self-contained HTML/DOCX/PPTX reports.
         </p>
         <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
             <span style="font-size: 0.78rem; background: rgba(56, 189, 248, 0.15); color: #7dd3fc; padding: 4px 10px; border-radius: 6px; font-weight: 600;">✓ Zero Custom Dependency</span>
@@ -139,12 +139,12 @@ def render_skills_hero_banner(compact: bool = False):
 
     c1, c2 = st.columns([2.2, 1])
     with c1:
-        st.caption("👇 **กดปุ่ม Copy มุมขวาของกล่องโค้ดนี้** เพื่อติดตั้งลงใน AI Agent ของคุณทันที:")
+        st.caption("👇 **Click the Copy button (top-right of the code box)** to install in your AI Agent:")
         st.code('npx skills add "https://github.com/ntwkkm/shinystat-skills"', language="bash")
     with c2:
-        st.caption("⭐ **ดูคู่มือและซอร์สโค้ดทั้งหมด:**")
+        st.caption("⭐ **Documentation & Source Code:**")
         st.link_button(
-            "🌟 เปิด GitHub: ntwkkm/shinystat-skills ↗",
+            "🌟 View on GitHub: ntwkkm/shinystat-skills ↗",
             "https://github.com/ntwkkm/shinystat-skills",
             use_container_width=True,
             type="primary"
@@ -171,11 +171,11 @@ st.sidebar.markdown("""
         🤖 ShinyStat Skills
     </div>
     <div style="font-size: 0.76rem; color: #cbd5e1; line-height: 1.4;">
-        สังเคราะห์จากเว็บแอปนี้! เปลี่ยน AI Agent ให้รันสถิติคลินิก + กราฟ NEJM/JAMA 300 DPI อัตโนมัติ
+        Synthesized from this web app! Empower your AI Agent to run clinical biostatistics &amp; 300 DPI NEJM/JAMA figures automatically.
     </div>
 </div>
 """, unsafe_allow_html=True)
-st.sidebar.caption("📋 กด Copy คำสั่งติดตั้ง Skill:")
+st.sidebar.caption("📋 Copy command to install skill:")
 st.sidebar.code('npx skills add "https://github.com/ntwkkm/shinystat-skills"', language="bash")
 st.sidebar.link_button(
     "⭐ GitHub: shinystat-skills ↗",
@@ -365,7 +365,7 @@ if upl:
             st.session_state.var_meta = current_meta
             
             logger.log_operation("file_upload", "completed",  # ✅ LOG COMPLETION
-                                rows=len(new_df), columns=len(new_df.columns))
+                                 rows=len(new_df), columns=len(new_df.columns))
             st.sidebar.success("File Uploaded and Metadata Initialized!")
             st.rerun()
         
