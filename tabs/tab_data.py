@@ -119,7 +119,40 @@ def get_clean_data(df, custom_na_list=None):
         
     return df_clean
 
+def _render_tab_skill_promo():
+    """
+    🟢 Render prominent promo card for shinystat-skills inside the first tab (Data Management).
+    """
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #eff6ff 0%, #e0f2fe 100%); border: 1px solid #93c5fd; border-left: 5px solid #2563eb; border-radius: 12px; padding: 14px 18px; margin-bottom: 10px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+            <div>
+                <span style="background: #2563eb; color: #ffffff; font-size: 0.7rem; font-weight: 800; padding: 2px 8px; border-radius: 999px; margin-right: 6px;">🚀 AI AGENT SKILL</span>
+                <strong style="color: #0f172a; font-size: 0.98rem;">อยากให้ AI วิเคราะห์ไฟล์ข้อมูลนี้และเขียนรายงานวิจัยให้อัตโนมัติไหม?</strong>
+            </div>
+        </div>
+        <div style="color: #334155; font-size: 0.86rem; margin-top: 6px; line-height: 1.45;">
+            ติดตั้ง <b><code>shinystat-skills</code></b> (สังเคราะห์จาก Logic ของเว็บแอปนี้) ลงใน Claude Code, Cursor หรือ AI Agent เพื่อรัน <b>Table 1, Firth/Logistic, Cox PH, KM, PSM, ROC (DeLong), DCA, MICE</b> พร้อมสร้างกราฟ <b>300 DPI มาตรฐาน NEJM/JAMA</b> และออกรายงาน HTML/Word/PPTX อัตโนมัติ
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    c_cmd, c_btn = st.columns([2.5, 1], vertical_alignment="center")
+    with c_cmd:
+        st.code('npx skills add "https://github.com/ntwkkm/shinystat-skills"', language="bash")
+    with c_btn:
+        st.link_button(
+            "⭐ ดูบน GitHub (shinystat-skills) ↗",
+            "https://github.com/ntwkkm/shinystat-skills",
+            use_container_width=True,
+            type="primary"
+        )
+    st.divider()
+
 def render(df):
+    # 🟢 NEW: Show ShinyStat Skills Promo Banner at the top of Tab 0 (First Tab)
+    _render_tab_skill_promo()
+
     st.subheader("Raw Data Table")
     
     # --- Config Section ---
