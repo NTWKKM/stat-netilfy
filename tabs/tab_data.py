@@ -128,11 +128,11 @@ def _render_tab_skill_promo():
         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
             <div>
                 <span style="background: #2563eb; color: #ffffff; font-size: 0.7rem; font-weight: 800; padding: 2px 8px; border-radius: 999px; margin-right: 6px;">🚀 AI AGENT SKILL</span>
-                <strong style="color: #0f172a; font-size: 0.98rem;">อยากให้ AI วิเคราะห์ไฟล์ข้อมูลนี้และเขียนรายงานวิจัยให้อัตโนมัติไหม?</strong>
+                <strong style="color: #0f172a; font-size: 0.98rem;">Want AI to analyze this dataset and generate a publication-ready manuscript report automatically?</strong>
             </div>
         </div>
         <div style="color: #334155; font-size: 0.86rem; margin-top: 6px; line-height: 1.45;">
-            ติดตั้ง <b><code>shinystat-skills</code></b> (สังเคราะห์จาก Logic ของเว็บแอปนี้) ลงใน Claude Code, Cursor หรือ AI Agent เพื่อรัน <b>Table 1, Firth/Logistic, Cox PH, KM, PSM, ROC (DeLong), DCA, MICE</b> พร้อมสร้างกราฟ <b>300 DPI มาตรฐาน NEJM/JAMA</b> และออกรายงาน HTML/Word/PPTX อัตโนมัติ
+            Install <b><code>shinystat-skills</code></b> (synthesized from this web app's statistical engine) into Claude Code, Cursor, or your AI Agent to run <b>Table 1, Firth/Logistic, Cox PH, KM, PSM, ROC (DeLong), DCA, and MICE</b>—complete with <b>300 DPI NEJM/JAMA figures</b> and automated HTML/Word/PPTX reports.
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -142,7 +142,7 @@ def _render_tab_skill_promo():
         st.code('npx skills add "https://github.com/ntwkkm/shinystat-skills"', language="bash")
     with c_btn:
         st.link_button(
-            "⭐ ดูบน GitHub (shinystat-skills) ↗",
+            "⭐ View on GitHub (shinystat-skills) ↗",
             "https://github.com/ntwkkm/shinystat-skills",
             use_container_width=True,
             type="primary"
